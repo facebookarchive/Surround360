@@ -1,0 +1,90 @@
+body {
+  background: #333333;
+  color: #555555;
+  padding: 0;
+  margin: 0;
+  font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  position: relative;
+  cursor: default;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-style: normal;
+  color: #222222;
+  text-rendering: optimizeLegibility;
+  margin-top: 0.2rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+h3 {
+  font-size: 1.375rem;
+}
+
+h4 {
+  font-size: 1.525rem;
+  margin-top: 1.2rem;
+  display: inline-block;
+}
+
+#wrapper {
+  background: #fff;
+}
+
+.hero {
+  background: #3b5998;
+}
+
+.row {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 0;
+  margin-bottom: 0;
+  max-width: 62.5rem;
+  *zoom: 1;
+}
+
+.row:before, .row:after {
+  content: " ";
+  display: table;
+}
+
+.row:after {
+  clear: both;
+}
+
+.columns {
+  position: relative;
+  width: 100%;
+  float: left;
+}
+
+button, .button {
+  cursor: pointer;
+  font-size: 0.9em;
+  margin: 0 0 1.25rem;
+  position: relative;
+  text-align: center;
+  display: inline-block;
+  padding: 5px 10px 5px 10px;
+  background-color: #6bb933;
+  color: white;
+  border-radius: 15px;
+}
+
+table {
+  background: white;
+}
+
+table tr th, table tr td {
+  padding: 0rem 0.625rem;
+  font-size: 0.875rem;
+  color: #222222;
+}
+

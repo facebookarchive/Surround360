@@ -9,7 +9,6 @@
   $action_cmd_msg = $action . "\0";
 
   $ret = msg_send($queue, 1, $action_cmd_msg, false, true, $msg_err);
-
   if (!$ret) {
     echo "ERROR";
   } else {

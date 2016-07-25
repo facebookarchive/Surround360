@@ -7,7 +7,7 @@
   }
   
   // Process running. Kill it
-  $result = exec('sudo pkill -SIGINT CameraControl', $output, $return_var);
+  $result = exec('pkill -SIGINT CameraControl', $output, $return_var);
   
   echo 'OK';
   return;

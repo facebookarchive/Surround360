@@ -812,7 +812,6 @@ void frameConsumer(
   }
 
   size_t fileSize = FRAME_SIZE * nCameras * size_t(nImages) / CONSUMER_COUNT;
-  posix_fallocate(fd, 0, fileSize);
   posix_fadvise(fd, 0, fileSize, POSIX_FADV_DONTNEED);
   posix_fadvise(fd, 0, fileSize, POSIX_FADV_SEQUENTIAL);
 
@@ -843,10 +842,6 @@ void frameConsumer(
   }
 
   fsync(fd);
-
-  if (bytesWritten < fileSize) {
-    const int status = ftruncate(fd, bytesWritten);
-  }
   close(fd);
   clock_gettime(CLOCK_REALTIME, &tEnd);
 
@@ -1058,6 +1053,11 @@ int main(int argc, char *argv[]) {
   google::SetUsageMessage("Control capturing of image data.");
   google::ParseCommandLineFlags(&argc, &argv, false);
 
+  if (argc == 1) {
+    cerr << "No arguments. See --help for more information." << endl;
+    return -1;
+  }
+
   if (FLAGS_cli) {
     tcgetattr(STDIN_FILENO, &origTermSettings);
     tattr = origTermSettings;
@@ -1069,32 +1069,7 @@ int main(int argc, char *argv[]) {
     atexit(&restoreTerminalSettings);
   }
 
-  const string label = FLAGS_dir;
-  string captureDir = kFramesDisk + "/" + FLAGS_dir;
-
-  ret = stat(captureDir.c_str(), &dirStat);
-  if (ret == -1 && errno == ENOENT) {
-    ret = mkdir(captureDir.c_str(), kPermissions);
-    if (ret == -1) {
-      const string kErrString(strerror(errno));
-      throw "Can't create destination directory: " + kErrString;
-    }
-  } else {
-    // destination directory exists. Don't overwrite. Append timestamp to the name
-    captureDir += "-" + to_string(time(nullptr));
-    ret = mkdir(captureDir.c_str(), kPermissions);
-    if (ret == -1) {
-      const string kErrString(strerror(errno));
-      throw "Can't create destination directory "
-        + captureDir + ": " + kErrString;
-    }
-  }
-
-  saveCMDArgs(captureDir, argc, argv);
-  checkCameraSpeeds();
   getCameraSerialNumbers(serialNumbers);
-  camStrobeOutSN = FLAGS_master;
-
   SerialIndexVector* sortedSerials =
     new SerialIndexVector(serialNumbers->size());
   copy(serialNumbers->begin(), serialNumbers->end(), sortedSerials->begin());
@@ -1123,6 +1098,31 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  const string label = FLAGS_dir;
+  string captureDir = kFramesDisk + "/" + FLAGS_dir;
+
+  ret = stat(captureDir.c_str(), &dirStat);
+  if (ret == -1 && errno == ENOENT) {
+    ret = mkdir(captureDir.c_str(), kPermissions);
+    if (ret == -1) {
+      const string kErrString(strerror(errno));
+      throw "Can't create destination directory: " + kErrString;
+    }
+  } else {
+    // destination directory exists. Don't overwrite. Append timestamp to the name
+    captureDir += "-" + to_string(time(nullptr));
+    ret = mkdir(captureDir.c_str(), kPermissions);
+    if (ret == -1) {
+      const string kErrString(strerror(errno));
+      throw "Can't create destination directory "
+        + captureDir + ": " + kErrString;
+    }
+  }
+
+  saveCMDArgs(captureDir, argc, argv);
+  checkCameraSpeeds();
+
+  camStrobeOutSN = FLAGS_master;
   validateWhiteBalance(FLAGS_whitebalance);
 
   // Check if we have enough disk space

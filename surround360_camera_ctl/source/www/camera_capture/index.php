@@ -43,8 +43,10 @@
         <form id="capture_image" method="post" action="capture_image.php">
           <h4>Record Video</h4>
           &nbsp;
-          <button id="button_snap" type="submit" class="btn btn-primary start">Start</button>
-          <button id="button_stop" type="button" class="btn btn-primary stop" style="display:none">Stop</button>
+          <button id="button_snap" type="submit" class="btn btn-primary start">Run program</button>
+          <button id="button_record" type="submit" class="btn btn-primary record">Start recording</button>
+          <button id="button_stoprec" type="submit" class="btn btn-primary stoprec">Stop recording</button>
+          <button id="button_stop" type="button" class="btn btn-primary stop" style="display:none">Stop program</button>
           <button id="button_reset" type="button">Reset Params</button>
           <button id="button_update_preview" type="button">Update Preview</button>
           <div id="log_div"></div>
@@ -128,6 +130,63 @@
         $('#camera_control').load('camera_control.php');
       });
 
+      $('#button_record').click(function() {
+        $.ajax({
+          url: 'record.php?action=record',
+          type: 'get',
+          success: function(response) {
+                     if (response) {
+                       if (response == 'OK') {
+                         logger('Recording...');
+                       } else {
+                         logger(response);
+                       }
+                     } else {
+                       alert("Bad response when initiating recording.");
+                     }
+                   },
+          error: function() { alert(defaultErrorText); }
+        })
+      });
+
+      $('#button_stoprec').click(function() {
+        $.ajax({
+          url: 'record.php?action=stop',
+          type: 'get',
+          success: function(response) {
+                     if (response) {
+                       if (response == 'OK') {
+                         logger('Program quit...');
+                       } else {
+                         logger(response);
+                       }
+                     } else {
+                       alert("Bad response when quitting.");
+                     }
+                   },
+          error: function() { alert(defaultErrorText); }
+        })
+      });
+
+      $('#button_stop').click(function() {
+        $.ajax({
+          url: 'record.php?action=quit',
+          type: 'get',
+          success: function(response) {
+                     if (response) {
+                       if (response == 'OK') {
+                         logger('Stopped recording...');
+                       } else {
+                         logger(response);
+                       }
+                     } else {
+                       alert("Bad response when stopping recording.");
+                     }
+                   },
+          error: function() { alert(defaultErrorText); }
+        })
+      });
+
       $('#button_update_preview').click(function(){
         var shutter = document.getElementById('-shutter_number').value;
         var gain = document.getElementById('-gain_number').value;
@@ -200,6 +259,8 @@
       $('#loading').show();
       $('#loading_text').text('');
       $('#button_snap').hide();
+      $('#button_record').show();
+      $('#button_stoprec').show();
       $('#button_stop').show();
       $('#button_reset').hide();
       $('#table_label').hide();
@@ -210,7 +271,9 @@
       $('#loading').hide();
       $('#loading_text').text('');
       $('#button_snap').show();
-      $('#button_stop').hide();
+      $('#button_record').show();
+      $('#button_stoprec').show();
+      $('#button_stop').show();
       $('#button_reset').show();
       $('#table_label').show()
       $('#table_duration').show();

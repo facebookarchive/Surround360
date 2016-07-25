@@ -4,7 +4,7 @@
         if (file_exists($camera_props_file)) {
                 $output = file($camera_props_file, FILE_IGNORE_NEW_LINES);
         } else {
-          $command = 'sudo /usr/local/bin/CameraControl --props --raw --debug';
+                $command = '/usr/local/bin/CameraControl --props --raw --debug';
                 $pid = exec($command, $output, $return_var);
 
                 if ($return_var !== 0) { // failure

@@ -47,11 +47,7 @@
                 $cmd_options .= sprintf(' -whitebalance "%s %s"', $cmd_wb[0], $cmd_wb[1]);
         }
 
-        // Free pagecache, dentries and inodes
-        // TODO (app): run this after the process ends (too?)
-        exec('sync; echo 3 | sudo tee /proc/sys/vm/drop_caches');
-
-        $command = 'sudo /usr/local/bin/CameraControl '.$cmd_options;
+        $command = '/usr/local/bin/CameraControl '.$cmd_options;
 
         // Run first with -nocapture to set up all the cameras
         exec($command.' -nocapture', $output);

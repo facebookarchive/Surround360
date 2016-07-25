@@ -1,0 +1,10 @@
+syntax: regexp
+^Makefile
+^bin/.*$
+^lib/.*$
+.*\.pyc$
+.*\.pyo$
+CMakeFiles/.*$
+^CMakeCache\.txt
+^cmake_install\.cmake
+^local/.*$

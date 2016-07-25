@@ -1,0 +1,49 @@
+[
+{
+  "camera_id": "cam0",
+  "is_top": true,
+  "is_fisheye": true,
+  "image_center_x": 1024,
+  "image_center_y": 1024,
+  "fisheye_rotation_deg": 0.0,
+  "usable_pixels_radius": 781,
+  "fisheye_fov_deg": 185.0,
+  "fisheye_fov_deg_crop": 140.0
+},
+{"camera_id": "cam1",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam2",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam3",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam4",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam5",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam6",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam7",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam8",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam9",  "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam10", "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam11", "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam12", "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam13", "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{"camera_id": "cam14", "fov_horizontal": 77.7769, "aspect_ratio_wh": 1.0},
+{
+  "camera_id": "cam15",
+  "is_bottom": true,
+  "is_fisheye": true,
+  "image_center_x": 1024,
+  "image_center_y": 1024,
+  "fisheye_rotation_deg": 180.0,
+  "usable_pixels_radius": 781,
+  "fisheye_fov_deg": 185.0,
+  "fisheye_fov_deg_crop": 140.0
+},
+{
+  "camera_id": "cam16",
+  "is_bottom2": true,
+  "is_fisheye": true,
+  "image_center_x": 1024,
+  "image_center_y": 1024,
+  "flip180": true,
+  "usable_pixels_radius": 781,
+  "fisheye_fov_deg": 185.0,
+  "fisheye_fov_deg_crop": 140.0
+}
+]

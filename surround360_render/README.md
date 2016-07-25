@@ -23,7 +23,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 
 * The build system for the Surround 360 code is CMake.
 
-* This software has been tested on Ubuntu 14.04 LTS (cmake 3.2.2) and OS X 10.11.5 (cmake 3.5.1)
+* This software has been tested on Ubuntu 14.04 LTS (cmake 3.2.2) and OS X 10.11.5 (using CMake 3.5.1).
 
 * If you are building on OS X, it may be more convenient to use brew to install some dependencies.
 

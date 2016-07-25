@@ -33,8 +33,8 @@
           <h4>Record Video</h4>
           <button id="button_start_preview" type="submit">Start preview</button>
           <button id="button_stop_preview" type="button" style="display:none">Stop preview</button>
-          <button id="button_start_record" type="submit" style="display:none">Start recording</button>
-          <button id="button_stop_record" type="submit" style="display:none">Stop recording</button>
+          <button id="button_start_record" type="button" style="display:none">Start recording</button>
+          <button id="button_stop_record" type="button" style="display:none">Stop recording</button>
           <button id="button_reset" type="button">Reset Params</button>
           <button id="button_update_preview" type="button" style="display:none">Update Preview</button>
           <div id="log_div"></div>
@@ -131,8 +131,10 @@
       }
 
       function showLoadingRecord() {
+        $('#button_stop_preview').hide();
         $('#button_start_record').hide();
         $('#button_stop_record').show();
+        $('#button_update_preview').hide();
       }
 
       function clearLoading() {
@@ -275,7 +277,6 @@
         });
 
         $('#button_start_record').click(function() {
-
           showLoadingRecord();
           logger('Recording...');
 
@@ -298,6 +299,9 @@
         });
 
         $('#button_stop_record').click(function() {
+          clearLoading();
+          logger('Stopping...');
+
           $.ajax({
             url: 'record.php?action=stop',
             type: 'get',
@@ -317,6 +321,9 @@
         });
 
         $('#button_stop_preview').click(function() {
+          clearLoading();
+          logger('Stopping preview...');
+
           $.ajax({
             url: 'record.php?action=quit',
             type: 'get',

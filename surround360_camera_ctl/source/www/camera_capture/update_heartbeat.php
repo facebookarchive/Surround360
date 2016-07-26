@@ -1,7 +1,7 @@
 <?php
   $dir = $_GET['dir'];
 
-  exec('pgrep CameraControl' . $pname, $pids);
+  exec('pgrep CameraControl', $pids);
   if (empty($pids)) {
     echo 'NO';
     return;

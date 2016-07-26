@@ -263,7 +263,7 @@
                   clearLoading();
                 } else {
                   // Camera capture process is not done yet
-                  dirOutput = String(response[1]);
+                  dirOutput = JSON.parse(response)[1];
                   isCapturing = true;
                 }
               } else {

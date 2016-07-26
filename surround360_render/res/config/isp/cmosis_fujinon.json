@@ -1,0 +1,30 @@
+{
+    "CameraIsp" : {
+        "serial" : 0,
+        "name" : "PointGrey Grasshopper",
+        "bitsPerPixel" : 8,
+        "compandingLut" :  [[0.0,  0.0,  0.0],
+                            [0.6,  0.6,  0.0],
+                            [1.0,  1.0, 0.0]],
+        "blackLevel" : [0.0, 0.0, 0.0],
+        "vignetteRollOff" : [[1.0, 1.0, 1.0],
+                             [1.0, 1.0, 1.0],
+                             [1.0, 1.0, 1.0],
+                             [1.1, 1.1, 1.1],
+                             [2.2, 2.2, 2.2]],
+        "whiteBalanceGain" : [1.133, 1.0, 1.733],
+        "stuckPixelThreshold" : 5,
+        "stuckPixelDarknessThreshold" : 0.11,
+        "stuckPixelRadius" : 0,
+        "denoise" : 0.6,
+        "denoiseRadius" : 2,
+        "ccm" : [[1.02169,  -0.05711,  0.03543],
+                 [0.16789,   1.13419, -0.30208],
+                 [-0.15726, -0.07864,  1.2359]],
+        "sharpenning" : [0.2, 0.2, 0.2],
+        "saturation" : 1.2,
+        "contrast" : 1.0,
+        "gamma" : [0.55, 0.55, 0.55]
+        "bayerPattern" : "GBRG"
+    }
+}

@@ -38,7 +38,7 @@ outlined on that page and do not file a public issue.
 
 * 2 spaces for indentation rather than tabs
 * 80 character line length (with discretion in cases where it makes code less readable).
-* use #pragma once instead of #ifdef include gaurds
+* use #pragma once instead of #ifdef include guards
 * Indentation style for functions should be one of these:
 
   If the whole thing fits on one line:

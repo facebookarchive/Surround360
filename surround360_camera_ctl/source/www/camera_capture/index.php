@@ -88,6 +88,7 @@
                 <td><input class="camera-checkbox" type="checkbox" name="choose_cameras" value="16">&nbsp;16&nbsp;</td>
               </tr>
             </table>
+          <br>
           <video id="feed_preview" src="http://127.0.0.1:8090/live.webm" width="512" height="512" autoplay></video>
         </div>
       </div>
@@ -262,7 +263,7 @@
                   clearLoading();
                 } else {
                   // Camera capture process is not done yet
-                  dirOutput = String(result[1]);
+                  dirOutput = String(response[1]);
                   isCapturing = true;
                 }
               } else {

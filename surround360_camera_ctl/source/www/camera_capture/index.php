@@ -119,7 +119,7 @@
         document.getElementById('log_stats_div').innerHTML = msg + "<br>";
       }
 
-      function showLoading() {
+      function showPreviewButtonLayout() {
         $('#loading').show();
         $('#loading_text').text('');
         $('#button_start_preview').hide();
@@ -131,14 +131,14 @@
         $('#table_label').hide();
       }
 
-      function showLoadingRecord() {
+      function showRecordButtonLayout() {
         $('#button_stop_preview').hide();
         $('#button_start_record').hide();
         $('#button_stop_record').show();
         $('#button_update_preview').hide();
       }
 
-      function clearLoading() {
+      function resetButtonLayout() {
         $('#loading').hide();
         $('#loading_text').text('');
         $('#button_start_preview').show();
@@ -200,7 +200,7 @@
         var hasErrors = checkErrors();
 
         if (hasErrors == true) {
-          clearLoading();
+          resetButtonLayout();
         } else {
           showStats();
 
@@ -208,7 +208,7 @@
           // Giving it a 2 second pause to make sure everything is back in place
           setTimeout(function(){
             hideLogger();
-            clearLoading();
+            resetButtonLayout();
           }, 2000);
         }
       }
@@ -249,7 +249,7 @@
           // Clear stats
           loggerStats('');
 
-          showLoading();
+          showPreviewButtonLayout();
           logger('Starting preview...');
 
           $.ajax({
@@ -260,25 +260,50 @@
               if (response) {
                 if (response === 'ERROR:isAppRunning') {
                   alert('Camera is busy. Please try again.');
-                  clearLoading();
+                  resetButtonLayout();
                 } else {
                   // Camera capture process is not done yet
                   dirOutput = JSON.parse(response)[1];
                   isCapturing = true;
                 }
               } else {
-                clearLoading();
+                resetButtonLayout();
               }
             },
             error: function() {
-              clearLoading();
+              resetButtonLayout();
               alert(defaultErrorText);
             }
           });
         });
 
+        $('#button_stop_preview').click(function() {
+          resetButtonLayout();
+          logger('Stopping preview...');
+
+          $.ajax({
+            url: 'record.php?action=quit',
+            type: 'get',
+            success: function(response) {
+              if (response) {
+                if (response == 'OK') {
+                  logger('Stopped preview...');
+                  doneCapturing();
+                } else {
+                  logger(response);
+                }
+              } else {
+                alert("Bad response when stopping recording.");
+              }
+            },
+            error: function() {
+              alert(defaultErrorText);
+            }
+          })
+        });
+
         $('#button_start_record').click(function() {
-          showLoadingRecord();
+          showRecordButtonLayout();
           logger('Recording...');
 
           $.ajax({
@@ -295,38 +320,19 @@
                 alert("Bad response when initiating recording.");
               }
             },
-            error: function() { alert(defaultErrorText); }
+            error: function() {
+              alert(defaultErrorText);
+            }
           })
         });
 
         $('#button_stop_record').click(function() {
-          clearLoading();
+          resetButtonLayout();
+          showPreviewButtonLayout();
           logger('Stopping...');
 
           $.ajax({
             url: 'record.php?action=stop',
-            type: 'get',
-            success: function(response) {
-              if (response) {
-                if (response == 'OK') {
-                  logger('Program quit...');
-                } else {
-                  logger(response);
-                }
-              } else {
-                alert("Bad response when quitting.");
-              }
-            },
-            error: function() { alert(defaultErrorText); }
-          })
-        });
-
-        $('#button_stop_preview').click(function() {
-          clearLoading();
-          logger('Stopping preview...');
-
-          $.ajax({
-            url: 'record.php?action=quit',
             type: 'get',
             success: function(response) {
               if (response) {
@@ -336,10 +342,12 @@
                   logger(response);
                 }
               } else {
-                alert("Bad response when stopping recording.");
+                alert("Bad response when quitting.");
               }
             },
-            error: function() { alert(defaultErrorText); }
+            error: function() {
+              alert(defaultErrorText);
+            }
           })
         });
 

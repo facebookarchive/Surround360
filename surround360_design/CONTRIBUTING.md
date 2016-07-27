@@ -42,4 +42,4 @@ outlined on that page and do not file a public issue.
 
 ## License
 
-The Surround 360 hardware design is licensed under the Creative Commons Attribution 4.0 International license, as it appears in LICENSE_design.md under /surround360_design. We also provide an additional patent grant.
+The Surround 360 hardware design is licensed under the Creative Commons Attribution 4.0 International license, as it appears in LICENSE_design.md under /surround360_design.

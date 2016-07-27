@@ -42,5 +42,5 @@ outlined on that page and do not file a public issue.
 
 ## License
 
-The Surround 360 camera control code is licensed as described in LICENSE_camera_ctl.md under /surround360_camera_ctl. We also provide an additional patent grant.
+The Surround 360 camera control code is licensed as described in LICENSE_camera_ctl.md under /surround360_camera_ctl.
 

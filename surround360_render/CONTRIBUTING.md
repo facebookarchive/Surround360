@@ -38,56 +38,61 @@ outlined on that page and do not file a public issue.
 
 * 2 spaces for indentation rather than tabs
 * 80 character line length (with discretion in cases where it makes code less readable).
-* use #pragma once instead of #ifdef include guards
+* use `#pragma once` instead of `#ifdef` include guards
 * Indentation style for functions should be one of these:
-
+  
   If the whole thing fits on one line:
-
-  void foo(int x, int y) {
-    body
-  }
-
+```
+void foo(int x, int y) {
+  body
+}
+```
   If it does not fit on one line:
-  void foo(
-      int x,
-      int y) {
+```
+void foo(
+    int x,
+    int y) {
 
-    body
-  }
-
+  body
+}
+```
   Note that in the above example the argument list is indented 2 levels relative to the function name. This should be used for implementations. For headers/forward declarations, only indent 1 level.
 
   Avoid this style:
-
-  void bazz(int x,
-            int y) {
-  }
+```
+void bazz(int x,
+          int y) {
+}
+```
 
   Also note that we follow similar conventions for function calls. The following patterns should be preferred:
 
   If it fits all on one line:
-  int x = foo(a, b, c);
+```
+int x = foo(a, b, c);
+```
 
   Two lines:
-
-  int x = foobarscrazzle(
-    x, y, z, a, b, c);
-
+```
+int x = foobarscrazzle(
+  x, y, z, a, b, c);
+```
   Many lines:
-
-  int x = foobarscrazzle(
-    foo,
-    bar,
-    blah);
-
+```
+int x = foobarscrazzle(
+  foo,
+  bar,
+  blah);
+```
   Avoid this:
-
-  int x = foobarscrazzled(xyz,
-                          abc);
+```
+int x = foobarscrazzled(xyz,
+                        abc);
+```
 
 * Group asterisk and ampersand with the type instead of the variable name, e.g.,
-  Yes:  int* x;
-  No:   int *x;
+  * Yes:  ```int* x;```
+  * No:   ```int *x;```
 
 ## License
 

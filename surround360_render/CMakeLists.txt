@@ -1,22 +1,24 @@
-cmake_minimum_required(VERSION 3.1)
-project(Surround360Render CXX)
-find_package(OpenCV)
-include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/util)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/optical_flow)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_isp)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/calibration)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-IF( NOT DEFINED CMAKE_BUILD_TYPE )
-   SET( ${CMAKE_BUILD_TYPE} Release ... FORCE )
+PROJECT(Surround360Render CXX)
+
+FIND_PACKAGE(OpenCV)
+INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/util)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/optical_flow)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_isp)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/calibration)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
+
+IF(NOT DEFINED CMAKE_BUILD_TYPE)
+  SET(${CMAKE_BUILD_TYPE} Release ... FORCE)
 ENDIF()
 
-IF ( NOT ${CMAKE_BUILD_TYPE} MATCHES  Debug )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast" )
-ENDIF ()
+IF(NOT ${CMAKE_BUILD_TYPE} MATCHES Debug)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast")
+ENDIF()
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Dinteger=int")
 
@@ -30,24 +32,24 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 ### Add custom targets to show all source and header files in Xcode ###
 
-file(GLOB SRC "${CMAKE_CURRENT_SOURCE_DIR}/source/*")
-add_custom_target( _source SOURCES ${SRC} )
+FILE(GLOB SRC "${CMAKE_CURRENT_SOURCE_DIR}/source/*")
+ADD_CUSTOM_TARGET( _source SOURCES ${SRC} )
 
 ### LibJSON ###
 
-add_library(
+ADD_LIBRARY(
   LibJSON
   source/thirdparty/supereasyjson/json.cpp
 )
 
 ### LibVrCamera ###
 
-file(GLOB calibration_SRC "source/calibration/*.cpp")
-file(GLOB optical_flow_SRC "source/optical_flow/*.cpp")
-file(GLOB render_SRC "source/render/*.cpp")
-file(GLOB util_SRC "source/util/*.cpp")
+FILE(GLOB calibration_SRC "source/calibration/*.cpp")
+FILE(GLOB optical_flow_SRC "source/optical_flow/*.cpp")
+FILE(GLOB render_SRC "source/render/*.cpp")
+FILE(GLOB util_SRC "source/util/*.cpp")
 
-add_library(
+ADD_LIBRARY(
   LibVrCamera
   source/util/SystemUtil.cpp
   ${calibration_SRC}
@@ -55,17 +57,17 @@ add_library(
   ${render_SRC}
   ${util_SRC}
 )
-target_compile_features(LibVrCamera PRIVATE cxx_range_for)
+TARGET_COMPILE_FEATURES(LibVrCamera PRIVATE cxx_range_for)
 
 
 ### Raw2Rgb ###
 
-add_executable(
+ADD_EXECUTABLE(
   Raw2Rgb
   source/camera_isp/Raw2Rgb.cpp
 )
 
-target_link_libraries(
+TARGET_LINK_LIBRARIES(
   Raw2Rgb
   LibVrCamera
   LibJSON
@@ -76,12 +78,12 @@ target_link_libraries(
 
 ### TestRenderStereoPanorama ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestRenderStereoPanorama
   source/test/TestRenderStereoPanorama.cpp
 )
-target_compile_features(TestRenderStereoPanorama PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestRenderStereoPanorama PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestRenderStereoPanorama
   LibVrCamera
   LibJSON
@@ -93,12 +95,12 @@ target_link_libraries(
 
 ### TestJson ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestJson
   source/test/TestJson.cpp
 )
-target_compile_features(TestJson PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestJson PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestJson
   LibVrCamera
   LibJSON
@@ -108,12 +110,12 @@ target_link_libraries(
 
 ### TestIntrinsicCalibration ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestIntrinsicCalibration
   source/test/TestIntrinsicCalibration.cpp
 )
-target_compile_features(TestIntrinsicCalibration PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestIntrinsicCalibration PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestIntrinsicCalibration
   LibVrCamera
   LibJSON
@@ -124,12 +126,12 @@ target_link_libraries(
 
 ### TestOpticalFlow ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestOpticalFlow
   source/test/TestOpticalFlow.cpp
 )
-target_compile_features(TestOpticalFlow PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestOpticalFlow PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestOpticalFlow
   LibVrCamera
   LibJSON
@@ -141,12 +143,12 @@ target_link_libraries(
 
 ### TestImageWarper ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestImageWarper
   source/test/TestImageWarper.cpp
 )
-target_compile_features(TestImageWarper PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestImageWarper PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestImageWarper
   LibVrCamera
   LibJSON
@@ -158,12 +160,12 @@ target_link_libraries(
 
 ### TestLogger ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestLogger
   source/test/TestLogger.cpp
 )
-target_compile_features(TestLogger PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestLogger PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestLogger
   LibVrCamera
   glog
@@ -173,12 +175,12 @@ target_link_libraries(
 
 ### UnpackImageBundle ###
 
-add_executable(
+ADD_EXECUTABLE(
   UnpackImageBundle
   source/camera_isp/UnpackImageBundle.cpp
 )
-target_compile_features(UnpackImageBundle PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(UnpackImageBundle PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   UnpackImageBundle
   LibVrCamera
   LibJSON
@@ -190,12 +192,12 @@ target_link_libraries(
 
 ### TestRingRectification ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestRingRectification
   source/test/TestRingRectification.cpp
 )
-target_compile_features(TestRingRectification PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestRingRectification PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestRingRectification
   LibVrCamera
   LibJSON
@@ -207,12 +209,12 @@ target_link_libraries(
 
 ### TestPoleRemoval ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestPoleRemoval
   source/test/TestPoleRemoval.cpp
 )
-target_compile_features(TestPoleRemoval PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestPoleRemoval PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestPoleRemoval
   LibVrCamera
   LibJSON
@@ -224,12 +226,12 @@ target_link_libraries(
 
 ### TestOpticalCenterVisualization ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestOpticalCenterVisualization
   source/test/TestOpticalCenterVisualization.cpp
 )
-target_compile_features(TestOpticalCenterVisualization PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestOpticalCenterVisualization PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestOpticalCenterVisualization
   LibVrCamera
   LibJSON
@@ -241,12 +243,12 @@ target_link_libraries(
 
 ### TestRenderWithoutSides ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestRenderWithoutSides
   source/test/TestRenderWithoutSides.cpp
 )
-target_compile_features(TestRenderWithoutSides PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestRenderWithoutSides PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestRenderWithoutSides
   LibVrCamera
   LibJSON
@@ -258,12 +260,12 @@ target_link_libraries(
 
 ### TestExtractAlphaChannel ###
 
-add_executable(
+ADD_EXECUTABLE(
   TestExtractAlphaChannel
   source/test/TestExtractAlphaChannel.cpp
 )
-target_compile_features(TestExtractAlphaChannel PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(TestExtractAlphaChannel PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   TestExtractAlphaChannel
   LibVrCamera
   LibJSON

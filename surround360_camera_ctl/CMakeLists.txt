@@ -1,18 +1,20 @@
-cmake_minimum_required(VERSION 3.1)
-project(Surround360CameraCtl CXX)
-include_directories(/usr/include/flycapture)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_control)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-IF( NOT DEFINED CMAKE_BUILD_TYPE )
-   SET( ${CMAKE_BUILD_TYPE} Release ... FORCE )
+PROJECT(Surround360CameraCtl CXX)
+
+INCLUDE_DIRECTORIES(/usr/include/flycapture)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_control)
+
+IF(NOT DEFINED CMAKE_BUILD_TYPE)
+   SET(${CMAKE_BUILD_TYPE} Release ... FORCE)
 ENDIF()
 
-IF ( NOT ${CMAKE_BUILD_TYPE} MATCHES  Debug )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast" )
-ENDIF ()
+IF(NOT ${CMAKE_BUILD_TYPE} MATCHES Debug)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast")
+ENDIF()
 
-SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wno-write-strings" )
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wno-write-strings")
 
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -20,19 +22,19 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 ### Add custom targets to show all source and header files in IDEs ###
 
-file( GLOB SRC "${CMAKE_CURRENT_SOURCE_DIR}/source/*" )
-add_custom_target( _source SOURCES ${SRC} )
+FILE(GLOB SRC "${CMAKE_CURRENT_SOURCE_DIR}/source/*")
+ADD_CUSTOM_TARGET(_source SOURCES ${SRC})
 
 ### CameraControl ###
 
-add_executable(
+ADD_EXECUTABLE(
   CameraControl
   source/camera_control/PointGrey.cpp
   source/camera_control/CameraControl.cpp
 )
 
-target_compile_features(CameraControl PRIVATE cxx_range_for)
-target_link_libraries(
+TARGET_COMPILE_FEATURES(CameraControl PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
   CameraControl
   "-lflycapture${D}"
   "-lusb-1.0"
@@ -46,11 +48,11 @@ target_link_libraries(
 )
 
 ### Producer consumer test ###
-add_executable(
+ADD_EXECUTABLE(
   pc_test
   source/camera_control/pc_test.cpp
 )
 
-target_link_libraries(
+TARGET_LINK_LIBRARIES(
   pc_test
 )

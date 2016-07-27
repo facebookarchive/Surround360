@@ -147,7 +147,7 @@ This step is only required if you are using different lenses or sensors than our
 
 This file should be passed to run_all.py in the "intrinsic parameters file" field via the GUI, or the --src_intrinsic_param_file argument via the command line.
 
-* Assuming you need to compute intrinsic calibration for a different lens/sensor combination, you will need a collection of images of checkerboards in different poses. We use at least 40 images. The checkerboard images should completely contain the checkerboard (i.e. it is not cut off at the edges), and should have the checkerboards in many different orientations and distances from the camera. The goal is to get some data to correct every part of the image. An example image can found in /surround360_render/res/config/example_data/intrinsic_checkerboard.png.
+* Assuming you need to compute intrinsic calibration for a different lens/sensor combination, you will need a collection of images of checkerboards in different poses. We use at least 40 images. The checkerboard images should completely contain the checkerboard (i.e. it is not cut off at the edges), and should have the checkerboards in many different orientations and distances from the camera. The goal is to get some data to correct every part of the image. An example image can found in /surround360_render/res/example_data/intrinsic_checkerboard.png.
 
 * We will assume you are working in a folder located at ~/Desktop/intrinsic.
 

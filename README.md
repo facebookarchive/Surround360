@@ -1,6 +1,6 @@
 # Surround360 System
 
-Surround360 is a hardware and software system for capturing and rendering 3d (stereo) 360 videos and photos, suitable for viewing in VR. We divide the open source components of the system into three subdirectories:
+Surround360 is a hardware and software system for capturing and rendering 3D (stereo) 360 videos and photos, suitable for viewing in VR. We divide the open source components of the system into three subdirectories:
 
 * /surround360_design -- hardware designs and assembly instructions
 * /surround360_camera_ctl -- software for controlling the camera to capture raw data

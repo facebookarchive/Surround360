@@ -8,13 +8,11 @@ IF( NOT DEFINED CMAKE_BUILD_TYPE )
    SET( ${CMAKE_BUILD_TYPE} Release ... FORCE )
 ENDIF()
 
-SET( PLATFORM_SPECIFIC_LIBS "-lpthread -lgflags")
-
 IF ( NOT ${CMAKE_BUILD_TYPE} MATCHES  Debug )
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast" )
 ENDIF ()
 
-SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-write-strings" )
+SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wno-write-strings" )
 
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -45,7 +43,6 @@ target_link_libraries(
   "-lavcodec"
   "-lavformat"
   "-lavfilter"
-  ${PLATFORM_SPECIFIC_LIBS}
 )
 
 ### Producer consumer test ###
@@ -56,5 +53,4 @@ add_executable(
 
 target_link_libraries(
   pc_test
-  ${PLATFORM_SPECIFIC_LIBS}
 )

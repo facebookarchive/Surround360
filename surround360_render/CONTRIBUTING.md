@@ -106,4 +106,4 @@ outlined on that page and do not file a public issue.
 
 ## License
 
-The Surround 360 rendering code is BSD-licensed, as it appears in LICENSE_render.md under /surround360_render. We also provide an additional patent grant.
+The Surround 360 rendering code is BSD-licensed, as it appears in `LICENSE_render.md` under `/surround360_render`. We also provide an additional patent grant.

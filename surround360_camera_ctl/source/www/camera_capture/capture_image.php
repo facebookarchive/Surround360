@@ -20,7 +20,7 @@
   $_POST['dir'] = $output_dir;
   unset($_POST['label']);
 
-  $cmd_options = ' -fps '.$fps.' -numcams '.$num_cameras.' -raw -nbits 8 -nframes '.$num_frames.' -dir '.$output_dir;
+  $cmd_options = ' -fps '.$fps.' -numcams '.$num_cameras.' -raw -nbits 8 -dir '.$output_dir;
 
   // Camera properties
   $cmd_wb = array();

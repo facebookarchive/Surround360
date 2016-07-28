@@ -100,7 +100,7 @@ void intrinsicCheckerboardCalibration(
           CV_AA);
       }
 
-      // if we found the checkerboard, at the image data to the list
+      // if we found the checkerboard, add the image data to the list
       imagePoints.push_back(cornerPoints);
       objectPoints.push_back(checkerboardTemplate);
     }

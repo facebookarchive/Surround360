@@ -802,7 +802,7 @@ void frameConsumer(
   const string& label,
   stringstream* statsStream) {
 
-  const string filenameFrames = dir + "/" + label + "_" + to_string(cid) + ".bin";
+  const string filenameFrames = dir + "/" + to_string(cid) + ".bin";
   int fd = open(filenameFrames.c_str(),
                 O_WRONLY | O_NONBLOCK | O_CREAT | O_DIRECT, 0644);
 

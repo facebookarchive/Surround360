@@ -228,7 +228,7 @@ if __name__ == "__main__":
     print_runall_command(args)
 
   binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
-  binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)[:-1]
+  binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
   disk_count = len(binary_files)
 
   # We want to be able to map a file path to its flag/variable name, so we keep

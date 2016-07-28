@@ -31,7 +31,7 @@ using namespace surround360::util;
 
 DEFINE_int32(image_width,     2048,   "expected image width");
 DEFINE_int32(image_height,    2048,   "expected image height");
-DEFINE_string(binary_prefix,  "",     "path to binary image disk up to timestamp (i.e. without _X)");
+DEFINE_string(binary_prefix,  "",     "path to binary image disk up to timestamp_ (i.e. before 0,1)");
 DEFINE_int32(disk_count,      2,      "number of consumer threads");
 DEFINE_int32(start_frame,     0,      "start frame (per camera)");
 DEFINE_int32(frame_count,     0,      "number of frames to unpack (per camera)");
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
 
   const size_t imageSize = FLAGS_image_width * FLAGS_image_height;
   vector<string> cameraNames;
-  const string camera_names_path = FLAGS_binary_prefix + "_cameranames.txt";
+  const string camera_names_path = FLAGS_binary_prefix + "cameranames.txt";
   ifstream cameraNamesFile(camera_names_path);
   if (!cameraNamesFile) {
     throw VrCamException("file read failed:" + camera_names_path);
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Reading binary files...";
 
   for (int i = 0; i < FLAGS_disk_count; ++i) {
-    string fileName(FLAGS_binary_prefix + "_" + to_string(i) + ".bin");
+    string fileName(FLAGS_binary_prefix + to_string(i) + ".bin");
     binaryFile[i] = open(fileName.c_str(), O_RDONLY);
     if (binaryFile[i] < 0) {
       throw VrCamException(

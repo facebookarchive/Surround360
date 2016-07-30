@@ -173,7 +173,7 @@ This file should be passed to run_all.py in the "intrinsic parameters file" fiel
 </pre>
 
 
-NOTE: the --checkerboard_width and --checkerboard_height parameters should match the number of checkers in your printed target, and the --resize_width and --resize_height parameters should match the image resolution. Other parameters such as --checker_size and --sensor_width won't have any effect.
+NOTE: the --checkerboard_width and --checkerboard_height parameters should match the number of checkers in your printed target minus 1, and the --resize_width and --resize_height parameters should match the image resolution. Other parameters such as --checker_size and --sensor_width won't have any effect.
 
 * The output is a new file at ~/Desktop/intrinsic/my_intrinsic.xml. This is what you would pass to run_all.py for the --src_intrinsic_param_file argument.
 

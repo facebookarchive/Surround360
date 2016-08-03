@@ -6,6 +6,12 @@ Surround360 is a hardware and software system for capturing and rendering 3D (st
 * /surround360_camera_ctl -- software for controlling the camera to capture raw data
 * /surround360_render -- software for rendering the raw data that is captured into a format suitable for viewing in VR.
 
+## Sample Data ##
+
+We provide a sample dataset for those who are interested in testing the rendering software without first building a camera.
+
+* https://fburl.com/399375715 -- 2 frames from the "Palace of Fine Arts" scene (337.4MB)
+
 ## Join the Surround360 community
 
 * Website: https://facebook360.fb.com/facebook-surround-360/

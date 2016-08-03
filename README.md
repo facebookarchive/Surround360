@@ -10,7 +10,7 @@ Surround360 is a hardware and software system for capturing and rendering 3D (st
 
 We provide a sample dataset for those who are interested in testing the rendering software without first building a camera.
 
-* https://fburl.com/399375715 -- 2 frames from the "Palace of Fine Arts" scene (337.4MB)
+* https://s3-us-west-2.amazonaws.com/surround360/sample/sample_dataset.zip -- 2 frames from the "Palace of Fine Arts" scene (337.4MB)
 
 ## Join the Surround360 community
 

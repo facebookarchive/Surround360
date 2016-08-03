@@ -60,6 +60,17 @@ python {SURROUND360_RENDER_DIR}/scripts/batch_process_isp.py
 {FLAGS_ISP_EXTRA}
 """
 
+RECTIFY_COMMAND_TEMPLATE = """
+{SURROUND360_RENDER_DIR}/bin/TestRingRectification
+--logbuflevel -1 --stderrthreshold 0 --v 0 \
+--rig_json_file {RIG_JSON_FILE} \
+--src_intrinsic_param_file {SRC_INSTRINSIC_PARAM_FILE} \
+--output_transforms_file {RECTIFY_FILE} \
+--root_dir {ROOT_DIR} \
+--frames_list {FRAME_LIST} \
+--visualization_dir {ROOT_DIR}/rectify_vis
+"""
+
 RENDER_COMMAND_TEMPLATE = """
 python {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
 --flow_alg {FLOW_ALG}
@@ -122,7 +133,7 @@ def parse_args():
   parser.add_argument('--enable_pole_removal',      help='false = use primary bottom camera', action='store_true')
   parser.add_argument('--save_debug_images',        help='save debug images', action='store_true')
   parser.add_argument('--dryrun',                   help='do not execute steps', action='store_true')
-  parser.add_argument('--steps',                    metavar='Steps', help='[unpack,arrange,isp,render,ffmpeg,all]', required=False, default='all')
+  parser.add_argument('--steps',                    metavar='Steps', help='[unpack,arrange,isp,rectify,render,ffmpeg,all]', required=False, default='all')
   parser.add_argument('--flow_alg',                 metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_med',  'pixflow_ultra'], default='pixflow_low')
   parser.add_argument('--cam_to_isp_config_file',   metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
   parser.add_argument('--pole_masks_dir',           metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
@@ -231,18 +242,18 @@ if __name__ == "__main__":
   binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
   disk_count = len(binary_files)
 
+  step_list_all = ["unpack", "arrange", "isp", "rectify", "render", "ffmpeg"]
+  step_list = steps.split(',')
+
   # We want to be able to map a file path to its flag/variable name, so we keep
   # a dictionary of mappings between them
   paths_map = dict((eval(name), name) for name in ['cam_to_isp_config_file', 'src_intrinsic_param_file', 'rectify_file', 'rig_json_file'])
   for path, name in paths_map.iteritems():
     if not os.path.isfile(path):
       # rectify_file can be set to NONE
-      if path != rectify_file or path != "NONE":
+      if (path != rectify_file or path != "NONE") and "rectify" not in step_list:
         sys.stderr.write("Given --" + name + " (" + path + ") does not exist\n")
         exit(1)
-
-  step_list_all = ["unpack", "arrange", "isp", "render", "ffmpeg"]
-  step_list = steps.split(',')
 
   if "all" in step_list:
     step_list = step_list_all
@@ -269,6 +280,8 @@ if __name__ == "__main__":
 
   os.chdir(surround360_render_dir)
 
+  ### unpack step ###
+
   step = "unpack"
   unpack_params = {
     "SURROUND360_RENDER_DIR": surround360_render_dir,
@@ -285,6 +298,8 @@ if __name__ == "__main__":
 
   if int(frame_count) == 0 and os.path.isdir(dest_dir + "/vid"):
     frame_count = len(os.listdir(dest_dir + "/vid"))
+
+  ### arrange step ###
 
   step = "arrange"
   arrange_extra_params = ""
@@ -321,6 +336,8 @@ if __name__ == "__main__":
     duplicate_isp_files(config_isp_path)
     update_isp_mappings(cam_to_isp_config_file)
 
+  ### isp step ###
+
   step = "isp"
   isp_extra_params = ""
 
@@ -341,6 +358,38 @@ if __name__ == "__main__":
   isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
 
   run_step(step, step_list, isp_command, verbose, dryrun, file_runtimes)
+
+  ### rectify step ###
+
+  if "rectify" in step_list and rectify_file == "NONE":
+    print """
+    The 'rectify' step is enabled. The 'rectification file' parameter must not
+    be NONE. Please supply a destination path to write the rectification file.
+    A good path to use is your destination directory /rectify.yml.
+    """
+    exit(1)
+
+  if rectify_file != "NONE" and os.path.isdir(rectify_file):
+    print "The 'rectification file' parameter should be a path to a file, not a directory"
+    exit(1)
+
+  if rectify_file != "NONE" and not rectify_file.endswith(".yml"):
+    print "The 'rectification file' parameter must end with .yml"
+    exit(1)
+
+  step = "rectify"
+  rectify_params = {
+    "SURROUND360_RENDER_DIR": surround360_render_dir,
+    "ROOT_DIR": dest_dir,
+    "RIG_JSON_FILE": rig_json_file,
+    "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
+    "RECTIFY_FILE": rectify_file,
+    "FRAME_LIST": str(start_frame).zfill(FRAME_NUM_DIGITS),
+  }
+  rectify_command = RECTIFY_COMMAND_TEMPLATE.replace("\n", " ").format(**rectify_params)
+  run_step(step, step_list, rectify_command, verbose, dryrun, file_runtimes)
+
+  ### render step ###
 
   step = "render"
   render_extra_params = ""
@@ -377,6 +426,8 @@ if __name__ == "__main__":
   render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
 
   run_step(step, step_list, render_command, verbose, dryrun, file_runtimes)
+
+  ### ffmpeg step ###
 
   step = "ffmpeg"
   ffmpeg_extra_params = ""

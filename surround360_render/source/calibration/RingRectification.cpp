@@ -222,8 +222,9 @@ vector<Mat> optimizeRingRectification(
   static const float kRegularizationCoef = 1000.0f;
   static const float kGradientStepSize   = 0.0000005f;
   static const int kNumGradientItrs      = 2000;
+  float currObjective = 0.0;
   for (int itr = 0; itr < kNumGradientItrs; ++itr) {
-    const float currObjective = rectificationObjective(
+    currObjective = rectificationObjective(
       kRegularizationCoef,
       numSideCameras,
       sideCamImagesFeatures[0][0].size(),
@@ -244,6 +245,12 @@ vector<Mat> optimizeRingRectification(
       rectificationVector[i] -= kGradientStepSize * gradient[i];
     }
     LOG(INFO) << itr << "\t" << currObjective;
+  }
+
+  const static float kRectifyObjectiveWarningThreshold = 400.0;
+  if (currObjective > kRectifyObjectiveWarningThreshold) {
+    LOG(WARNING) << "rectification objective is very bad. this suggests a "
+      "problem. check /keypoint_vis for good matches";
   }
 
   vector<Mat> finalTransforms = solutionVectorToTransforms(

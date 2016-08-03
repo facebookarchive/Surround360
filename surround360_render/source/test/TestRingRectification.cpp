@@ -7,7 +7,7 @@
 * of patent rights can be found in the PATENTS file in the same directory.
 */
 
-#include <stdio.h>
+#include <stdlib.h>
 
 #include <fstream>
 #include <iostream>
@@ -36,12 +36,11 @@ using namespace surround360::calibration;
 using namespace surround360::util;
 
 DEFINE_string(rig_json_file,              "",   "path to json file drescribing camera array");
-DEFINE_string(src_undistorted,            "",   "path to undistorted side camera images dir");
-DEFINE_string(match_vis_dir,              "",   "path to write keypoint matching visualizations");
-DEFINE_string(four_pt_vis_dir,            "",   "path to write 4 point perspective visualization");
-DEFINE_string(warped_output_dir,          "",   "path to write result warped images");
+DEFINE_string(src_intrinsic_param_file,   "",   "path to read intrinsic matrices");
+DEFINE_string(root_dir,                   "",   "path to a video root directory");
+DEFINE_string(frames_list,                "",   "list of frame indices to process");
+DEFINE_string(visualization_dir,          "",   "path to write visualizations");
 DEFINE_string(output_transforms_file,     "",   "path to write transforms");
-DEFINE_string(src_undistorted_features,   "",   "path to undistorted side camera images dir for feature extraction");
 
 // runs the optimization procedure for joint stereo rectification of the side cameras,
 // and produces one perspective transform matrix per camera, which is meant to be applied
@@ -49,12 +48,29 @@ DEFINE_string(src_undistorted_features,   "",   "path to undistorted side camera
 int main(int argc, char** argv) {
   initSurround360(argc, argv);
   requireArg(FLAGS_rig_json_file, "rig_json_file");
-  requireArg(FLAGS_src_undistorted, "src_undistorted");
-  requireArg(FLAGS_match_vis_dir, "match_vis_dir");
-  requireArg(FLAGS_four_pt_vis_dir, "four_pt_vis_dir");
-  requireArg(FLAGS_warped_output_dir, "warped_output_dir");
+  requireArg(FLAGS_src_intrinsic_param_file, "src_intrinsic_param_file");
+  requireArg(FLAGS_root_dir, "root_dir");
+  requireArg(FLAGS_frames_list, "frames_list");
+  requireArg(FLAGS_visualization_dir, "visualization_dir");
   requireArg(FLAGS_output_transforms_file, "output_transforms_file");
-  requireArg(FLAGS_src_undistorted_features, "src_undistorted_features");
+
+  // create directories for visualization. it's OK if these fail because the
+  // folders already exist.
+  system(string("mkdir " + FLAGS_visualization_dir).c_str());
+  system(string("mkdir " + FLAGS_visualization_dir + "/keypoint_vis").c_str());
+  system(string("mkdir " + FLAGS_visualization_dir + "/warped").c_str());
+
+  // read the intrinsic/distortion coefs from file
+  cv::FileStorage fileStorage(FLAGS_src_intrinsic_param_file, FileStorage::READ);
+  if (!fileStorage.isOpened()) {
+    throw VrCamException("file read failed: " + FLAGS_src_intrinsic_param_file);
+  }
+  Mat intrinsic, distCoeffs;
+  fileStorage["intrinsic"] >> intrinsic;
+  fileStorage["distCoeffs"] >> distCoeffs;
+  LOG(INFO) << "intrinsic parameters and distortion coefficients:";
+  LOG(INFO) << intrinsic;
+  LOG(INFO) << distCoeffs;
 
   LOG(INFO) << "reading camera json file";
   vector<CameraMetadata> camModelArrayWithTop =
@@ -65,72 +81,68 @@ int main(int argc, char** argv) {
     removeTopAndBottomFromCamArray(camModelArrayWithTop);
   const int numSideCameras = camModelArray.size();
 
-  LOG(INFO) << "loading source images";
-  vector<Mat> sideCamImages;
-  for (int i = 0; i < numSideCameras; ++i) {
-    LOG(INFO) << camModelArray[i].cameraId;
-    sideCamImages.push_back(
-      imreadExceptionOnFail(FLAGS_src_undistorted + "/" + camModelArray[i].cameraId + ".png",
-      CV_LOAD_IMAGE_COLOR));
-  }
+  vector<string> framesList = stringSplit(FLAGS_frames_list, ',');
+  assert(!framesList.empty());
 
-  LOG(INFO) << "loading source images for feature extraction";
-  vector<string> featureDirs = getFilesInDir(FLAGS_src_undistorted_features, false);
-  vector<vector<Mat>> sideCamImagesFeatures(featureDirs.size(), vector<Mat>());
-  for (size_t iDir = 0; iDir < featureDirs.size(); iDir++) {
-    LOG(INFO) << "reading images from dir: " << featureDirs[iDir];
-    for (size_t i = 0; i < numSideCameras; ++i) {
-      LOG(INFO) << featureDirs[iDir] << ": " << camModelArray[i].cameraId;
-      sideCamImagesFeatures[iDir].push_back(
-        imreadExceptionOnFail(
-          FLAGS_src_undistorted_features + "/" + featureDirs[iDir] + "/" + camModelArray[i].cameraId + ".png",
-          CV_LOAD_IMAGE_COLOR));
+  vector<vector<Mat>> sideCamImages(framesList.size(), vector<Mat>());
+  for (int frameIdx = 0; frameIdx < framesList.size(); ++frameIdx) {
+    const string& frameName = framesList[frameIdx];
+    LOG(INFO) << "getting side camera images from frame: " << frameName;
+    for (int i = 0; i < numSideCameras; ++i) {
+      const string srcImagePath = FLAGS_root_dir + "/vid/" + framesList[0] +
+        "/isp_out/" + camModelArray[i].cameraId + ".png";
+      LOG(INFO) << "\t" << camModelArray[i].cameraId << ": " << srcImagePath;
+      Mat origImage = imreadExceptionOnFail(srcImagePath, CV_LOAD_IMAGE_COLOR);
+      Mat imageUndistorted;
+      cvUndistortBicubic(
+        origImage, imageUndistorted, intrinsic, distCoeffs, intrinsic);
+      sideCamImages[frameIdx].push_back(imageUndistorted);
     }
   }
 
-  LOG(INFO) << "saving transforms";
+  LOG(INFO) << "finding keypoint matches and optimizing rectification";
   const vector<Mat> finalTransforms = optimizeRingRectification(
     camModelArray,
-    sideCamImagesFeatures,
-    featureDirs.size(),
-    FLAGS_match_vis_dir);
+    sideCamImages,
+    framesList.size(),
+    FLAGS_visualization_dir + "/keypoint_vis");
   FileStorage transformsFile(FLAGS_output_transforms_file, FileStorage::WRITE);
   for (int i = 0; i < numSideCameras; ++i) {
     transformsFile << camModelArray[i].cameraId << finalTransforms[i];
   }
 
-  LOG(INFO) << "saving warped images";
-  vector<Mat> warpedSideImages;
+  LOG(INFO) << "generating visualizations";
 
   // Remap entire image from rectilinear to spherical
   float fovH = camModelArray[0].fovHorizontal;
   float fovV = camModelArray[0].fovHorizontal / camModelArray[0].aspectRatioWH;
 
+  vector<Mat> warpedSideImages;
   for (int i = 0; i < numSideCameras; ++i) {
     LOG(INFO) << "warping image " << i;
-    LOG(INFO) << "sideCamImages[i].size()=" << sideCamImages[i].size();
+    LOG(INFO) << "sideCamImages[0][i].size()=" << sideCamImages[0][i].size();
     Mat warpedImage;
     warpPerspective(
-      sideCamImages[i], warpedImage, finalTransforms[i], sideCamImages[i].size());
+      sideCamImages[0][i], warpedImage, finalTransforms[i], sideCamImages[0][i].size());
 
     Mat sphericalImage = projectRectilinearToSpherical(
       warpedImage,
       fovH,
       fovV,
-      sideCamImages[i].cols,
-      sideCamImages[i].rows);
+      sideCamImages[0][i].cols,
+      sideCamImages[0][i].rows);
 
     warpedSideImages.push_back(sphericalImage);
 
     imwriteExceptionOnFail(
-      FLAGS_warped_output_dir + "/" + camModelArray[i].cameraId + "_sphe.png",
+      FLAGS_visualization_dir + "/warped/" + camModelArray[i].cameraId + ".png",
       sphericalImage);
   }
 
   // putting them all in one image makes it easier to check rectification
   Mat stackedImage = stackHorizontal(warpedSideImages);
   imwriteExceptionOnFail(
-    FLAGS_warped_output_dir + "/stacked.png",
+    FLAGS_visualization_dir + "/stacked.png",
     stackedImage);
 
   return EXIT_SUCCESS;

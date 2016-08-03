@@ -10,72 +10,31 @@ There are three specialized calibration processes: intrinsic calibration to corr
 
 The purpose of the rectification step is to align everything so that both eyes see every point in the scene at the same y-coordinate. This is the most important step in calibration; skipping this step will likely result in stereo which causes eye-strain or which cannot be fused as 3D at all. Fortunately, this step can be done with any unstructured data (if you captured a single frame of video, you have the necessary data). Rectification must be done once per rig, but can be left alone for subsequent scenes captured with the same rig.
 
-The config file for rectification has a .yml extension. It is passed to run_all.py via the --rectify_file command-line arugment, or "rectification file" in the GUI.
+* The config file for rectification has a .yml extension. It is passed to run_all.py via the --rectify_file command-line arugment, or "rectification file" in the GUI.
 
-For fast preview rendering modes, rectification may be skipped, and it is allowed to pass "NONE" for --rectify_file.
+* For fast preview rendering modes, rectification may be skipped, and it is allowed to pass "NONE" for --rectify_file.
 
-The process for rectification is somewhat involved; we will simplify it and provide a GUI in the near future. For now, follow these steps:
+* A rectify file can be generated from the run_all.py GUI, or by directly from the command line. To generate it using the GUI, execute run_all.py, then make sure that the "Steps" list is either 'all', or includes 'rectify'. Note that 'rectify' must happen in between the 'isp' step and the 'render' step (or the 'isp' step should already have been run). You must also specify a file path in the 'Rectification File' parameter; this should be a path to a file with a .yml extension. A good default choice is to take the 'Destination Directory" path and add 'rectify.yml' to that, e.g., if 'Destination Directory' is ~Desktop/my360video, then 'Rectification File' could be ~Desktop/my360video/rectify.yml.
 
-* We will assume that we already have a dataset captured, and that it has gone through the 'unpack', 'arrange', and 'isp' steps (at least for 1 frame). For the sake of this example, we will assume everything has been unpacked to a folder located at ~/Desktop/palace1 ('palace1' is the name of the scene we are rendering, as in, "Palace of Fine Arts"). In the 'arrange' step of the pipeline, several subdirectories should be created, such as
-  * ~/Desktop/palace1/vid
-  * ~/Desktop/palace1/logs
-  * etc ...
+* WARNING: running the 'rectify' step is not necessary if you already have a rectification file, and pointing the 'Rectification file' argument to an existing file may cause it to be overwritten.
 
-* In this example we will use frame 000000 for rectification (this needs to be done with 1 or more frames of sample data, but it can then be applied to the whole video, or other videos captured with the same rig).
+* WARNING: in rare cases, rectification may fail to produce valid results (if keypoint matching fails, e.g. in extremely low light conditions). If this happens, there will be a warning message in the logs, and it can be seen in the visualizations that are generated (see below). If the scene you are trying to render is not usable for rectification, use the same camera on a different scene, then apply that rectification file to the other scene.
 
-* Navigate to ~/Desktop/palace1/vid/000000. It should contain the following subdirectories:
-  * /flow
-  * /flow_images
-  * /isp_out
-  * /projections
-  * /raw
-
-* Make sure the /isp_out directory contains images named cam0.png, cam1.png, ... up to cam16.png. If these files are missing, it means the 'isp' step hasn't been run. You must run the 'isp' step for at least one frame before proceeding with rectification, although color adjustment is not required.
-
-* Under /000000, create several additional empty folders (we will fill these with data in the next steps):
-  * /undistorted
-  * /undistorted_features
-  * /warped
-  * /keypoint_vis
-  * /4point
-
-* The rectification calibrator expects as input, images which have no barrel distortion. We will generate those images by undistorting the contents of /isp_out, and write the results to /undistorted. cd to /surround360_render, then run the following command:
-<pre>
-./bin/TestIntrinsicCalibration \
---logbuflevel -1 --stderrthreshold 0 --v 0 \
---mode undistort \
---src_intrinsic_param_file ./res/config/sunex_intrinsic.xml \
---src_fisheye_img_dir ~/Desktop/palace1/vid/000000/isp_out \
---dest_undistorted_dir ~/Desktop/palace1/vid/000000/undistorted \
---resize_width 2048 \
---resize_height 2048
-</pre>
-After running this command, /undistorted should contain a new version of cam0.png, ..., cam16.png.
-
-* Next, we will prepare a folder of data to be used for rectification. It is possible to use multiple frames of data for rectification, but in this example we will use only one frame. Under /undistorted_features, create a new folder named /00. The full path to the new folder should be ~/Desktop/palace1/vid/000000/undistorted_features/00.
-
-* Copy all of the files cam0.png, ..., cam16.png from ~/Desktop/palace1/vid/000000/undistorted to ~/Desktop/palace1/vid/000000/undistorted_features/00.
-
-* NOTE: here /00 contains the first frame of data for rectification. If we were using multiple frames, the data for these would go in /01, /02, ... etc.
-
-* Delete cam0.png, cam15.png, and cam16.png from undistorted_features/00 (DO NOT delete them from /undistorted, only delete them from /undistorted_features/00). We are deleting these because cam0, cam15, and cam16 are fisheye lenses at the top and bottom, not side cameras. These are not part of rectificaiton.
-
-* Now we are ready to run the rectification code. cd to /surround360_render, then run the following command:
+* Here is a sample command for computing rectification from the command line:
 <pre>
 ./bin/TestRingRectification \
 --logbuflevel -1 --stderrthreshold 0 --v 0 \
 --rig_json_file ./res/config/17cmosis_default.json \
---src_undistorted ~/Desktop/palace1/vid/000000/undistorted \
---src_undistorted_features ~/Desktop/palace1/vid/000000/undistorted_features \
---match_vis_dir ~/Desktop/palace1/vid/000000/keypoint_vis \
---four_pt_vis_dir ~/Desktop/palace1/vid/000000/4point \
---warped_output_dir ~/Desktop/palace1/vid/000000/warped \
---output_transforms_file ~/Desktop/rectify_my_rig.yml
+--src_intrinsic_param_file ./res/config/sunex_intrinsic.xml \
+--output_transforms_file ~/Desktop/new_rectify_test/rectify.yml \
+--root_dir ~/Desktop/new_rectify_test \
+--frames_list 000000 \
+--visualization_dir ~/Desktop/new_rectify_test/rectify_vis
 </pre>
 
-* Once the command above finishes, a new file is created at ~/Desktop/rectify_my_rig.yml. This is the file you need to pass in to run_all.py for "rectification file" (GUI) or --rectify_file (command-line). You may wish to copy this file to /surround360_render/res/config.
+* Once the command above finishes, a new file is created at ~/Desktop/new_rectify_test/rectify.yml. This is the file you need to pass in to run_all.py for "rectification file" (GUI) or --rectify_file (command-line). You may wish to copy this file to /surround360_render/res/config.
 
-* That is all you need to do, but some interesting visualizations are generated in /keypoint_vis and /warped. For example, /warped/stacked.png shows all of the side cameras stacked horizontally into one big image, after rectification. If you draw a horizontal line across stacked.png, you should see everything lining up between adjacent images.
+* That is all you need to do, but some interesting visualizations are generated in /keypoint_vis and /warped (relative to the --visualization_dir flag if using the command line, or in the /rectify_vis directory under a video's root folder if using the GUI). For example, /stacked.png shows all of the side cameras stacked horizontally into one big image, after rectification. If you draw a horizontal line across stacked.png, you should see everything lining up between adjacent images.
 
 ## Optical Centering
 

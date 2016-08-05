@@ -75,7 +75,7 @@ DEFINE_string(cubemap_format,             "video",        "either video or photo
 DEFINE_bool(fast_preview_mode,            false,          "if true, lots of tweaks for +speed -quality");
 DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
 DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
-
+DEFINE_bool(enable_render_coloradjust,    false,          "if true, color and brightness of images will be automatically adjusted to make smoother blends (in the renderer, not in the ISP step)");
 
 // project the image of a single camera into spherical coordinates
 void projectCamImageToSphericalThread(
@@ -128,7 +128,7 @@ void projectCamImageToSphericalThread(
   }
 
   // if we got a non-zero brightness adjustment, apply it
-  if (brightnessAdjustment != 0.0f) {
+  if (FLAGS_enable_render_coloradjust && brightnessAdjustment != 0.0f) {
     projectedImage = addBrightnessAndClamp(
       projectedImage, brightnessAdjustment);
   }
@@ -169,7 +169,8 @@ void projectSphericalCamImages(
 
   // if we gota  brightness adjustments file, read the values
   vector<float> brightnessAdjustments(camModelArray.size(), 0.0f);
-  if (!FLAGS_brightness_adjustment_src.empty()){
+  if (FLAGS_enable_render_coloradjust &&
+      !FLAGS_brightness_adjustment_src.empty()){
     LOG(INFO) << "reading brightness adjustment file: "
       << FLAGS_brightness_adjustment_src;
     ifstream brightnessAdjustFile(FLAGS_brightness_adjustment_src);
@@ -671,6 +672,9 @@ void renderStereoPanorama() {
 
   const double startTime = getCurrTimeSec();
 
+  ColorAdjustmentSampleLogger::instance().enabled =
+    FLAGS_enable_render_coloradjust;
+
   // load camera meta data and source images
   VLOG(1) << "Reading camera model json";
   vector<CameraMetadata> camModelArrayWithTop =
@@ -844,10 +848,17 @@ void renderStereoPanorama() {
     topFlowThreadL.join();
     topFlowThreadR.join();
 
-    sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
-      sphericalImageL, topSphericalWarpedL);
-    sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
-      sphericalImageR, topSphericalWarpedR);
+    if (FLAGS_enable_render_coloradjust) {
+      sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
+        sphericalImageL, topSphericalWarpedL);
+      sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
+        sphericalImageR, topSphericalWarpedR);
+    } else {
+      sphericalImageL = flattenLayersDeghostPreferBase(
+        sphericalImageL, topSphericalWarpedL);
+      sphericalImageR = flattenLayersDeghostPreferBase(
+        sphericalImageR, topSphericalWarpedR);
+    }
   }
 
   if (FLAGS_enable_bottom) {
@@ -856,10 +867,17 @@ void renderStereoPanorama() {
 
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
-    sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
-      sphericalImageL, bottomSphericalWarpedL);
-    sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
-      sphericalImageR, bottomSphericalWarpedR);
+    if (FLAGS_enable_render_coloradjust) {
+      sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
+        sphericalImageL, bottomSphericalWarpedL);
+      sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
+        sphericalImageR, bottomSphericalWarpedR);
+    } else {
+      sphericalImageL = flattenLayersDeghostPreferBase(
+        sphericalImageL, bottomSphericalWarpedL);
+      sphericalImageR = flattenLayersDeghostPreferBase(
+        sphericalImageR, bottomSphericalWarpedR);
+    }
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
   }
@@ -933,7 +951,8 @@ void renderStereoPanorama() {
   Mat stereoEquirect = stackVertical(vector<Mat>({sphericalImageL, sphericalImageR}));
   imwriteExceptionOnFail(FLAGS_output_equirect_path, stereoEquirect);
 
-  if (!FLAGS_brightness_adjustment_dest.empty()) {
+  if (FLAGS_enable_render_coloradjust &&
+      !FLAGS_brightness_adjustment_dest.empty()) {
     LOG(INFO) << "running side brightness adjustment";
     ColorAdjustmentSampleLogger& colorSampleLogger =
       ColorAdjustmentSampleLogger::instance();

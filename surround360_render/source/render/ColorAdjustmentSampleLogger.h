@@ -33,6 +33,7 @@ class ColorAdjustmentSampleLogger {
  public:
   mutex samplesMutex;
   vector<ColorSample> samples;
+  bool enabled;
 
   static ColorAdjustmentSampleLogger& instance() {
     static ColorAdjustmentSampleLogger* inst =
@@ -45,6 +46,10 @@ class ColorAdjustmentSampleLogger {
       const int& rightImageIdx,
       const Vec4b& leftImageColor,
       const Vec4b& rightImageColor) {
+
+    if (!enabled) {
+      return;
+    }
 
     static const int kSampleRate = 1000; // keep only one over this # samples
     if (rand() % kSampleRate == 0) {
@@ -61,7 +66,9 @@ class ColorAdjustmentSampleLogger {
   }
 
  private:
-  ColorAdjustmentSampleLogger() {}
+  ColorAdjustmentSampleLogger() {
+    enabled = true;
+  }
 };
 
 } // namespace color_adjust

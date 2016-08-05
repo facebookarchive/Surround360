@@ -121,26 +121,27 @@ def parse_args():
 
   parse_type = GooeyParser if USE_GOOEY else argparse.ArgumentParser
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument('--data_dir',                 metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
-  parser.add_argument('--dest_dir',                 metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
-  parser.add_argument('--quality',                  metavar='Quality', help='final output quality', required=False, choices=['preview', '3k', '4k', '6k', '8k'], default='6k')
-  parser.add_argument('--start_frame',              metavar='Start Frame', help='start frame', required=False, default='0')
-  parser.add_argument('--frame_count',              metavar='Frame Count', help='0 = all', required=False, default='0')
-  parser.add_argument('--cubemap_face_resolution',  metavar='Cubemap Face Resolution', help='0 = no cubemaps', required=False, default='0')
-  parser.add_argument('--cubemap_format',           metavar='Cubemap Format', help='photo or video', required=False, choices=['photo', 'video'], default='video')
-  parser.add_argument('--enable_top',               help='enable top camera', action='store_true')
-  parser.add_argument('--enable_bottom',            help='enable bottom camera', action='store_true')
-  parser.add_argument('--enable_pole_removal',      help='false = use primary bottom camera', action='store_true')
-  parser.add_argument('--save_debug_images',        help='save debug images', action='store_true')
-  parser.add_argument('--dryrun',                   help='do not execute steps', action='store_true')
-  parser.add_argument('--steps',                    metavar='Steps', help='[unpack,arrange,isp,rectify,render,ffmpeg,all]', required=False, default='all')
-  parser.add_argument('--flow_alg',                 metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_med',  'pixflow_ultra'], default='pixflow_low')
-  parser.add_argument('--cam_to_isp_config_file',   metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
-  parser.add_argument('--pole_masks_dir',           metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
-  parser.add_argument('--src_intrinsic_param_file', metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)
-  parser.add_argument('--rectify_file',             metavar='Rectification File', help='rectification file [or NONE]', required=False, default=create_default_path(rectify_file, "NONE"), **file_chooser)
-  parser.add_argument('--rig_json_file',            metavar='Rig Geometry File', help='json file with rig geometry info', required=False, default=create_default_path(rig_json_file, ""), **file_chooser)
-  parser.add_argument('--verbose',                  help='increase output verbosity', action='store_true')
+  parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
+  parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
+  parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['preview', '3k', '4k', '6k', '8k'], default='6k')
+  parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
+  parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
+  parser.add_argument('--cubemap_face_resolution',    metavar='Cubemap Face Resolution', help='0 = no cubemaps', required=False, default='0')
+  parser.add_argument('--cubemap_format',             metavar='Cubemap Format', help='photo or video', required=False, choices=['photo', 'video'], default='video')
+  parser.add_argument('--enable_top',                 help='enable top camera', action='store_true')
+  parser.add_argument('--enable_bottom',              help='enable bottom camera', action='store_true')
+  parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
+  parser.add_argument('--enable_render_coloradjust',  help='modify color/brightness in the renderer to improve blending. increases runtime', action='store_true')
+  parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
+  parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
+  parser.add_argument('--steps',                      metavar='Steps', help='[unpack,arrange,isp,rectify,render,ffmpeg,all]', required=False, default='all')
+  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_med',  'pixflow_ultra'], default='pixflow_low')
+  parser.add_argument('--cam_to_isp_config_file',     metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
+  parser.add_argument('--pole_masks_dir',             metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
+  parser.add_argument('--src_intrinsic_param_file',   metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)
+  parser.add_argument('--rectify_file',               metavar='Rectification File', help='rectification file [or NONE]', required=False, default=create_default_path(rectify_file, "NONE"), **file_chooser)
+  parser.add_argument('--rig_json_file',              metavar='Rig Geometry File', help='json file with rig geometry info', required=False, default=create_default_path(rig_json_file, ""), **file_chooser)
+  parser.add_argument('--verbose',                    help='increase output verbosity', action='store_true')
 
   return vars(parser.parse_args())
 
@@ -219,6 +220,7 @@ if __name__ == "__main__":
   enable_top                = args["enable_top"]
   enable_bottom             = args["enable_bottom"]
   enable_pole_removal       = args["enable_pole_removal"]
+  enable_render_coloradjust = args["enable_render_coloradjust"]
   save_debug_images         = args["save_debug_images"]
   dryrun                    = args["dryrun"];
   steps                     = args["steps"]
@@ -402,6 +404,9 @@ if __name__ == "__main__":
 
     if enable_pole_removal:
       render_extra_params += " --enable_pole_removal"
+
+  if enable_render_coloradjust and quality != "preview":
+    render_extra_params += " --enable_render_coloradjust"
 
   if save_debug_images:
     render_extra_params += " --save_debug_images"

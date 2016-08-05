@@ -34,7 +34,7 @@ template <typename T>
 inline T square(const T x) { return x * x; }
 
 template <typename T>
-inline T clamp(const T x, const T a, const T b) {
+inline T clamp(const T& x, const T& a, const T& b) {
   return x < a ? a : x > b ? b : x;
 }
 

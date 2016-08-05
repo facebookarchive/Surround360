@@ -7,6 +7,7 @@
 * of patent rights can be found in the PATENTS file in the same directory.
 */
 
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -14,6 +15,7 @@
 #include <vector>
 
 #include "CameraMetadata.h"
+#include "ColorAdjustmentSampleLogger.h"
 #include "CvUtil.h"
 #include "Filter.h"
 #include "ImageWarper.h"
@@ -24,6 +26,8 @@
 #include "OpticalFlowFactory.h"
 #include "OpticalFlowVisualization.h"
 #include "PoleRemoval.h"
+#include "SideCameraBrightnessAdjustment.h"
+#include "StringUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
@@ -38,6 +42,7 @@ using namespace surround360::math_util;
 using namespace surround360::optical_flow;
 using namespace surround360::util;
 using namespace surround360::warper;
+using namespace surround360::color_adjust;
 
 DEFINE_string(src_intrinsic_param_file,   "",             "path to read intrinsic matrices");
 DEFINE_string(rig_json_file,              "",             "path to json file drescribing camera array");
@@ -68,9 +73,13 @@ DEFINE_int32(final_eqr_height,            960,            "resize before stackin
 DEFINE_int32(cubemap_face_resolution,     1536,           "resolution of output cubemaps");
 DEFINE_string(cubemap_format,             "video",        "either video or photo");
 DEFINE_bool(fast_preview_mode,            false,          "if true, lots of tweaks for +speed -quality");
+DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
+DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
+
 
 // project the image of a single camera into spherical coordinates
 void projectCamImageToSphericalThread(
+    float brightnessAdjustment,
     Mat* intrinsic,
     Mat* distCoeffs,
     CameraMetadata* cam,
@@ -117,6 +126,13 @@ void projectCamImageToSphericalThread(
       BORDER_CONSTANT,
       Scalar(0.0, 0.0, 0.0));
   }
+
+  // if we got a non-zero brightness adjustment, apply it
+  if (brightnessAdjustment != 0.0f) {
+    projectedImage = addBrightnessAndClamp(
+      projectedImage, brightnessAdjustment);
+  }
+
   *outProjectedImage = projectedImage;
 }
 
@@ -137,6 +153,7 @@ void projectSphericalCamImages(
     << endLoadCameraImagesTime - startLoadCameraImagesTime
     << " sec";
 
+  // if we got intrinsic lens parameters, read them to correct distortion
   Mat intrinsic, distCoeffs;
   if (FLAGS_src_intrinsic_param_file == "NONE") {
     VLOG(1) << "src_intrinsic_param_file = NONE. no intrinsics loaded";
@@ -150,9 +167,35 @@ void projectSphericalCamImages(
     }
   }
 
-  // to ensure thread safety, we need to make absolutely sure there is no monkey business
-  // with STL pair + cv::Mat going out of scope, so before spawning threads we unpack the
-  // pairs.
+  // if we gota  brightness adjustments file, read the values
+  vector<float> brightnessAdjustments(camModelArray.size(), 0.0f);
+  if (!FLAGS_brightness_adjustment_src.empty()){
+    LOG(INFO) << "reading brightness adjustment file: "
+      << FLAGS_brightness_adjustment_src;
+    ifstream brightnessAdjustFile(FLAGS_brightness_adjustment_src);
+    if (!brightnessAdjustFile) {
+      throw VrCamException(
+        "file read failed: " + FLAGS_brightness_adjustment_src);
+    }
+    const string strData(
+      (istreambuf_iterator<char>(brightnessAdjustFile)),
+      istreambuf_iterator<char>());
+    vector<string> brightnessStrs = stringSplit(strData , ',');
+    if (brightnessStrs.size() != camModelArray.size()) {
+      throw VrCamException(
+        "expected number of brightness adjustment values to match number of "
+        "side cameras. got # cameras = " + to_string(camModelArray.size()) +
+        " and # brightness adjustments = " +
+        to_string(brightnessAdjustments.size()));
+    }
+    for (int i = 0; i < brightnessStrs.size(); ++i) {
+      brightnessAdjustments[i] = std::stof(brightnessStrs[i]);
+    }
+  }
+
+  // to ensure thread safety, we need to make absolutely sure there is no monkey
+  // business with STL pair + cv::Mat going out of scope, so before spawning
+  // threads we unpack the pairs.
   vector<CameraMetadata> camModels;
   vector<Mat> camImages;
   for (int camIdx = 0; camIdx < camImagePairs.size(); ++camIdx) {
@@ -166,6 +209,7 @@ void projectSphericalCamImages(
   for (int camIdx = 0; camIdx < camImagePairs.size(); ++camIdx) {
     threads.push_back(std::thread(
       projectCamImageToSphericalThread,
+      brightnessAdjustments[camIdx],
       &intrinsic,
       &distCoeffs,
       &camModels[camIdx],
@@ -272,8 +316,11 @@ void renderStereoPanoramaChunksThread(
     ++currChunkX;
   }
 
-  pair<Mat, Mat> lazyNovelChunksLR =
-    novelViewGen->combineLazyNovelViews(lazyNovelViewBuffer);
+  const int rightIdx = (leftIdx + 1) % numCams;
+  pair<Mat, Mat> lazyNovelChunksLR = novelViewGen->combineLazyNovelViews(
+    lazyNovelViewBuffer,
+    leftIdx,
+    rightIdx);
   *chunkL = lazyNovelChunksLR.first;
   *chunkR = lazyNovelChunksLR.second;
 }
@@ -797,8 +844,10 @@ void renderStereoPanorama() {
     topFlowThreadL.join();
     topFlowThreadR.join();
 
-    sphericalImageL = flattenLayersDeghostPreferBase(sphericalImageL, topSphericalWarpedL);
-    sphericalImageR = flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
+    sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
+      sphericalImageL, topSphericalWarpedL);
+    sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
+      sphericalImageR, topSphericalWarpedR);
   }
 
   if (FLAGS_enable_bottom) {
@@ -807,8 +856,10 @@ void renderStereoPanorama() {
 
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
-    sphericalImageL = flattenLayersDeghostPreferBase(sphericalImageL, bottomSphericalWarpedL);
-    sphericalImageR = flattenLayersDeghostPreferBase(sphericalImageR, bottomSphericalWarpedR);
+    sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
+      sphericalImageL, bottomSphericalWarpedL);
+    sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
+      sphericalImageR, bottomSphericalWarpedR);
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
   }
@@ -881,6 +932,32 @@ void renderStereoPanorama() {
   LOG(INFO) << "Creating stereo equirectangular image";
   Mat stereoEquirect = stackVertical(vector<Mat>({sphericalImageL, sphericalImageR}));
   imwriteExceptionOnFail(FLAGS_output_equirect_path, stereoEquirect);
+
+  if (!FLAGS_brightness_adjustment_dest.empty()) {
+    LOG(INFO) << "running side brightness adjustment";
+    ColorAdjustmentSampleLogger& colorSampleLogger =
+      ColorAdjustmentSampleLogger::instance();
+
+    LOG(INFO) << "# color samples = " << colorSampleLogger.samples.size();
+
+    vector<double> sideCamBrightnessAdjustments =
+      computeBrightnessAdjustmentsForSideCameras(
+        camModelArray.size(), colorSampleLogger.samples);
+
+    LOG(INFO) << "writing brightness adjustments to file: "
+      << FLAGS_brightness_adjustment_dest;
+    ofstream brightnessAdjustFile(FLAGS_brightness_adjustment_dest);
+    if (!brightnessAdjustFile) {
+      throw VrCamException(
+        "file write failed: " + FLAGS_brightness_adjustment_dest);
+    }
+    vector<string> brightnessStrs;
+    for (int i = 0; i < sideCamBrightnessAdjustments.size(); ++i) {
+      brightnessStrs.push_back(to_string(sideCamBrightnessAdjustments[i]));
+    }
+    brightnessAdjustFile << stringJoin(",", brightnessStrs);
+    brightnessAdjustFile.close();
+  }
 
   const double endTime = getCurrTimeSec();
   VLOG(1) << "--- Runtime breakdown (sec) ---";

@@ -139,22 +139,28 @@ void combineBottomImagesWithPoleRemoval(
     imwriteExceptionOnFail(outputDataDir + "/bottomWarp2.png", warpedBottomImage2);
   }
 
+  const vector<vector<float>> colorAdjustModel = buildColorAdjustmentModel(
+    bottomImage, warpedBottomImage2);
+  const Mat adjustedBottomImage2 = applyColorAdjustmentModel(
+    warpedBottomImage2, colorAdjustModel);
+
   VLOG(1) << "Combining the primary bottom image and the secondary warped image";
   for (int y = 0; y < bottomImage.rows; ++y) {
     for (int x = 0; x < bottomImage.cols; ++x) {
       const float alpha = bottomImage.at<Vec4b>(y, x)[3] / 255.0f;
-      const float alpha2 = warpedBottomImage2.at<Vec4b>(y, x)[3] / 255.0f;
-       // if we don't have full alpha from the primary image, and we have some data from
-       // the secondary image, use a weighted combination. otherwise leave it unchanged.
+      const float alpha2 =
+        adjustedBottomImage2.at<Vec4b>(y, x)[3] / 255.0f;
+      // if we don't have full alpha from the primary image, and we have some data from
+      // the secondary image, use a weighted combination. otherwise leave it unchanged.
       if (alpha < 1.0f && alpha2 > 0.0f) {
         const float a1 = alpha;
         const float a2 = 1.0f - alpha;
         const float r1 = bottomImage.at<Vec4b>(y, x)[2];
         const float g1 = bottomImage.at<Vec4b>(y, x)[1];
         const float b1 = bottomImage.at<Vec4b>(y, x)[0];
-        const float r2 = warpedBottomImage2.at<Vec4b>(y, x)[2];
-        const float g2 = warpedBottomImage2.at<Vec4b>(y, x)[1];
-        const float b2 = warpedBottomImage2.at<Vec4b>(y, x)[0];
+        const float r2 = adjustedBottomImage2.at<Vec4b>(y, x)[2];
+        const float g2 = adjustedBottomImage2.at<Vec4b>(y, x)[1];
+        const float b2 = adjustedBottomImage2.at<Vec4b>(y, x)[0];
         bottomImage.at<Vec4b>(y, x) = Vec4b(
           a1 * b1 + a2 * b2,
           a1 * g1 + a2 * g2,

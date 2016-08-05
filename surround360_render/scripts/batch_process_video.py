@@ -115,9 +115,15 @@ if __name__ == "__main__":
     rectify_file = "NONE"
 
   start_time = timer()
-  is_first_frame = True
-  for i in range(min_frame, max_frame + 1):
+  brightness_adjust_path = root_dir + "/brightness_adjust.txt"
+  frame_range = range(min_frame, max_frame + 1)
+  if not os.path.isfile(brightness_adjust_path):
+    print "no brightness adjustment file found. the first frame will be rendered twice to generate one, then use it"
+    frame_range = [min_frame] + frame_range
+
+  for i in frame_range:
     frame_to_process = format(i, "06d")
+    is_first_frame = (i == min_frame)
 
     print "----------- [Render] processing frame:", frame_to_process
     sys.stdout.flush()
@@ -143,6 +149,11 @@ if __name__ == "__main__":
       "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
       "EXTRA_FLAGS": "",
     }
+
+    if os.path.isfile(brightness_adjust_path):
+      render_params["EXTRA_FLAGS"] += " --brightness_adjustment_src " + brightness_adjust_path
+    else:
+      render_params["EXTRA_FLAGS"] += " --brightness_adjustment_dest " + brightness_adjust_path
 
     if resume or not is_first_frame:
       render_params["PREV_FRAME_DIR"] = prev_frame_dir
@@ -223,8 +234,6 @@ if __name__ == "__main__":
         sys.stdout.flush()
 
       subprocess.call(rm_old_flow_images_command, shell=True)
-
-    is_first_frame = False
 
   end_time = timer()
 

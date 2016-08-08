@@ -110,21 +110,6 @@ void projectCamImageToSphericalThread(
       *camImage,
       FLAGS_side_alpha_feather_size,
       skipUndistort);
-
-    // If the un-padded height is odd and FLAGS_eqr_height is even, we can't do equal
-    // padding to get the final image to be FLAGS_eqr_height. the formulas below give
-    // equal padding if possible, or equal +/-1 if not.
-    const int paddingAbove = (FLAGS_eqr_height - projectedImage.rows) / 2;
-    const int paddingBelow = FLAGS_eqr_height - projectedImage.rows - paddingAbove;
-    copyMakeBorder(
-      projectedImage,
-      projectedImage,
-      paddingAbove,
-      paddingBelow,
-      0,
-      0,
-      BORDER_CONSTANT,
-      Scalar(0.0, 0.0, 0.0));
   }
 
   // if we got a non-zero brightness adjustment, apply it
@@ -662,6 +647,23 @@ void sharpenThread(Mat* sphericalImage) {
     *sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpenning);
 }
 
+// If the un-padded height is odd and targetHeight is even, we can't do equal
+// padding to get the final image to be targetHeight. the formulas below give
+// equal padding if possible, or equal +/-1 if not.
+void padToheight(Mat& unpaddedImage, const int targetHeight) {
+  const int paddingAbove = (targetHeight - unpaddedImage.rows) / 2;
+  const int paddingBelow = targetHeight - unpaddedImage.rows - paddingAbove;
+  copyMakeBorder(
+    unpaddedImage,
+    unpaddedImage,
+    paddingAbove,
+    paddingBelow,
+    0,
+    0,
+    BORDER_CONSTANT,
+    Scalar(0.0, 0.0, 0.0));
+}
+
 // run the whole stereo panorama rendering pipeline
 void renderStereoPanorama() {
   requireArg(FLAGS_src_intrinsic_param_file, "src_intrinsic_param_file");
@@ -784,6 +786,12 @@ void renderStereoPanorama() {
     imwriteExceptionOnFail(FLAGS_output_data_dir + "/sphericalImg_offsetwrapL.png", wrapSphericalImageL);
     imwriteExceptionOnFail(FLAGS_output_data_dir + "/sphericalImg_offsetwrapR.png", wrapSphericalImageR);
   }
+
+  // so far we only operated on the strip that contains the full vertical FOV of
+  // the side cameras. before merging those results with top/bottom cameras,
+  // we will pad the side images out to be a full 180 degree vertical equirect.
+  padToheight(sphericalImageL, FLAGS_eqr_height);
+  padToheight(sphericalImageR, FLAGS_eqr_height);
 
   // if both top and bottom cameras are enabled, there are 4 threads that can be done in
   // parallel (for top/bottom, we flow to the left eye and right eye side panoramas).

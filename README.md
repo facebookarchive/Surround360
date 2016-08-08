@@ -6,6 +6,12 @@ Surround360 is a hardware and software system for capturing and rendering 3D (st
 * /surround360_camera_ctl -- software for controlling the camera to capture raw data
 * /surround360_render -- software for rendering the raw data that is captured into a format suitable for viewing in VR.
 
+## Instruction Manual ##
+
+Please refer to our instruction manual (which covers use of both hardware and software) here:
+
+https://github.com/facebook/Surround360/blob/master/surround360_design/assembly_guide/Surround360_Manual.pdf
+
 ## Sample Data ##
 
 We provide a sample dataset for those who are interested in testing the rendering software without first building a camera.

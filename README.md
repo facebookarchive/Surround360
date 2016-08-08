@@ -16,7 +16,9 @@ https://github.com/facebook/Surround360/blob/master/surround360_design/assembly_
 
 We provide a sample dataset for those who are interested in testing the rendering software without first building a camera.
 
-* https://s3-us-west-2.amazonaws.com/surround360/sample/sample_dataset.zip -- 2 frames from the "Palace of Fine Arts" scene (337.4MB)
+* "Palace of Fine Arts" - 2 frames - (337.4MB)
+  * Raw data: http://surround360.hacktv.xyz/sample/sample_dataset.zip
+  * Sample result: https://s3-us-west-2.amazonaws.com/surround360/sample/sample_result.zip
 
 ## Join the Surround360 community
 

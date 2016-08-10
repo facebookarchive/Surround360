@@ -77,6 +77,12 @@ vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
           model.fisheyeRotationDegrees = jsonCam["fisheye_rotation_deg"].ToFloat();
         }
         model.fovHorizontal = model.fisheyeFovDegrees;
+        if (jsonCam.HasKey("fov_horizontal")) {
+          model.fovHorizontal = jsonCam["fov_horizontal"].ToFloat();
+        }
+        if (jsonCam.HasKey("aspect_ratio_wh")) {
+          model.aspectRatioWH = jsonCam["aspect_ratio_wh"].ToFloat();
+        }
       } else {
         model.isFisheye = false;
         model.fovHorizontal = jsonCam["fov_horizontal"].ToFloat();

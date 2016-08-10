@@ -93,8 +93,8 @@ void projectCamImageToSphericalThread(
     projectedImage = sideFisheyeToSpherical(
       *camImage,
       *cam,
-      FLAGS_eqr_width * (cam->fisheyeFovDegrees / 360.0),
-      FLAGS_eqr_height * (cam->fisheyeFovDegrees / 180.0));
+      FLAGS_eqr_width * (cam->fovHorizontal / 360.0),
+      FLAGS_eqr_height * ((cam->fovHorizontal / cam->aspectRatioWH) / 180.0));
   } else {
     VLOG(1) << "Projecting non-fisheye camera";
     const bool skipUndistort =
@@ -517,7 +517,7 @@ void poleToSideFlowThread(
       const float phi =
         fisheyeCamModel.fisheyeFovDegrees * 0.5f * float(y) / float(warp.rows - 1);
       const float alpha = 1.0f - rampf(phi, phiMid, phiRampEnd);
-      (*warpedSphericalForEye).at<Vec4b>(y, x)[3] = 255.0f * alpha;
+      (*warpedSphericalForEye).at<Vec4b>(y, x)[3] *= alpha;
     }
   }
 

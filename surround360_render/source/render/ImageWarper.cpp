@@ -186,22 +186,28 @@ Mat sideFisheyeToSpherical(
   if (src.type() == CV_8UC3) {
     cvtColor(src, srcRGBA, CV_BGR2BGRA);
   }
+
+  const float fovHRad = toRadians(camModel.fovHorizontal);
+  const float fovVRad = fovHRad / camModel.aspectRatioWH;
+  const float offsetHRad = (M_PI - fovHRad) / 2.0f;
+  const float offsetVRad = (M_PI - fovVRad) / 2.0f;
+
   Mat warpMat(Size(outWidth, outHeight), CV_32FC2);
   for (int y = 0; y < outHeight; ++y) {
     for (int x = 0; x < outWidth; ++x) {
-      const float theta = M_PI * (1.0 - float(x) / float(outWidth));
-      const float phi = M_PI * float(y) / float(outHeight);
+      const float theta =
+        fovHRad * (1.0 - float(x) / float(outWidth)) + offsetHRad;
+      const float phi = fovVRad * float(y) / float(outHeight) + offsetVRad;
       const float xSphere = cos(theta) * sin(phi);
       const float ySphere = sin(theta) * sin(phi);
       const float zSphere = cos(phi);
-      const float xRot = xSphere;
-      const float yRot = ySphere;
-      const float zRot = zSphere;
-      const float theta2 = atan2(-zRot, xRot);
-      const float phi2 = acos(yRot);
-      const float r = 2.0 * phi2 / M_PI;
-      const float srcX = camModel.imageCenterX + camModel.usablePixelsRadius * r * cos(theta2);
-      const float srcY = camModel.imageCenterY + camModel.usablePixelsRadius * r * sin(theta2);
+      const float theta2 = atan2(-zSphere, xSphere);
+      const float phi2 = acos(ySphere);
+      const float r = phi2 / toRadians(camModel.fisheyeFovDegrees / 2.0f);
+      const float srcX =
+        camModel.imageCenterX + camModel.usablePixelsRadius * r * cos(theta2);
+      const float srcY =
+        camModel.imageCenterY + camModel.usablePixelsRadius * r * sin(theta2);
       warpMat.at<Point2f>(y, x) = Point2f(srcX, srcY);
     }
   }

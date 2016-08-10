@@ -165,10 +165,14 @@ void combineBottomImagesWithPoleRemoval(
           a1 * b1 + a2 * b2,
           a1 * g1 + a2 * g2,
           a1 * r1 + a2 * r2,
-          255.0f * max(alpha, alpha2));
+          255);
       }
     }
   }
+  // redo the alpha channel.. this is to remove an alpha-channel hole where
+  // pole masks overlap at the very bottom.
+  circleAlphaCut(bottomImage, bottomCamModel.usablePixelsRadius);
+  bottomImage = featherAlphaChannel(bottomImage, alphaFeatherSize);
 
   if (saveDebugImages) {
     imwriteExceptionOnFail(outputDataDir + "/_bottomCombined.png", bottomImage);

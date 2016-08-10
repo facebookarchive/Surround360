@@ -89,8 +89,8 @@ int main(int argc, char** argv) {
     const string& frameName = framesList[frameIdx];
     LOG(INFO) << "getting side camera images from frame: " << frameName;
     for (int i = 0; i < numSideCameras; ++i) {
-      const string srcImagePath = FLAGS_root_dir + "/vid/" + framesList[0] +
-        "/isp_out/" + camModelArray[i].cameraId + ".png";
+      const string srcImagePath = FLAGS_root_dir + "/vid/" +
+        framesList[frameIdx] + "/isp_out/" + camModelArray[i].cameraId + ".png";
       LOG(INFO) << "\t" << camModelArray[i].cameraId << ": " << srcImagePath;
       Mat origImage = imreadExceptionOnFail(srcImagePath, CV_LOAD_IMAGE_COLOR);
       Mat imageUndistorted;

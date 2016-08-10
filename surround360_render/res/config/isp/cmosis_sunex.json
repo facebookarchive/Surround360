@@ -3,17 +3,19 @@
         "serial" : 0,
         "name" : "PointGrey Grasshopper",
         "bitsPerPixel" : 8,
+        "width" : 2048,
+        "height" : 2048,
         "compandingLut" :  [[0.0,  0.0, 0.0],
                             [0.6,  0.6, 0.0],
                             [0.7,  0.7, 0.0],
                             [1.0,  1.0, 0.0]],
-        "blackLevel" : [0.0, 0.0, 0.0],
+        "blackLevel" : [5.0, 5.0, 5.0],
         "vignetteRollOff" : [[1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0],
                              [1.1, 1.1, 1.1]],
-        "whiteBalanceGain" : [1.296, 1.0, 1.604],
+        "whiteBalanceGain" : [1.1, 1.0, 1.65],
         "stuckPixelThreshold" : 5,
         "stuckPixelDarknessThreshold" : 0.11,
         "stuckPixelRadius" : 0,
@@ -25,7 +27,9 @@
         "sharpenning" : [0.5, 0.5, 0.5],
         "saturation" : 1.2,
         "contrast" : 1.0,
-        "gamma" : [0.55, 0.55, 0.55]
+        "lowKeyBoost" : [-0.2, -0.2, -0.2],
+        "highKeyBoost" : [0.2, 0.2, 0.2],
+        "gamma" : [0.4545, 0.4545, 0.4545],
         "bayerPattern" : "GBRG"
     }
 }

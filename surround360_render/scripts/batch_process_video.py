@@ -42,7 +42,6 @@ RENDER_COMMAND_TEMPLATE = """
 --final_eqr_width {FINAL_EQR_WIDTH}
 --final_eqr_height {FINAL_EQR_HEIGHT}
 --interpupilary_dist 6.4
---camera_ring_radius 15.65
 --zero_parallax_dist 10000
 --sharpenning {SHARPENNING}
 {EXTRA_FLAGS}

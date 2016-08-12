@@ -34,7 +34,8 @@ using namespace std;
 using namespace util;
 
 vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
-    const string& jsonFilePath) {
+    const string& jsonFilePath,
+    float& cameraRingRadius) {
 
   // read the file into a string
   ifstream fs(jsonFilePath);
@@ -45,8 +46,9 @@ vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
   string jsonStr((istreambuf_iterator<char>(fs)), istreambuf_iterator<char>());
   vector<CameraMetadata> cameraModels;
   try {
-    json::Value jsobBlob = json::Deserialize(jsonStr);
-    json::Array jsonCamArray = jsobBlob.ToArray();
+    json::Object jsobBlob = json::Deserialize(jsonStr).ToObject();
+    cameraRingRadius = jsobBlob["camera_ring_radius"].ToFloat();
+    json::Array jsonCamArray = jsobBlob["cameras"].ToArray();
     for (int i = 0 ; i < jsonCamArray.size(); ++i) {
       CameraMetadata model;
       json::Object jsonCam = jsonCamArray[i];

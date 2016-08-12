@@ -53,7 +53,6 @@ DEFINE_string(prev_frame_data_dir,        "NONE",         "path to data for prev
 DEFINE_string(output_cubemap_path,        "",             "path to write output oculus 360 cubemap");
 DEFINE_string(output_equirect_path,       "",             "path to write output oculus 360 cubemap");
 DEFINE_double(interpupilary_dist,         6.4,            "separation of eyes for stereo, spherical_in whatever units the rig json uses.");
-DEFINE_double(camera_ring_radius,         19.0,           "used for computing shift for zero parallax as a function of IPD.");
 DEFINE_int32(side_alpha_feather_size,     100,            "alpha feather for projection of side cameras to spherical coordinates");
 DEFINE_int32(std_alpha_feather_size,      31,             "alpha feather for all other purposes. must be odd");
 DEFINE_bool(save_debug_images,            false,          "if true, lots of debug images are generated");
@@ -313,6 +312,7 @@ void renderStereoPanoramaChunksThread(
 
 // generates a left/right eye equirect panorama using slices of novel views
 void generateRingOfNovelViewsAndRenderStereoSpherical(
+    const float cameraRingRadius,
     const float camFovHorizontalDegrees,
     vector<Mat>& projectionImages,
     Mat& panoImageL,
@@ -359,7 +359,7 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   const float v =
     atanf(FLAGS_zero_parallax_dist / (FLAGS_interpupilary_dist / 2.0f));
   const float psi =
-    asinf(sinf(v) * (FLAGS_interpupilary_dist / 2.0f) / FLAGS_camera_ring_radius);
+    asinf(sinf(v) * (FLAGS_interpupilary_dist / 2.0f) / cameraRingRadius);
   const float vergeAtInfinitySlabDisplacement =
     psi * (float(camImageWidth) / fovHorizontalRadians);
   const float theta = -M_PI / 2.0f + v + psi;
@@ -679,8 +679,11 @@ void renderStereoPanorama() {
 
   // load camera meta data and source images
   VLOG(1) << "Reading camera model json";
+  float cameraRingRadius;
   vector<CameraMetadata> camModelArrayWithTop =
-    readCameraProjectionModelArrayFromJSON(FLAGS_rig_json_file);
+    readCameraProjectionModelArrayFromJSON(
+      FLAGS_rig_json_file,
+      cameraRingRadius);
 
   VLOG(1) << "Verifying image filenames";
   verifyImageDirFilenamesMatchCameraArray(camModelArrayWithTop, FLAGS_imgs_dir);
@@ -769,6 +772,7 @@ void renderStereoPanorama() {
   Mat sphericalImageL, sphericalImageR;
   LOG(INFO) << "Rendering stereo panorama";
   generateRingOfNovelViewsAndRenderStereoSpherical(
+    cameraRingRadius,
     camModelArray[0].fovHorizontal,
     projectionImages,
     sphericalImageL,

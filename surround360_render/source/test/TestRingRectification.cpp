@@ -73,8 +73,11 @@ int main(int argc, char** argv) {
   LOG(INFO) << distCoeffs;
 
   LOG(INFO) << "reading camera json file";
+  float cameraRingRadius;
   vector<CameraMetadata> camModelArrayWithTop =
-    readCameraProjectionModelArrayFromJSON(FLAGS_rig_json_file);
+    readCameraProjectionModelArrayFromJSON(
+      FLAGS_rig_json_file,
+      cameraRingRadius);
 
   LOG(INFO) << "removing top and side cameras from rig";
   vector<CameraMetadata> camModelArray =

@@ -63,8 +63,11 @@ int main(int argc, char** argv) {
 
   // load camera meta data and source images
   LOG(INFO) << "reading camera model json";
+  float cameraRingRadius;
   vector<CameraMetadata> camModelArrayWithTop =
-    readCameraProjectionModelArrayFromJSON(FLAGS_rig_json_file);
+    readCameraProjectionModelArrayFromJSON(
+      FLAGS_rig_json_file,
+      cameraRingRadius);
 
   LOG(INFO) << "verifying image filenames";
   verifyImageDirFilenamesMatchCameraArray(camModelArrayWithTop, FLAGS_imgs_dir);

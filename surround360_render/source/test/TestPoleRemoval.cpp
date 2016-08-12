@@ -45,8 +45,11 @@ int main(int argc, char** argv) {
   requireArg(FLAGS_rig_json_file, "rig_json_file");
   requireArg(FLAGS_flow_alg, "flow_alg");
 
+  float cameraRingRadius;
   vector<CameraMetadata> camModelArrayWithTop =
-    readCameraProjectionModelArrayFromJSON(FLAGS_rig_json_file);
+    readCameraProjectionModelArrayFromJSON(
+      FLAGS_rig_json_file,
+      cameraRingRadius);
 
   CameraMetadata bottomCamModel;
   Mat bottomImage;

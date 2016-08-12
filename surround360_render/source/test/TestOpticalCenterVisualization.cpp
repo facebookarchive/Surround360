@@ -92,8 +92,11 @@ int main(int argc, char** argv) {
   requireArg(FLAGS_images_dir, "images_dir");
   requireArg(FLAGS_rig_json_file, "rig_json_file");
 
+  float cameraRingRadius;
   vector<CameraMetadata> camModelArrayWithTop =
-      readCameraProjectionModelArrayFromJSON(FLAGS_rig_json_file);
+      readCameraProjectionModelArrayFromJSON(
+        FLAGS_rig_json_file,
+        cameraRingRadius);
 
   try {
     CameraMetadata topCamModel = getTopCamModel(camModelArrayWithTop);

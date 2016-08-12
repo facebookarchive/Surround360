@@ -44,9 +44,11 @@ struct CameraMetadata {
     flip180(false) {}
 };
 
-// reads a JSON file that stores metadata for an array of cameras
+// reads a JSON file that stores metadata for an array of cameras.
+// cameraRingRadius will be overwritten with the value from the json file.
 vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
-  const string& jsonFilePath);
+  const string& jsonFilePath,
+  float& cameraRingRadius);
 
 // takes a camera model array (which includes "camera_id" names for each camera)
 // and a folder containing images. verifies the image prefixes match the camera

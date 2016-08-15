@@ -28,6 +28,7 @@ using namespace surround360::math_util;
 using namespace cv;
 using namespace cv::detail;
 
+template <bool UseDirectionalRegularization>
 struct PixFlow : public OpticalFlowInterface {
 
   static constexpr int kPyrMinImageSize               = 24;
@@ -185,21 +186,6 @@ struct PixFlow : public OpticalFlowInterface {
       }
     }
   }
-
-  virtual float errorFunction(
-      const Mat& I0,
-      const Mat& I1,
-      const Mat& alpha0,
-      const Mat& alpha1,
-      const Mat& I0x,
-      const Mat& I0y,
-      const Mat& I1x,
-      const Mat& I1y,
-      const int x,
-      const int y,
-      const Mat& flow,
-      const Mat& blurredFlow,
-      const Point2f& flowDir) = 0;
 
   inline Point2f errorGradient(
       const Mat& I0,
@@ -363,26 +349,6 @@ struct PixFlow : public OpticalFlowInterface {
     }
     return pyramid;
   }
-};
-
-struct PixFlowWithoutDirectionalRegularization : public PixFlow {
-
-  PixFlowWithoutDirectionalRegularization(
-      const float pyrScaleFactor,
-      const float smoothnessCoef,
-      const float verticalRegularizationCoef,
-      const float horizontalRegularizationCoef,
-      const float gradientStepSize,
-      const float downscaleFactor,
-      const float directionalRegularizationCoef) :
-  PixFlow(
-      pyrScaleFactor,
-      smoothnessCoef,
-      verticalRegularizationCoef,
-      horizontalRegularizationCoef,
-      gradientStepSize,
-      downscaleFactor,
-      directionalRegularizationCoef) {}
 
   inline float errorFunction(
       const Mat& I0,
@@ -406,79 +372,30 @@ struct PixFlowWithoutDirectionalRegularization : public PixFlow {
     const float i1x         = getPixBilinear32FExtend(I1x, matchX, matchY);
     const float i1y         = getPixBilinear32FExtend(I1y, matchX, matchY);
     const Point2f flowDiff  = blurredFlow.at<Point2f>(y, x) - flowDir;
-    const float smoothness  = sqrtf(flowDiff.x * flowDiff.x + flowDiff.y * flowDiff.y);
+    const float smoothness  = sqrtf(flowDiff.dot(flowDiff));
 
     float err = sqrtf((i0x - i1x) * (i0x - i1x) + (i0y - i1y) * (i0y - i1y))
       + smoothness * smoothnessCoef
       + verticalRegularizationCoef * fabsf(flowDir.y) / float(I0.cols)
       + horizontalRegularizationCoef * fabsf(flowDir.x) / float(I0.cols);
 
-    return err;
-  }
-};
-
-// the whole purpose of this subclass is to avoid an if statement inside errorFunction,
-// which makes a significant difference in runtime
-struct PixFlowWithDirectionalRegularization : public PixFlow {
-
-  PixFlowWithDirectionalRegularization(
-      const float pyrScaleFactor,
-      const float smoothnessCoef,
-      const float verticalRegularizationCoef,
-      const float horizontalRegularizationCoef,
-      const float gradientStepSize,
-      const float downscaleFactor,
-      const float directionalRegularizationCoef) :
-  PixFlow(
-      pyrScaleFactor,
-      smoothnessCoef,
-      verticalRegularizationCoef,
-      horizontalRegularizationCoef,
-      gradientStepSize,
-      downscaleFactor,
-      directionalRegularizationCoef) {}
-
-  inline float errorFunction(
-      const Mat& I0,
-      const Mat& I1,
-      const Mat& alpha0,
-      const Mat& alpha1,
-      const Mat& I0x,
-      const Mat& I0y,
-      const Mat& I1x,
-      const Mat& I1y,
-      const int x,
-      const int y,
-      const Mat& flow,
-      const Mat& blurredFlow,
-      const Point2f& flowDir) {
-
-    const float matchX      = x + flowDir.x;
-    const float matchY      = y + flowDir.y;
-    const float i0x         = I0x.at<float>(y, x);
-    const float i0y         = I0y.at<float>(y, x);
-    const float i1x         = getPixBilinear32FExtend(I1x, matchX, matchY);
-    const float i1y         = getPixBilinear32FExtend(I1y, matchX, matchY);
-    const Point2f flowDiff  = blurredFlow.at<Point2f>(y, x) - flowDir;
-    const float smoothness  = sqrtf(flowDiff.x * flowDiff.x + flowDiff.y * flowDiff.y);
-
-    float err = sqrtf((i0x - i1x) * (i0x - i1x) + (i0y - i1y) * (i0y - i1y))
-      + smoothness * smoothnessCoef
-      + verticalRegularizationCoef * fabsf(flowDir.y) / float(I0.cols)
-      + horizontalRegularizationCoef * fabsf(flowDir.x) / float(I0.cols);
-
-    Point2f bf = blurredFlow.at<Point2f>(y, x);
-    const float blurredFlowMag = sqrtf(bf.x * bf.x + bf.y * bf.y);
-    const static float kEpsilon = 0.001f;
-    bf /= blurredFlowMag + kEpsilon;
-    const float flowMag = sqrtf(flowDir.x * flowDir.x + flowDir.y * flowDir.y);
-    Point2f normalizedFlowDir = flowDir / (flowMag + kEpsilon);
-    const float dot = bf.x * normalizedFlowDir.x + bf.y * normalizedFlowDir.y;
-    err -= directionalRegularizationCoef * dot;
+    if (UseDirectionalRegularization) {
+      Point2f bf = blurredFlow.at<Point2f>(y, x);
+      const float blurredFlowMag = sqrtf(bf.dot(bf));
+      const static float kEpsilon = 0.001f;
+      bf /= blurredFlowMag + kEpsilon;
+      const float flowMag = sqrtf(flowDir.dot(flowDir));
+      Point2f normalizedFlowDir = flowDir / (flowMag + kEpsilon);
+      const float dot = bf.dot(normalizedFlowDir);
+      err -= directionalRegularizationCoef * dot;
+    }
 
     return err;
   }
 };
+
+using PixFlowWithDirectionalRegularization = PixFlow<true>;
+using PixFlowWithoutDirectionalRegularization = PixFlow<false>;
 
 } // namespace optical_flow
 } // namespace surround360

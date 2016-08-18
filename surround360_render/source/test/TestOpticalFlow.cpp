@@ -11,13 +11,16 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "CvUtil.h"
+#include "MathUtil.h"
 #include "NovelView.h"
 #include "OpticalFlowVisualization.h"
 #include "StringUtil.h"
+#include "SystemUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
@@ -38,6 +41,7 @@ DEFINE_int32(num_intermediate_views,      11,     "number of views to make");
 DEFINE_string(flow_alg,                   "",     "optical flow algorithm to use");
 DEFINE_int32(repetitions,                 1,      "number of times to repeat the flow calculation");
 DEFINE_bool(save_asymmetric_novel_views,  false,  "if true, we will save the non-merged novel views that are obtained by warping the left/right images, in addition to the combined novel view");
+DEFINE_bool(show_interpolated_view,       false,  "only for mode = middlebury_interpolation_experiment. controls whether we show a window with the results or not.");
 
 // reads a pair of images specified by --left_img and --right_img. applies an optical flow
 // algorithm specified by --flow_alg. generates a visualization of the flow field, and a
@@ -72,18 +76,7 @@ void testDisparity(const string imagePathL, const string imagePathR) {
 
     LOG(INFO) << "calling prepare";
     double prepareStartTime = getCurrTimeSec();
-    const Mat prevFlowLtoR = Mat();
-    const Mat prevFlowRtoL = Mat();
-    const Mat prevColorImageL = Mat();
-    const Mat prevColorImageR = Mat();
-
-    novelViewGen->prepare(
-      colorImageL,
-      colorImageR,
-      prevFlowLtoR,
-      prevFlowRtoL,
-      prevColorImageL,
-      prevColorImageR);
+    novelViewGen->prepare(colorImageL, colorImageR);
     double prepareEndTime = getCurrTimeSec();
     LOG(INFO) << "RUNTIME (sec) = " << (prepareEndTime - prepareStartTime);
 
@@ -149,6 +142,89 @@ void testDisparity(const string imagePathL, const string imagePathR) {
   }
 }
 
+// compute the difference between two images using root-mean-squared error
+double imageDiffRMSE(const Mat& imageA, const Mat& imageB) {
+  assert(imageA.size() == imageB.size());
+
+  double sse = 0.0;
+  for (int y = 0; y < imageA.rows; ++y) {
+    for (int x = 0; x < imageA.cols; ++x) {
+      const Vec3b colorA = imageA.at<Vec3b>(y, x);
+      const Vec3b colorB = imageB.at<Vec3b>(y, x);
+      sse +=
+        math_util::square(colorA[0] - colorB[0]) +
+        math_util::square(colorA[1] - colorB[1]) +
+        math_util::square(colorA[2] - colorB[2]);
+    }
+  }
+  const double mse = sse / double(3 * imageA.rows * imageA.cols);
+  const double rmse = sqrt(mse);
+  return rmse;
+}
+
+void middleburyInterpolationExperiment() {
+  requireArg(FLAGS_test_dir, "test_dir");
+  requireArg(FLAGS_flow_alg, "flow_alg");
+
+  set<string> uniqueDatasets;
+  for (const string& f : util::getFilesInDir(FLAGS_test_dir, false)) {
+    const string prefix = stringSplit(f, '_')[0];
+    uniqueDatasets.insert(prefix);
+  }
+
+  double minRMSE = std::numeric_limits<double>::max();
+  double maxRMSE = -std::numeric_limits<double>::max();
+  double avgRMSE = 0.0;
+
+  for (const string& dataset : uniqueDatasets) {
+
+    const string imagePath0 = FLAGS_test_dir + "/" + dataset + "_10.png";
+    const string imagePath1 = FLAGS_test_dir + "/" + dataset + "_11.png";
+    const string imagePathMid = FLAGS_test_dir + "/" + dataset + "_10i11.png";
+
+    Mat inputImage0 = imreadExceptionOnFail(imagePath0, -1); // -1 = load RGBA
+    Mat inputImage1 = imreadExceptionOnFail(imagePath1, -1);
+    Mat groundTruthImageMid = imreadExceptionOnFail(imagePathMid, -1);
+
+    if (inputImage0.type() == CV_8UC3) {
+      cvtColor(inputImage0, inputImage0, CV_BGR2BGRA);
+    }
+    if (inputImage1.type() == CV_8UC3) {
+      cvtColor(inputImage1, inputImage1, CV_BGR2BGRA);
+    }
+    if (groundTruthImageMid.type() == CV_8UC3) {
+      cvtColor(groundTruthImageMid, groundTruthImageMid, CV_BGR2BGRA);
+    }
+
+    NovelViewGenerator* novelViewGen =
+      new NovelViewGeneratorAsymmetricFlow(FLAGS_flow_alg);
+
+    novelViewGen->prepare(inputImage0, inputImage1);
+
+      Mat novelViewMerged, novelViewFromL, novelViewFromR;
+      const float kShift = 0.5f;
+      novelViewGen->generateNovelView(
+        kShift, novelViewMerged, novelViewFromL, novelViewFromR);
+
+    const double rmse = imageDiffRMSE(groundTruthImageMid, novelViewMerged);
+    minRMSE = min(minRMSE, rmse);
+    maxRMSE = max(maxRMSE, rmse);
+    avgRMSE += rmse;
+
+    LOG(INFO) << dataset << "\t" << rmse;
+
+    if (FLAGS_show_interpolated_view) {
+      Mat stackedVis = stackHorizontal({groundTruthImageMid, novelViewMerged});
+      imshow("left-ground truth, right-prediction", stackedVis);
+      waitKey(0);
+    }
+  }
+  avgRMSE /= double(uniqueDatasets.size());
+  LOG(INFO) << "min RMSE over all datasets = " << minRMSE;
+  LOG(INFO) << "max RMSE over all datasets = " << maxRMSE;
+  LOG(INFO) << "avg RMSE over all datasets = " << avgRMSE;
+}
+
 int main(int argc, char** argv) {
   initSurround360(argc, argv);
   requireArg(FLAGS_mode, "mode");
@@ -157,6 +233,8 @@ int main(int argc, char** argv) {
     testDisparity(
       FLAGS_test_dir + "/" + FLAGS_left_img,
       FLAGS_test_dir + "/" + FLAGS_right_img);
+  } else if (FLAGS_mode == "middlebury_interpolation_experiment") {
+    middleburyInterpolationExperiment();
   } else {
     throw VrCamException("unrecongized mode: " + FLAGS_mode);
   }

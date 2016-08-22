@@ -245,7 +245,10 @@ if __name__ == "__main__":
   disk_count = len(binary_files)
 
   step_list_all = ["unpack", "arrange", "isp", "rectify", "render", "ffmpeg"]
-  step_list = steps.split(',')
+  if steps == "all":
+    step_list = step_list_all
+  else:
+    step_list = steps.split(',')
 
   # We want to be able to map a file path to its flag/variable name, so we keep
   # a dictionary of mappings between them
@@ -256,9 +259,6 @@ if __name__ == "__main__":
       if (path != rectify_file or path != "NONE") and "rectify" not in step_list:
         sys.stderr.write("Given --" + name + " (" + path + ") does not exist\n")
         exit(1)
-
-  if "all" in step_list:
-    step_list = step_list_all
 
   for step in step_list:
     if step not in step_list_all:

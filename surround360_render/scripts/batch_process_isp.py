@@ -100,7 +100,7 @@ if __name__ == "__main__":
         "SURROUND360_RENDER_DIR": surround360_render_dir,
         "LOG_DIR": log_dir,
         "INPUT_IMAGE_PATH": raw_img_path,
-        "ISP_CONFIG_PATH": surround360_render_dir + "/res/config/isp/" + cam_to_isp_config[filename_prefix],
+        "ISP_CONFIG_PATH": cam_to_isp_config[filename_prefix],
         "BLACK_LEVEL_OFFSET": str(CAM_TO_BLACKLEVEL[filename_prefix]),
         "OUTPUT_IMAGE_PATH": dest_rgb_path,
         "FLAGS_RAW2RGB_EXTRA": raw2rgb_extra_params,

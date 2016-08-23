@@ -196,12 +196,12 @@ def duplicate_isp_files(config_isp_path):
     cmosis_path = cmosis_fujinon_path if i in [0, 15, 16] else cmosis_sunex_path
     os.system("cp " + cmosis_path + " " + config_isp_path + "/isp" + str(i) + ".json")
 
-def update_isp_mappings(cam_to_isp_config_file):
+def update_isp_mappings(cam_to_isp_config_file, config_isp_path):
   with open(cam_to_isp_config_file, "r") as json_file:
     cam_json_map = json.load(json_file)
 
   for i in range(0, NUM_CAMS):
-    cam_json_map["cam" + str(i)] = "isp" + str(i) + ".json"
+    cam_json_map["cam" + str(i)] = config_isp_path + "/isp" + str(i) + ".json"
 
   with open(cam_to_isp_config_file, "w") as json_file:
     json.dump(cam_json_map, json_file, indent=4, sort_keys=True)
@@ -336,7 +336,7 @@ if __name__ == "__main__":
     print "WARNING: Color adjustment files not found. Using default files.\n"
     sys.stdout.flush()
     duplicate_isp_files(config_isp_path)
-    update_isp_mappings(cam_to_isp_config_file)
+    update_isp_mappings(cam_to_isp_config_file, config_isp_path)
 
   ### isp step ###
 

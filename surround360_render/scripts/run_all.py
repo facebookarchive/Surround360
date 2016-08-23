@@ -440,7 +440,9 @@ if __name__ == "__main__":
   if not verbose:
     ffmpeg_extra_params += " -loglevel error -stats"
 
-  mp4_path = dest_dir + "/" + str(int(timer())) + "_" + quality + "_TB.mp4"
+  # Sequence name is the directory containing raw data
+  sequence_name = binary_prefix.rsplit('/', 2)[-2]
+  mp4_path = dest_dir + "/" + sequence_name + "_" + str(int(timer())) + "_" + quality + "_TB.mp4"
 
   ffmpeg_params = {
     "START_NUMBER": str(start_frame).zfill(FRAME_NUM_DIGITS),

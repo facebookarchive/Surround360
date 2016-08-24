@@ -71,7 +71,6 @@ DEFINE_int32(final_eqr_width,             3480,           "resize before stackin
 DEFINE_int32(final_eqr_height,            960,            "resize before stacking stereo equirect height");
 DEFINE_int32(cubemap_face_resolution,     1536,           "resolution of output cubemaps");
 DEFINE_string(cubemap_format,             "video",        "either video or photo");
-DEFINE_bool(fast_preview_mode,            false,          "if true, lots of tweaks for +speed -quality");
 DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
 DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
 DEFINE_bool(enable_render_coloradjust,    false,          "if true, color and brightness of images will be automatically adjusted to make smoother blends (in the renderer, not in the ISP step)");
@@ -96,8 +95,7 @@ void projectCamImageToSphericalThread(
       FLAGS_eqr_height * ((cam->fovHorizontal / cam->aspectRatioWH) / 180.0));
   } else {
     VLOG(1) << "Projecting non-fisheye camera";
-    const bool skipUndistort =
-      FLAGS_fast_preview_mode || FLAGS_src_intrinsic_param_file == "NONE";
+    const bool skipUndistort = (FLAGS_src_intrinsic_param_file == "NONE");
     projectedImage = undistortToSpherical(
       cam->fovHorizontal,
       cam->fovHorizontal / cam->aspectRatioWH,
@@ -236,7 +234,7 @@ void prepareNovelViewGeneratorThread(
 
   // read the previous frame's flow results, if available
   Mat prevFrameFlowLtoR, prevFrameFlowRtoL, prevOverlapImageL, prevOverlapImageR;
-  if (FLAGS_prev_frame_data_dir != "NONE" && !FLAGS_fast_preview_mode) {
+  if (FLAGS_prev_frame_data_dir != "NONE") {
     VLOG(1) << "Reading previous frame flow and images from: "
       << FLAGS_prev_frame_data_dir;
     prevFrameFlowLtoR = readFlowFromFile(

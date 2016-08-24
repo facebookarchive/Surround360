@@ -63,7 +63,7 @@ if __name__ == "__main__":
   parser.add_argument('--surround360_render_dir', help='project root path, containing bin and scripts dirs', required=False, default='.')
   parser.add_argument('--start_frame', help='first frame index', required=True)
   parser.add_argument('--end_frame', help='last frame index', required=True)
-  parser.add_argument('--quality', help='preview,3k,4k,6k,8k', required=True)
+  parser.add_argument('--quality', help='3k,4k,6k,8k', required=True)
   parser.add_argument('--cubemap_face_resolution', help='default is to not generate cubemaps', required=False, default=0)
   parser.add_argument('--cubemap_format', help='photo,video', required=False, default='photo')
   parser.add_argument('--save_debug_images', dest='save_debug_images', action='store_true')
@@ -105,15 +105,6 @@ if __name__ == "__main__":
   src_intrinsic_param_file  = args["src_intrinsic_param_file"]
   flow_alg                  = args["flow_alg"]
   verbose                   = args["verbose"]
-
-  # Force no rectification file if preview mode
-  if quality == "preview":
-    print "*** FAST PREVIEW MODE ***"
-
-    if rectify_file != "NONE":
-      print "Preview mode: no rectiication file will be used"
-      sys.stdout.flush()
-    rectify_file = "NONE"
 
   start_time = timer()
   brightness_adjust_path = root_dir + "/brightness_adjust.txt"
@@ -164,27 +155,20 @@ if __name__ == "__main__":
     if save_debug_images:
       render_params["EXTRA_FLAGS"] += " --save_debug_images"
 
-    if enable_top and quality != "preview":
+    if enable_top:
       render_params["EXTRA_FLAGS"] += " --enable_top"
 
     if enable_pole_removal and enable_bottom is False:
       sys.stderr.write("Cannot use enable_pole_removal if enable_bottom is not used")
       exit(1)
 
-    if enable_bottom and quality != "preview":
+    if enable_bottom:
       render_params["EXTRA_FLAGS"] += " --enable_bottom"
       if enable_pole_removal:
         render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
         render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
 
-    if quality == "preview":
-      render_params["EXTRA_FLAGS"]                  += " --fast_preview_mode"
-      render_params["SHARPENNING"]                  = 0.0
-      render_params["EQR_WIDTH"]                    = 1008
-      render_params["EQR_HEIGHT"]                   = 512
-      render_params["FINAL_EQR_WIDTH"]              = 1024
-      render_params["FINAL_EQR_HEIGHT"]             = 1024
-    elif quality == "3k":
+    if quality == "3k":
       render_params["SHARPENNING"]                  = 0.25
       render_params["EQR_WIDTH"]                    = 3080
       render_params["EQR_HEIGHT"]                   = 1540

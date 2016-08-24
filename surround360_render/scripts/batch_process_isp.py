@@ -50,11 +50,9 @@ if __name__ == "__main__":
   parser.add_argument('--surround360_render_dir', help='project root path, containing bin and scripts dirs', required=False, default='.')
   parser.add_argument('--start_frame', help='first frame index', required=True)
   parser.add_argument('--end_frame', help='last frame index', required=True)
-  parser.add_argument('--preview_mode', dest='preview_mode', action='store_true')
   parser.add_argument('--delete_raws', dest='delete_raws', action='store_true')
   parser.add_argument('--cam_to_isp_config_file', help='file with mappings cam: isp file', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
-  parser.set_defaults(preview_mode=False)
   parser.set_defaults(delete_raws=False)
   args = vars(parser.parse_args())
 
@@ -62,14 +60,10 @@ if __name__ == "__main__":
   surround360_render_dir  = args["surround360_render_dir"]
   min_frame               = int(args["start_frame"])
   max_frame               = int(args["end_frame"])
-  preview_mode            = args["preview_mode"]
   delete_raws             = args["delete_raws"]
   cam_to_isp_config_file  = args["cam_to_isp_config_file"]
   verbose                 = args["verbose"]
   log_dir                 = root_dir + "/logs"
-
-  if preview_mode:
-    print "*** FAST PREVIEW MODE ***"
 
   start_time = timer()
   num_cpus = multiprocessing.cpu_count()
@@ -93,8 +87,7 @@ if __name__ == "__main__":
 
       raw2rgb_extra_params = ""
 
-      if preview_mode: raw2rgb_extra_params += " --resize 8 --demosaic_filter 2"
-      if delete_raws and not preview_mode: raw2rgb_extra_params += " && rm " + raw_img_path
+      if delete_raws: raw2rgb_extra_params += " && rm " + raw_img_path
 
       raw2rgb_params = {
         "SURROUND360_RENDER_DIR": surround360_render_dir,

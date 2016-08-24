@@ -190,6 +190,23 @@ TARGET_LINK_LIBRARIES(
   ${PLATFORM_SPECIFIC_LIBS}
 )
 
+### TestHyperPreview ###
+
+ADD_EXECUTABLE(
+  TestHyperPreview
+  source/test/TestHyperPreview.cpp
+)
+TARGET_COMPILE_FEATURES(TestHyperPreview PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
+  TestHyperPreview
+  LibVrCamera
+  LibJSON
+  glog
+  gflags
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
+)
+
 ### TestRingRectification ###
 
 ADD_EXECUTABLE(

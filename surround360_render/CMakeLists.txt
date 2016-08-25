@@ -20,7 +20,7 @@ IF(NOT ${CMAKE_BUILD_TYPE} MATCHES Debug)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast")
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Dinteger=int")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Dinteger=int -m64 -mbmi2 -mbmi -mavx -msse -msse2 -msse3 -funroll-loops")
 
 IF(NOT APPLE)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")

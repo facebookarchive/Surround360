@@ -82,7 +82,6 @@ DEFINE_double(fps,          30.0,                     "Set frame rate.");
 DEFINE_double(gain,         0.0,                      "Set gain.");
 DEFINE_double(gamma,        1.250,                    "Set gamma.");
 DEFINE_bool(list,           false,                    "List detected cameras.");
-DEFINE_bool(mono,           false,                    "Capture grayscale frames.");
 DEFINE_bool(nocapture,      false,                    "Configure cameras and exit without capturing anything.");
 DEFINE_int32(master,        -1,                       "Master camera serial number.");
 DEFINE_int32(numcams,       -1,                       "Number of cameras in the rig.");
@@ -261,7 +260,6 @@ void cameraProducer(
   const int pid,
   const int iCamMaster,
   const bool isDebug,
-  const bool isMono,
   const bool isRaw,
   const int pinStrobe,
   const unsigned int nBits,
@@ -1234,12 +1232,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (FLAGS_raw) {
-    getPixelFormatFromBitDepth(&pf, FLAGS_nbits);
-  } else if (FLAGS_mono) {
-    pf = PIXEL_FORMAT_MONO8;
-  }
-
   CameraInfo camInfo;
 
   ////////// START OF SETTING CAMERA PARAMETERS //////////
@@ -1381,7 +1373,6 @@ int main(int argc, char *argv[]) {
         pid,
         iCamMaster,
         FLAGS_debug,
-        FLAGS_mono,
         FLAGS_raw,
         pinStrobe,
         FLAGS_nbits,

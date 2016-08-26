@@ -32,6 +32,9 @@ time {SURROUND360_RENDER_DIR}/bin/TestHyperPreview
 --preview_dest {DEST_DIR}/eqr_preview
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
+--eqr_width {EQR_WIDTH}
+--eqr_height {EQR_HEIGHT}
+--gamma {GAMMA}
  --disk_count 2
 """
 
@@ -59,6 +62,9 @@ def parse_args():
   parser.add_argument('--start_frame',      metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',      metavar='Frame Count', help='0 = all', required=False, default='0')
   parser.add_argument('--rig_json_file',    metavar='Rig Geometry File', help='json file with rig geometry info', required=False, default="./res/config/17cmosis_default.json", **file_chooser)
+  parser.add_argument('--gamma',            metavar='Exponent for gamma correction',required=False, default='1.0')
+  parser.add_argument('--eqr_width',        metavar='Output equirect width', required=False, default='2048')
+  parser.add_argument('--eqr_height',       metavar='Output equirect height',required=False, default='1024')
 
   return vars(parser.parse_args())
 
@@ -84,6 +90,9 @@ if __name__ == "__main__":
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
   rig_json_file             = args["rig_json_file"]
+  eqr_width                 = args["eqr_width"]
+  eqr_height                = args["eqr_height"]
+  gamma                     = args["gamma"]
 
   os.chdir(surround360_render_dir)
 
@@ -101,7 +110,10 @@ if __name__ == "__main__":
     "START_FRAME": start_frame,
     "FRAME_COUNT": frame_count,
     "DISK_COUNT": disk_count,
-    "RIG_JSON_FILE": rig_json_file
+    "RIG_JSON_FILE": rig_json_file,
+    "EQR_WIDTH": eqr_width,
+    "EQR_HEIGHT": eqr_height,
+    "GAMMA": gamma,
   }
   preview_command = PREVIEW_COMMAND_TEMPLATE.replace("\n", " ").format(**preview_params)
   start_subprocess("preview", preview_command)

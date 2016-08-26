@@ -21,6 +21,7 @@
 #include "CameraMetadata.h"
 #include "CvUtil.h"
 #include "ImageWarper.h"
+#include "MathUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
@@ -31,32 +32,34 @@ using namespace cv;
 using namespace std;
 using namespace surround360;
 using namespace surround360::calibration;
+using namespace surround360::math_util;
 using namespace surround360::util;
 using namespace surround360::warper;
 
-DEFINE_int32(image_width,       2048,       "expected image width");
-DEFINE_int32(image_height,      2048,       "expected image height");
-DEFINE_string(binary_prefix,    "",         "path to binary image disk up to timestamp_ (i.e. before 0,1)");
-DEFINE_int32(disk_count,        2,          "number of consumer threads");
-DEFINE_int32(start_frame,       0,          "start frame (per camera)");
-DEFINE_int32(frame_count,       0,          "number of frames to unpack (per camera)");
-DEFINE_string(rig_json_file,    "",         "path to json file drescribing camera array");
-DEFINE_int32(eqr_width,         2048,       "height of spherical projection image (0 to 2pi)");
-DEFINE_int32(eqr_height,        1024,        "height of spherical projection image (0 to pi)");
-DEFINE_string(preview_dest,     "",         "path to write equirect preview frames");
-DEFINE_double(gamma,            1.0,        "gamma correction exponent");
-DEFINE_int32(top_cam_index,     0,          "index of the top camera");
-DEFINE_int32(bottom_cam_index,  15,         "index of the bottom camera");
+DEFINE_int32(image_width,           2048,       "expected image width");
+DEFINE_int32(image_height,          2048,       "expected image height");
+DEFINE_string(binary_prefix,        "",         "path to binary image disk up to timestamp_ (i.e. before 0,1)");
+DEFINE_int32(disk_count,            2,          "number of consumer threads");
+DEFINE_int32(start_frame,           0,          "start frame (per camera)");
+DEFINE_int32(frame_count,           0,          "number of frames to unpack (per camera)");
+DEFINE_string(rig_json_file,        "",         "path to json file drescribing camera array");
+DEFINE_int32(eqr_width,             2048,       "height of spherical projection image (0 to 2pi)");
+DEFINE_int32(eqr_height,            1024,        "height of spherical projection image (0 to pi)");
+DEFINE_string(preview_dest,         "",         "path to write equirect preview frames");
+DEFINE_double(gamma,                1.0,        "gamma correction exponent");
+DEFINE_int32(top_cam_index,         0,          "index of the top camera");
+DEFINE_int32(bottom_cam_index,      15,         "index of the primary bottom camera");
+DEFINE_int32(bottom_cam2_index,     16,         "index of the secondary bottom camera");
+DEFINE_int32(enable_pole_removal,   true,       "if true, the secondary bottom camera is used to remove the pole in the primary bottom camera image");
 
 struct PreviewRenderer {
 
-  bool gotTopImage, gotBottomImage;
-  Mat topImage, bottomImage;
-  CameraMetadata bottomCamModel, topCamModel;
+  Mat topImage, bottomImage, bottomImage2;
+  CameraMetadata topCamModel, bottomCamModel;
+  Mat fisheyeWarpMatTop, fisheyeWarpMatBottom;
+  cv::Size outputSize;
 
-  PreviewRenderer() :
-      gotTopImage(false),
-      gotBottomImage(false) {
+  PreviewRenderer() {
 
     LOG(INFO) << "reading camera model json";
     float cameraRingRadius;
@@ -70,45 +73,63 @@ struct PreviewRenderer {
     // the simple/fast ISP we use for preview reduces image size by half,
     // so we will need to account for that when projecting from fisheye to
     // equirectangular.
-    topCamModel.usablePixelsRadius /= 2;
-    bottomCamModel.usablePixelsRadius /= 2;
-    topCamModel.imageCenterX /= 2;
-    topCamModel.imageCenterY /= 2;
-    bottomCamModel.imageCenterX /= 2;
-    bottomCamModel.imageCenterY /= 2;
+    topCamModel.usablePixelsRadius      /= 2;
+    topCamModel.imageCenterX            /= 2;
+    topCamModel.imageCenterY            /= 2;
+    bottomCamModel.usablePixelsRadius   /= 2;
+    bottomCamModel.imageCenterX         /= 2;
+    bottomCamModel.imageCenterY         /= 2;
+
+    outputSize = cv::Size(
+      FLAGS_eqr_width,
+      FLAGS_eqr_height * (topCamModel.fisheyeFovDegrees / 2.0f) / 180.0f);
+    fisheyeWarpMatTop = precomputeBicubicRemapFisheyeToSpherical(
+      topCamModel, outputSize);
+    fisheyeWarpMatBottom = precomputeBicubicRemapFisheyeToSpherical(
+      bottomCamModel, outputSize);
   }
 
   void addTopImage(const Mat& image) {
-    if (gotTopImage) {
-      throw VrCamException("got 2 top images in a row without a bottom image");
-    }
     topImage = image.clone();
-    gotTopImage = true;
   }
 
   void addBottomImage(const Mat& image) {
-    if (gotBottomImage) {
-      throw VrCamException("got 2 bottom images in a row without a top image");
-    }
     bottomImage = image.clone();
-    gotBottomImage = true;
   }
 
-  static Mat makePaddedEquirect(
-      const CameraMetadata& camModel,
+  void addBottomImage2(const Mat& image) {
+    bottomImage2 = image.clone();
+  }
+
+  Mat makePaddedEquirect(
+      const Mat& warpMat,
       const Mat& fisheyeImage,
       const bool isBottom) {
 
-    Mat eqrImage = bicubicRemapFisheyeToSpherical(
-      camModel,
+    Mat eqrImage(outputSize, CV_8UC3);
+    remap(
       fisheyeImage,
-      Size(
-        FLAGS_eqr_width,
-        FLAGS_eqr_height * (camModel.fisheyeFovDegrees / 2.0f) / 180.0f));
+      eqrImage,
+      warpMat,
+      Mat(),
+      CV_INTER_CUBIC,
+      BORDER_CONSTANT);
+
     cvtColor(eqrImage, eqrImage, CV_BGR2BGRA);
     if (isBottom) {
       flip(eqrImage, eqrImage, -1);
+
+      // do an alpha ramp to blend the bottom camera image against the top
+      const int halfEqrHeight = FLAGS_eqr_height / 2;
+      const int alphaRampHeight = eqrImage.rows - halfEqrHeight;
+      for (int y = 0; y < alphaRampHeight; ++y) {
+        for (int x = 0; x < eqrImage.cols; ++x) {
+          const float alpha = float(y) / float(alphaRampHeight);
+          eqrImage.at<Vec4b>(y, x)[3] = alpha * 255.0f;
+        }
+      }
     }
+
     copyMakeBorder(
       eqrImage,
       eqrImage,
@@ -121,17 +142,48 @@ struct PreviewRenderer {
   }
 
   void render(int frameNumber) {
-    if (!gotTopImage || !gotBottomImage) {
-      throw VrCamException("attempt to render a frame without both top/bottom");
-    }
-    gotTopImage = false;
-    gotBottomImage = false;
-
     const Mat topBGR = simpleDemosaic(topImage);
     const Mat bottomBGR = simpleDemosaic(bottomImage);
+    const Mat bottomBGR2 = simpleDemosaic(bottomImage2);
 
-    Mat topEqr = makePaddedEquirect(topCamModel, topBGR, false);
-    Mat bottomEqr = makePaddedEquirect(bottomCamModel, bottomBGR, true);
+    Mat topEqr = makePaddedEquirect(fisheyeWarpMatTop, topBGR, false);
+    Mat bottomEqr = makePaddedEquirect(fisheyeWarpMatBottom, bottomBGR, true);
+
+    if (FLAGS_enable_pole_removal) {
+      // the secondary bottom camera is rotated 180 degrees. we need to fix
+      // that, plus only composite in the right half of its image to cover the
+      // pole in the primary bottom camera image.
+      Mat bottomEqr2 = makePaddedEquirect(
+        fisheyeWarpMatBottom, bottomBGR2, true);
+      const static float kHorizontalRampFrac = 0.05f;
+      const int horizontalRampSize = bottomEqr.cols * kHorizontalRampFrac;
+      for (int y = 0; y < bottomEqr.rows; ++y) {
+        for (int x = bottomEqr.cols / 2; x < bottomEqr.cols; ++x) {
+          const Vec4b baseColor = bottomEqr.at<Vec4b>(y, x);
+          const Vec4b bottomColor2 =
+            bottomEqr2.at<Vec4b>(y, x - bottomEqr.cols / 2);
+          const float alphaRamp =
+            rampf(x - bottomEqr.cols / 2, 0, horizontalRampSize);
+          bottomEqr.at<Vec4b>(y, x) = Vec4b(
+            lerp(baseColor[0], bottomColor2[0], alphaRamp),
+            lerp(baseColor[1], bottomColor2[1], alphaRamp),
+            lerp(baseColor[2], bottomColor2[2], alphaRamp),
+            bottomColor2[3]);
+        }
+        for (int x = 0; x < horizontalRampSize; ++x) {
+          const Vec4b baseColor = bottomEqr.at<Vec4b>(y, x);
+          const Vec4b bottomColor2 =
+            bottomEqr2.at<Vec4b>(y, x + bottomEqr.cols / 2);
+          const float alphaRamp = 1.0f - rampf(x, 0, horizontalRampSize);
+          bottomEqr.at<Vec4b>(y, x) = Vec4b(
+            lerp(baseColor[0], bottomColor2[0], alphaRamp),
+            lerp(baseColor[1], bottomColor2[1], alphaRamp),
+            lerp(baseColor[2], bottomColor2[2], alphaRamp),
+            bottomColor2[3]);
+        }
+      }
+    }
+
     Mat eqrImage = flattenLayers<Vec4b>(topEqr, bottomEqr);
 
     stringstream ss;
@@ -275,6 +327,9 @@ int main(int argc, char** argv) {
       }
       if (cameraNames[cameraNumber] == sortedCameraNames[FLAGS_bottom_cam_index]) {
         previewRenderer.addBottomImage(outImage);
+      }
+      if (cameraNames[cameraNumber] == sortedCameraNames[FLAGS_bottom_cam2_index]) {
+        previewRenderer.addBottomImage2(outImage);
       }
     }
 

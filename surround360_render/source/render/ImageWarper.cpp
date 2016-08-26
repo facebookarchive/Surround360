@@ -143,9 +143,8 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   return faceImages;
 }
 
-Mat bicubicRemapFisheyeToSpherical(
+Mat precomputeBicubicRemapFisheyeToSpherical(
     const CameraMetadata& camModel,
-    const Mat& fisheyeImage,
     const Size sphericalImageSize) {
 
   assert(camModel.isFisheye);
@@ -164,6 +163,18 @@ Mat bicubicRemapFisheyeToSpherical(
       warpMat.at<Point2f>(j, i) = Point2f(srcX, srcY);
     }
   }
+  return warpMat;
+}
+
+Mat bicubicRemapFisheyeToSpherical(
+    const CameraMetadata& camModel,
+    const Mat& fisheyeImage,
+    const Size sphericalImageSize) {
+
+  assert(camModel.isFisheye);
+
+  const Mat warpMat = precomputeBicubicRemapFisheyeToSpherical(
+    camModel, sphericalImageSize);
 
   Mat sphericalImage(sphericalImageSize.height, sphericalImageSize.width, CV_8UC3);
   remap(

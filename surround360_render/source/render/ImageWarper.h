@@ -56,11 +56,17 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   const float fisheyeFovRadians, // for a full equirect source, pass in pi
   const int faceImageSize);
 
-// takes a fisheyeImage (un-distorted/straight from the sensor), and generates an equirect
-// projection. intended for use with top/bottom cameras
+// takes a fisheyeImage (un-distorted/straight from the sensor), and generates
+// an equirect projection. intended for use with top/bottom cameras
 Mat bicubicRemapFisheyeToSpherical(
   const CameraMetadata& camModel,
   const Mat& fisheyeImage,
+  const Size sphericalImageSize);
+
+// helper for bicubicRemapFisheyeToSpherical. returns the warp matrix to be
+// passed to cv::remap
+Mat precomputeBicubicRemapFisheyeToSpherical(
+  const CameraMetadata& camModel,
   const Size sphericalImageSize);
 
 // for camera arrays that use 180 degree fisheye lenses on the side, we need a different

@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
           if (FLAGS_nbits == 8) {
             pixval = imgbuf[p];
             // scale the value to 16-bits, 2^16 / 2^8 = 2^8
-            outImage.at<uint16_t>(y, x) = pixval << 8;
+            outImage.at<uint16_t>(y, x) = pixval << 8 | pixval;
             ++p;
           } else if (FLAGS_nbits == 12) {
             uint16_t pixval = *(uint16_t*)(imgbuf + p);

@@ -36,7 +36,8 @@ RENDER_COMMAND_TEMPLATE = """
 --side_flow_alg {SIDE_FLOW_ALGORITHM}
 --polar_flow_alg {POLAR_FLOW_ALGORITHM}
 --poleremoval_flow_alg {POLEREMOVAL_FLOW_ALGORITHM}
---cubemap_face_resolution {CUBEMAP_FACE_RESOLUTION}
+--cubemap_width {CUBEMAP_WIDTH}
+--cubemap_height {CUBEMAP_HEIGHT}
 --eqr_width {EQR_WIDTH}
 --eqr_height {EQR_HEIGHT}
 --final_eqr_width {FINAL_EQR_WIDTH}
@@ -64,7 +65,8 @@ if __name__ == "__main__":
   parser.add_argument('--start_frame', help='first frame index', required=True)
   parser.add_argument('--end_frame', help='last frame index', required=True)
   parser.add_argument('--quality', help='3k,4k,6k,8k', required=True)
-  parser.add_argument('--cubemap_face_resolution', help='default is to not generate cubemaps', required=False, default=0)
+  parser.add_argument('--cubemap_width', help='default is to not generate cubemaps', required=False, default=0)
+  parser.add_argument('--cubemap_height', help='default is to not generate cubemaps', required=False, default=0)
   parser.add_argument('--cubemap_format', help='photo,video', required=False, default='photo')
   parser.add_argument('--save_debug_images', dest='save_debug_images', action='store_true')
   parser.add_argument('--enable_top', dest='enable_top', action='store_true')
@@ -91,7 +93,8 @@ if __name__ == "__main__":
   out_cube_frames_dir       = root_dir + "/cube_frames"
   min_frame                 = int(args["start_frame"])
   max_frame                 = int(args["end_frame"])
-  cubemap_face_resolution   = int(args["cubemap_face_resolution"])
+  cubemap_width             = int(args["cubemap_width"])
+  cubemap_height            = int(args["cubemap_height"])
   cubemap_format            = args["cubemap_format"]
   quality                   = args["quality"]
   save_debug_images         = args["save_debug_images"]
@@ -131,7 +134,8 @@ if __name__ == "__main__":
       "PREV_FRAME_DIR": "NONE",
       "OUT_EQR_DIR": out_eqr_frames_dir,
       "OUT_CUBE_DIR": out_cube_frames_dir,
-      "CUBEMAP_FACE_RESOLUTION": cubemap_face_resolution,
+      "CUBEMAP_WIDTH": cubemap_width,
+      "CUBEMAP_HEIGHT": cubemap_height,
       "CUBEMAP_FORMAT": cubemap_format,
       "SRC_INTRINSIC_PARAM_FILE": src_intrinsic_param_file,
       "RIG_JSON_FILE": rig_json_file,

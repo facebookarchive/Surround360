@@ -54,7 +54,8 @@ void mapEquirectToCubemapCoordinate(
 vector<Mat> convertSphericalToCubemapBicubicRemap(
   const cv::Mat& srcSphericalImage,
   const float fisheyeFovRadians, // for a full equirect source, pass in pi
-  const int faceImageSize);
+  const int faceWidth,
+  const int faceHeight);
 
 // takes a fisheyeImage (un-distorted/straight from the sensor), and generates
 // an equirect projection. intended for use with top/bottom cameras

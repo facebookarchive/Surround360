@@ -69,7 +69,8 @@ DEFINE_int32(eqr_width,                   256,            "height of spherical p
 DEFINE_int32(eqr_height,                  128,            "height of spherical projection image (0 to pi)");
 DEFINE_int32(final_eqr_width,             3480,           "resize before stacking stereo equirect width");
 DEFINE_int32(final_eqr_height,            960,            "resize before stacking stereo equirect height");
-DEFINE_int32(cubemap_face_resolution,     1536,           "resolution of output cubemaps");
+DEFINE_int32(cubemap_width,               1536,           "face width of output cubemaps");
+DEFINE_int32(cubemap_height,              1536,           "face height of output cubemaps");
 DEFINE_string(cubemap_format,             "video",        "either video or photo");
 DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
 DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
@@ -922,15 +923,22 @@ void renderStereoPanorama() {
 
   // project the horizontal panoramas to cubemaps and composite the top
   const double startCubemapTime = getCurrTimeSec();
-  if (FLAGS_cubemap_face_resolution > 0 && !FLAGS_output_cubemap_path.empty()) {
+  if (FLAGS_cubemap_width > 0 && FLAGS_cubemap_height > 0
+      && !FLAGS_output_cubemap_path.empty()) {
     LOG(INFO) << "Generating stereo cubemap";
     Mat cubemapImageL = stackOutputCubemapFaces(
         FLAGS_cubemap_format,
         convertSphericalToCubemapBicubicRemap(
-          sphericalImageL, M_PI, FLAGS_cubemap_face_resolution));
+          sphericalImageL,
+          M_PI,
+          FLAGS_cubemap_width,
+          FLAGS_cubemap_height));
     Mat cubemapImageR = stackOutputCubemapFaces(
         FLAGS_cubemap_format, convertSphericalToCubemapBicubicRemap(
-          sphericalImageR, M_PI, FLAGS_cubemap_face_resolution));
+          sphericalImageR,
+          M_PI,
+          FLAGS_cubemap_width,
+          FLAGS_cubemap_height));
     Mat stereoCubemap = stackVertical(vector<Mat>({cubemapImageL, cubemapImageR}));
     imwriteExceptionOnFail(FLAGS_output_cubemap_path, stereoCubemap);
   }

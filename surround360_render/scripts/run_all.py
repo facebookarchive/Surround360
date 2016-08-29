@@ -79,7 +79,8 @@ python {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
 --quality {QUALITY}
 --start_frame {START_FRAME}
 --end_frame {END_FRAME}
---cubemap_face_resolution {CUBEMAP_FACE_RESOLUTION}
+--cubemap_width {CUBEMAP_WIDTH}
+--cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
 --src_intrinsic_param_file {SRC_INSTRINSIC_PARAM_FILE}
 --rectify_file {RECTIFY_FILE}
@@ -126,8 +127,9 @@ def parse_args():
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
-  parser.add_argument('--cubemap_face_resolution',    metavar='Cubemap Face Resolution', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--cubemap_format',             metavar='Cubemap Format', help='photo or video', required=False, choices=['photo', 'video'], default='video')
+  parser.add_argument('--cubemap_width',              metavar='Cubemap Face Width', help='0 = no cubemaps', required=False, default='0')
+  parser.add_argument('--cubemap_height',             metavar='Cubemap Face Height', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--enable_top',                 help='enable top camera', action='store_true')
   parser.add_argument('--enable_bottom',              help='enable bottom camera', action='store_true')
   parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
@@ -215,7 +217,8 @@ if __name__ == "__main__":
   quality                   = args["quality"]
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
-  cubemap_face_resolution   = int(args["cubemap_face_resolution"])
+  cubemap_width             = int(args["cubemap_width"])
+  cubemap_height            = int(args["cubemap_height"])
   cubemap_format            = args["cubemap_format"]
   enable_top                = args["enable_top"]
   enable_bottom             = args["enable_bottom"]
@@ -418,7 +421,8 @@ if __name__ == "__main__":
     "QUALITY": quality,
     "START_FRAME": start_frame,
     "END_FRAME": end_frame,
-    "CUBEMAP_FACE_RESOLUTION": cubemap_face_resolution,
+    "CUBEMAP_WIDTH": cubemap_width,
+    "CUBEMAP_HEIGHT": cubemap_height,
     "CUBEMAP_FORMAT": cubemap_format,
     "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
     "RECTIFY_FILE": rectify_file,

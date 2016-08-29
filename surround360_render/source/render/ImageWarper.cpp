@@ -97,7 +97,8 @@ void mapEquirectToCubemapCoordinate(
 vector<Mat> convertSphericalToCubemapBicubicRemap(
     const cv::Mat& srcSphericalImage,
     const float fisheyeFovRadians,
-    const int faceImageSize) {
+    const int faceWidth,
+    const int faceHeight) {
 
   static const vector<CubemapFace> faces = {
     CUBEMAP_FACE_RIGHT,
@@ -108,15 +109,14 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
     CUBEMAP_FACE_FRONT
   };
 
-  const float dy = 1.0f / float(faceImageSize);
-  const float dx = 1.0f / float(faceImageSize);
+  const float dy = 1.0f / float(faceWidth);
+  const float dx = 1.0f / float(faceHeight);
 
-  int faceOffset = 0;
   vector<Mat> faceImages;
   for (const CubemapFace& face : faces) {
-    Mat warpMat = Mat(Size(faceImageSize, faceImageSize), CV_32FC2);
-    for (int i = 0; i < faceImageSize; ++i) {
-      for (int j = 0; j < faceImageSize; ++j) {
+    Mat warpMat = Mat(Size(faceWidth, faceHeight), CV_32FC2);
+    for (int j = 0; j < faceHeight; ++j) {
+      for (int i = 0; i < faceWidth; ++i) {
         float srcX;
         float srcY;
         mapEquirectToCubemapCoordinate(
@@ -129,7 +129,6 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
         warpMat.at<Point2f>(j, i) = Point2f(srcX, srcY);
       }
     }
-    faceOffset += faceImageSize;
     Mat faceImage;
     remap(
       srcSphericalImage,

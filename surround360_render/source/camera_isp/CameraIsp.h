@@ -6,7 +6,6 @@
 * LICENSE_render file in the root directory of this subproject. An additional grant
 * of patent rights can be found in the PATENTS file in the same directory.
 */
-
 #pragma once
 
 #include <exception>
@@ -40,11 +39,11 @@ enum DemosaicFilter {
 };
 
 class CameraIsp {
- protected :
+ protected:
   string bayerPattern;
   vector<cv::Point3f> compandingLut;
   cv::Point3f blackLevel;
-  vector<cv::Point3f>vignetteRollOff;
+  vector<cv::Point3f> vignetteRollOff;
 
   int stuckPixelThreshold;
   float stuckPixelDarknessThreshold;
@@ -79,7 +78,7 @@ class CameraIsp {
   const float sqrtMaxD; // max diagonal distance
 
   void denoisePlaneAdaptiveBilateral(Mat& inputImage, const int c) {
-    Mat outputImage(inputImage.rows, inputImage.cols, CV_32FC1);
+    Mat outputImage(inputImage.rows, inputImage.cols, CV_32F);
 
     outputImage = 0;
     const int radius = denoiseRadius;
@@ -227,12 +226,12 @@ class CameraIsp {
 
   void demosaicEdgeAware(Mat& red, Mat& green, Mat& blue) const {
     // Horizontal and vertical green values
-    Mat gV(height, width, CV_32FC1);
-    Mat gH(height, width, CV_32FC1);
+    Mat gV(height, width, CV_32F);
+    Mat gH(height, width, CV_32F);
 
     // And their first and second order derivatives
-    Mat dV(height, width, CV_32FC1);
-    Mat dH(height, width, CV_32FC1);
+    Mat dV(height, width, CV_32F);
+    Mat dH(height, width, CV_32F);
 
     // Compute green gradients
     for (int i = 0; i < height; ++i) {
@@ -312,19 +311,20 @@ class CameraIsp {
     }
 
     // compute r-b
-    Mat redMinusGreen(height, width, CV_32FC1);
-    Mat blueMinusGreen(height, width, CV_32FC1);
+    Mat redMinusGreen(height, width, CV_32F);
+    Mat blueMinusGreen(height, width, CV_32F);
+    Mat pGreen(height, width, CV_32F);
 
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; ++j) {
+        pGreen.at<float>(i, j) = logf(1.0f + green.at<float>(i, j));
         if (redPixel(i, j)) {
-          redMinusGreen.at<float>(i, j) = red.at<float>(i, j) - green.at<float>(i, j);
+          redMinusGreen.at<float>(i, j) = red.at<float>(i, j) - pGreen.at<float>(i, j);
         } else if (!greenPixel(i, j)) {
-          blueMinusGreen.at<float>(i, j) = blue.at<float>(i, j) - green.at<float>(i, j);
+          blueMinusGreen.at<float>(i, j) = blue.at<float>(i, j) - pGreen.at<float>(i, j);
         }
       }
     }
-
     // Now use a constant hue based red/blue bilinear interopaltion
     for (int i = 0; i < height; ++i) {
       const int i_1 = reflect(i - 1, height);
@@ -347,8 +347,16 @@ class CameraIsp {
             (blueMinusGreen.at<float>(i_1, j_1) +
              blueMinusGreen.at<float>(i1, j_1) +
              blueMinusGreen.at<float>(i_1, j1) +
-             blueMinusGreen.at<float>(i1, j1)) / 4 +
-            green.at<float>(i, j);
+             blueMinusGreen.at<float>(i1, j1)) / 4.0f +
+            pGreen.at<float>(i, j);
+
+          red.at<float>(i, j) =
+            (redMinusGreen.at<float>(i, j) +
+             redMinusGreen.at<float>(i_2, j) +
+             redMinusGreen.at<float>(i2, j) +
+             redMinusGreen.at<float>(i, j_2) +
+             redMinusGreen.at<float>(i, j2)) / 5.0f +
+            pGreen.at<float>(i, j);
         } else if (greenPixel(i, j)) {
           Mat& diffCh1 = redGreenRow ? blueMinusGreen : redMinusGreen;
           Mat& diffCh2 = redGreenRow ? redMinusGreen :  blueMinusGreen;
@@ -362,8 +370,8 @@ class CameraIsp {
              diffCh1.at<float>(i_1, j_2) +
              diffCh1.at<float>(i1, j_2) +
              diffCh1.at<float>(i_1, j2) +
-             diffCh1.at<float>(i1, j2)) / 6 +
-            green.at<float>(i, j);
+             diffCh1.at<float>(i1, j2)) / 6.0f +
+            pGreen.at<float>(i, j);
 
           ch2.at<float>(i, j) =
             (diffCh2.at<float>(i, j_1) +
@@ -371,15 +379,23 @@ class CameraIsp {
              diffCh2.at<float>(i_2, j_1) +
              diffCh2.at<float>(i2, j_1) +
              diffCh2.at<float>(i_2, j1) +
-             diffCh2.at<float>(i2, j1)) / 6 +
-            green.at<float>(i, j);
+             diffCh2.at<float>(i2, j1)) / 6.0f +
+            pGreen.at<float>(i, j);
         } else {
           red.at<float>(i, j) =
             (redMinusGreen.at<float>(i_1, j_1) +
              redMinusGreen.at<float>(i1, j_1) +
              redMinusGreen.at<float>(i_1, j1) +
-             redMinusGreen.at<float>(i1, j1)) / 4.0 +
-            green.at<float>(i, j);
+             redMinusGreen.at<float>(i1, j1)) / 4.0f +
+            pGreen.at<float>(i, j);
+
+          blue.at<float>(i, j) =
+            (blueMinusGreen.at<float>(i, j) +
+             blueMinusGreen.at<float>(i_2, j) +
+             blueMinusGreen.at<float>(i2, j) +
+             blueMinusGreen.at<float>(i, j_2) +
+             blueMinusGreen.at<float>(i, j2)) / 5.0f +
+            pGreen.at<float>(i, j);
         }
       }
     }
@@ -610,11 +626,11 @@ class CameraIsp {
       greenBayerPixel[1][1] = false;
     }
 
-    vignetteCurve = shared_ptr<BezierCurve<float, cv::Point3f > > (
-      new BezierCurve<float, cv::Point3f >());
+    vignetteCurve = shared_ptr<BezierCurve<float, Point3f > > (
+      new BezierCurve<float, Point3f >());
 
     for (int i = 0; i < vignetteRollOff.size(); ++i) {
-      cv::Point3f v(vignetteRollOff[i]);
+      Point3f v(vignetteRollOff[i]);
       vignetteCurve->addPoint(v);
     }
 
@@ -719,7 +735,7 @@ class CameraIsp {
     }
   }
 
-  void loadImage(const Mat& inputImage) {
+  virtual void loadImage(const Mat& inputImage) {
     *const_cast<int*>(&width) = inputImage.cols / resize;
     *const_cast<int*>(&height) = inputImage.rows / resize;
 
@@ -728,12 +744,17 @@ class CameraIsp {
     *const_cast<float*>(&maxD) = square(width) + square(width);
     *const_cast<float*>(&sqrtMaxD) = sqrt(maxD);
 
-    rawImage = Mat::zeros(height, width, CV_32FC1);
+    rawImage = Mat::zeros(height, width, CV_32F);
 
     // Copy and convert to float
-    if (bitsPerPixel <= 8) {
+    uint8_t depth = inputImage.type() & CV_MAT_DEPTH_MASK;
+    if (depth == CV_8U) {
+      bitsPerPixel = 8;
       resizeInput<uint8_t>(inputImage);
-    } else if (bitsPerPixel <= 16) {
+    } else if (depth == CV_16U) {
+      // Actual bits per pixel could be 10, 12, or upto 16 so we have
+      // to rely on the specification in the isp config file since
+      // it's camera/sensor dependent.
       resizeInput<uint16_t>(inputImage);
     } else {
       throw VrCamException("input is larger that 16 bits per pixel");
@@ -806,12 +827,12 @@ class CameraIsp {
 
   // If the sensor isn't linear we need to make it linear with a look up table
   void linearize() {
-    Linear cLut(0.0f, 1.0f, maxPixelValue*2, compandingLut);
+    Linear clut(0.0f, 1.0f, maxPixelValue*2, compandingLut);
 
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
         float& v = rawImage.at<float>(i, j);
-        v = cLut(v);
+        v = clut(v);
       }
     }
   }
@@ -941,9 +962,9 @@ class CameraIsp {
 
 
   void demosiac() {
-    Mat r(height, width, CV_32FC1);
-    Mat g(height, width, CV_32FC1);
-    Mat b(height, width, CV_32FC1);
+    Mat r(height, width, CV_32F);
+    Mat g(height, width, CV_32F);
+    Mat b(height, width, CV_32F);
 
     // Break out each plane into a separate image so we can demosiacFilter
     // them seperately and then recombine them.
@@ -1016,7 +1037,7 @@ class CameraIsp {
 
   void colorCorrect() {
     // If saturation is unit this satImage will be the identity matrix.
-    Mat satImage = Mat::zeros(3, 3, CV_32FC1);
+    Mat satImage = Mat::zeros(3, 3, CV_32F);
     satImage.at<float>(0, 0) = 1.0f;
     satImage.at<float>(1, 1) = saturation;
     satImage.at<float>(2, 2) = saturation;
@@ -1052,7 +1073,7 @@ class CameraIsp {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
         const float d = sqrt(square(j - halfWidth) + square(i - halfHeight));
-        const cv::Point3f v = (*vignetteCurve)(2 * d / sqrtMaxD);
+        const Point3f v = (*vignetteCurve)(2 * d / sqrtMaxD);
         demosaicedImage.at<Vec3f>(i, j)[0] *= v.x;
         demosaicedImage.at<Vec3f>(i, j)[1] *= v.y;
         demosaicedImage.at<Vec3f>(i, j)[2] *= v.z;
@@ -1143,7 +1164,9 @@ void sharpen() {
                           1.0f + sharpenning.z);
   }
 
-  Mat getImage(const bool swizzle = true) {
+ protected:
+  // Replacable pipeline
+  virtual void executePipeline() {
     // Apply the pipeline
     blackLevelAdjust();
     linearize();
@@ -1157,7 +1180,11 @@ void sharpen() {
     contrastCurve();
     toneCurve();
     sharpen();
+  }
 
+ public:
+  Mat getImage(const bool swizzle = true) {
+    executePipeline();
     Mat outputImage(height, width, CV_8UC3);
 
     // Copy and convert to byte swizzling to BGR

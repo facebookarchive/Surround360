@@ -39,7 +39,7 @@ time {SURROUND360_RENDER_DIR}/bin/TestHyperPreview
 """
 
 FFMPEG_COMMAND_TEMPLATE = """
-time ./ffmpeg
+time ffmpeg
 -y
 -framerate 30
 -i {DEST_DIR}/eqr_preview/%06d.jpg

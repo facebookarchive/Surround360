@@ -579,7 +579,7 @@ static void preview(ConsumerBuffer* previewBuffer) {
 
   for (int i = 0; i < kNumPreviewCams; ++i) {
     source[i] = avfilter_get_by_name("buffer");
-    if (source == nullptr) {
+    if (source[i] == nullptr) {
       throw "could not allocate buffer source filter";
     }
     assert(source[i] != nullptr);

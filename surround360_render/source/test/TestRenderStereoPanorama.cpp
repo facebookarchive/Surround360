@@ -65,7 +65,7 @@ DEFINE_string(side_flow_alg,              "pixflow_low",  "which optical flow al
 DEFINE_string(polar_flow_alg,             "pixflow_low",  "which optical flow algorithm to use for top/bottom warp with sides");
 DEFINE_string(poleremoval_flow_alg,       "pixflow_low",  "which optical flow algorithm to use for pole removal with secondary bottom camera");
 DEFINE_double(zero_parallax_dist,         10000.0,        "distance where parallax is zero");
-DEFINE_int32(eqr_width,                   256,            "height of spherical projection image (0 to 2pi)");
+DEFINE_int32(eqr_width,                   256,            "width of spherical projection image (0 to 2pi)");
 DEFINE_int32(eqr_height,                  128,            "height of spherical projection image (0 to pi)");
 DEFINE_int32(final_eqr_width,             3480,           "resize before stacking stereo equirect width");
 DEFINE_int32(final_eqr_height,            960,            "resize before stacking stereo equirect height");

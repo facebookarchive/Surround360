@@ -120,6 +120,14 @@ def parse_args():
   rectify_file = res_path + "/config/rectify.yml"
   rig_json_file = res_path + "/config/17cmosis_default.json"
 
+  # Make sure we have per camera color adjustment files. If not, copy from template
+  config_isp_path = res_path + "/config/isp"
+  if not os.path.isfile(config_isp_path + "/isp0.json") or os.path.isfile(cam_to_isp_config_file):
+    print "WARNING: Color adjustment files not found. Using default files.\n"
+    sys.stdout.flush()
+    duplicate_isp_files(config_isp_path)
+    update_isp_mappings(cam_to_isp_config_file, config_isp_path)
+
   parse_type = GooeyParser if USE_GOOEY else argparse.ArgumentParser
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
@@ -199,9 +207,7 @@ def duplicate_isp_files(config_isp_path):
     os.system("cp " + cmosis_path + " " + config_isp_path + "/isp" + str(i) + ".json")
 
 def update_isp_mappings(cam_to_isp_config_file, config_isp_path):
-  with open(cam_to_isp_config_file, "r") as json_file:
-    cam_json_map = json.load(json_file)
-
+  cam_json_map = {}
   for i in range(0, NUM_CAMS):
     cam_json_map["cam" + str(i)] = config_isp_path + "/isp" + str(i) + ".json"
 
@@ -332,14 +338,6 @@ if __name__ == "__main__":
   file_runtimes.write("total frames: " + str(frame_count) + "\n")
 
   end_frame = int(start_frame) + int(frame_count) - 1
-
-  # Make sure we have per camera color adjustment files. If not, copy from template
-  config_isp_path = surround360_render_dir + "/res/config/isp"
-  if not os.path.isfile(config_isp_path + "/isp0.json"):
-    print "WARNING: Color adjustment files not found. Using default files.\n"
-    sys.stdout.flush()
-    duplicate_isp_files(config_isp_path)
-    update_isp_mappings(cam_to_isp_config_file, config_isp_path)
 
   ### isp step ###
 

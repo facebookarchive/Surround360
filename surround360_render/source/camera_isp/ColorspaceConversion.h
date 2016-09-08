@@ -53,7 +53,7 @@ static double pCurve(const double x) {
   return x > 0.008856f ? pow(x , 1.0 / 3.0) : 7.787 * x + 16.0/116.0;
 }
 
-void toLab(
+static void toLab(
     const double r,
     const double g,
     const double b,

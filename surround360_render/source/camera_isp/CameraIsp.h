@@ -765,6 +765,10 @@ class CameraIsp {
     return maxPixelValue;
   }
 
+  Mat getDemosaicedImage() const {
+    return demosaicedImage;
+  }
+
   void addBlackLevelOffset(const int offset) {
     blackLevel.x += offset;
     blackLevel.y += offset;

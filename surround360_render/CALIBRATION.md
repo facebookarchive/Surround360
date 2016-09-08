@@ -4,7 +4,7 @@ In order to produce a more accurate and comfortable result in VR, the Surround 3
 
 WARNING: you should not attempt to render videos captured with Surround 360 without first reading this document. Uncalibrated results may be severely distorted in VR to the point of breaking stereo perception of 3D.
 
-There are three specialized calibration processes: intrinsic calibration to correct barrel distortion, stereo rectification for the side cameras, and optical center for the fisheye lenses at the top and bottom. Each part of calibration requires different data and different steps to process with our software.
+There are four specialized calibration processes: intrinsic calibration to correct barrel distortion, color calibration, stereo rectification for the side cameras, and optical center for the fisheye lenses at the top and bottom. Each part of calibration requires different data and different steps to process with our software.
 
 ## Rectification
 
@@ -149,3 +149,58 @@ NOTE: the --checkerboard_width and --checkerboard_height parameters should match
 </pre>
 
 This will output a modified version of each checkerboard image to ~/Desktop/intrinsic/undistorted. If the intrinsic calibration worked as intended, straight lines from the checkerboards should appear as straight lines in the undistorted images.
+
+
+## Color Calibration
+
+When converting RAW images to RGB we use the files cmosis_sunex.json and cmosis_fujinon.json in /surround360_render/res/config/isp. These contain fields to configure the soft ISP for each side and top/bottom cameras, respectively. A detailed description of each field can be found on the README.txt file under the same directory.
+
+Even though all the sensors from the same camera model should behave the same way, in practice there are subtle differences that can cause two images from two sensors to look different under the same illuminant (light source).
+
+This calibration process lets us create an ISP config json file for a specific camera/lens combination, which can be then used by referencing it in cam_to_isp_config.json.
+
+Note that the ISP config file will only be valid for the illuminant the calibration was run against. However, there are certain known illuminants that work fairly well in multiple light scenarios. For this example we used D50 in a controlled environment, which approximates noon sky daylight.
+
+To calibrate against a known illuminant, we need something on the scene for which we know its ground truth RGB values. We use a MacBeth ColorChecker, which contains 24 square color patches. We also use a SpyderCUBE device, which allows us to find the darkest point on the image for black level adjustment.
+
+The steps below describe the process for a single camera. This must be done for all the cameras on the same rig, under the same illuminant (light source).
+
+* Under the known illuminant, place the MacBeth chart and the SpyderCUBE in front of the camera and take a picture. An example image can found in /surround360_render/res/example_data/color_calibration_input.png.
+
+* Assuming the image was saved at ~/Desktop/color_calibration/cam1.png, cd to /surround360_render and run the following command::
+<pre>
+./bin/TestColorCalibration \
+--logbuflevel -1 --stderrthreshold 0 --v 0 \
+--image_path ~/Desktop/color_calibration/cam1.png  \
+--isp_passthrough_path ./res/config/isp/cmosis_sunex_passthrough.json \
+--save_debug_images \
+--output_data_dir ~/Desktop/color_calibration/cam1
+</pre>
+
+* This creates the file ~/Desktop/color_calibration/cam1/isp_out.json, which can be renamed to to cam1.json.and. It also generates several debug images of each step of the detection process. /surround360_render/res/example_data/color_calibration_output.png is an example of the ouput of the last step (gamma correction) on the input image mentioned above.
+
+After doing this for all the side and top/bottom cameras, we will have N ISP config json files. which we can put on the same directory, say ~/Desktop/color_calibration/isp. Then, if we want to run the pipeline with these config files we just modify /surround360_render/res/config/isp/cam_to_isp_config.json so that it looks like:
+
+<pre>
+{
+    "cam0": "~/Desktop/color_calibration/isp/isp0.json", 
+    "cam1": "~/Desktop/color_calibration/isp/isp1.json", 
+    "cam10": "~/Desktop/color_calibration/isp/isp10.json", 
+    "cam11": "~/Desktop/color_calibration/isp/isp11.json", 
+    "cam12": "~/Desktop/color_calibration/isp/isp12.json", 
+    "cam13": "~/Desktop/color_calibration/isp/isp13.json", 
+    "cam14": "~/Desktop/color_calibration/isp/isp14.json", 
+    "cam15": "~/Desktop/color_calibration/isp/isp15.json", 
+    "cam16": "~/Desktop/color_calibration/isp/isp16.json", 
+    "cam2": "~/Desktop/color_calibration/isp/isp2.json", 
+    "cam3": "~/Desktop/color_calibration/isp/isp3.json", 
+    "cam4": "~/Desktop/color_calibration/isp/isp4.json", 
+    "cam5": "~/Desktop/color_calibration/isp/isp5.json", 
+    "cam6": "~/Desktop/color_calibration/isp/isp6.json", 
+    "cam7": "~/Desktop/color_calibration/isp/isp7.json", 
+    "cam8": "~/Desktop/color_calibration/isp/isp8.json", 
+    "cam9": "~/Desktop/color_calibration/isp/isp9.json"
+}
+</pre>
+
+and then run run_all.py as usual.

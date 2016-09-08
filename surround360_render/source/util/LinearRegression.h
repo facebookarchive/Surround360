@@ -35,7 +35,7 @@ inline float dot(
 }
 
 // solve a linear regression problem from R^d to R^k.
-vector<vector<float>> solveLinearRegressionRdToRk(
+static vector<vector<float>> solveLinearRegressionRdToRk(
     const int d,
     const int k,
     const vector<vector<float>>& x,

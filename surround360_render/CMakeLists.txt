@@ -291,3 +291,20 @@ TARGET_LINK_LIBRARIES(
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
+
+### TestColorCalibration ###
+
+ADD_EXECUTABLE(
+  TestColorCalibration
+  source/test/TestColorCalibration.cpp
+)
+TARGET_COMPILE_FEATURES(TestColorCalibration PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
+  TestColorCalibration
+  LibVrCamera
+  LibJSON
+  gflags
+  glog
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
+)

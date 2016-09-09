@@ -152,17 +152,17 @@ vector<ColorPatch> detectColorChart(
 
   // Adaptive thresholding
   Mat bw;
-  const double kMaxValue = 255.0;
-  const int kBlockSize = 17;
-  const int kWeightedSub = 2;
+  const double maxValue = 255.0;
+  const int blockSize = 19;
+  const int weightedSub = 2;
   adaptiveThreshold(
     image,
     bw,
-    kMaxValue,
+    maxValue,
     ADAPTIVE_THRESH_MEAN_C,
     THRESH_BINARY_INV,
-    kBlockSize,
-    kWeightedSub);
+    blockSize,
+    weightedSub);
 
   if (saveDebugImages) {
     const string adaptiveThreshImageFilename = outputDir +
@@ -178,10 +178,10 @@ vector<ColorPatch> detectColorChart(
     findContours(bw, saveDebugImages, outputDir, stepDebugImages);
 
   // Morphological constraints
-  const float kPatchMinAreaPerc = 0.02f;
-  const float kPatchMaxAreaPerc = 0.15f;
-  const int minArea = kPatchMinAreaPerc / 100 * bw.cols * bw.rows;
-  const int maxArea = kPatchMaxAreaPerc / 100 * bw.cols * bw.rows;
+  const float patchMinAreaPercentage = 0.02f;
+  const float patchMaxAreaPercentage = 0.25f;
+  const int minArea = patchMinAreaPercentage / 100 * bw.cols * bw.rows;
+  const int maxArea = patchMaxAreaPercentage / 100 * bw.cols * bw.rows;
   const float maxAspectRatio = 1.2f;
 
   vector<ColorPatch> colorPatchList;
@@ -193,11 +193,6 @@ vector<ColorPatch> detectColorChart(
     Moments mu = moments(cont, false);
 
     Point2f centroid = boundingBox.center;
-
-    if (centroid.x < 0.25 * bw.cols || centroid.x > 0.75 * bw.cols ||
-        centroid.y < 0.25 * bw.rows || centroid.y > 0.75 * bw.rows) {
-        continue;
-    }
 
     const int width = boundingBox.size.width;
     const int height = boundingBox.size.height;
@@ -337,9 +332,10 @@ vector<ColorPatch> removeContourOutliers(vector<ColorPatch> colorPatchList) {
   float minDistanceMedian = minDistancesSorted[minDistancesSorted.size() / 2];
 
   // Discard patches with too large of a minimum distance
+  const float maxDistanceThreshold = 2.0f * minDistanceMedian;
   vector<ColorPatch> colorPatchListClean;
   for (int iPatch = 0; iPatch < colorPatchList.size(); ++iPatch) {
-    if (minDistances[iPatch] < 3.0f * minDistanceMedian) {
+    if (minDistances[iPatch] < maxDistanceThreshold) {
       colorPatchListClean.push_back(colorPatchList[iPatch]);
     }
   }

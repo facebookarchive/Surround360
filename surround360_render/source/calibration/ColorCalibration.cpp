@@ -81,14 +81,13 @@ Point3f findBlackPoint(
   Mat maskNonZero;
   threshold(image, maskNonZero, 0, 255, THRESH_BINARY);
 
-  // Only search on the center 50% of the image, to avoid false positives
-  // outside light box (if any)
-  Mat mask50p = createMaskFromCenter(image, 0.5f);
+  // Ignore borders of image (e.g. embedded info)
+  Mat maskCenter = createMaskFromCenter(image, 0.9f);
 
   double blackLevel;
   Point minLoc;
   minMaxLoc(
-    image, &blackLevel, nullptr, &minLoc, nullptr, maskNonZero & mask50p);
+    image, &blackLevel, nullptr, &minLoc, nullptr, maskNonZero & maskCenter);
 
   if (saveDebugImages) {
     Mat rawRGB(image.size(), CV_8UC3);

@@ -122,7 +122,7 @@ def parse_args():
 
   # Make sure we have per camera color adjustment files. If not, copy from template
   config_isp_path = res_path + "/config/isp"
-  if not os.path.isfile(config_isp_path + "/isp0.json") or os.path.isfile(cam_to_isp_config_file):
+  if not os.path.isfile(config_isp_path + "/isp0.json") or not os.path.isfile(cam_to_isp_config_file):
     print "WARNING: Color adjustment files not found. Using default files.\n"
     sys.stdout.flush()
     duplicate_isp_files(config_isp_path)

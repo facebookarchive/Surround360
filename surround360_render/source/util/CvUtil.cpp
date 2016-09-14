@@ -18,6 +18,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "MathUtil.h"
 #include "LinearRegression.h"
@@ -262,6 +263,9 @@ vector<vector<float>> buildColorAdjustmentModel(
     const Mat& targetImage,
     const Mat& imageToAdjust) {
 
+  static const int kSampleRate = 100;
+  std::uniform_int_distribution<int> distribution(0, kSampleRate - 1);
+  std::default_random_engine engine;
   LOG(INFO) << "building color adjustment model";
   vector<vector<float>> inputs;
   vector<vector<float>> outputs;
@@ -270,10 +274,9 @@ vector<vector<float>> buildColorAdjustmentModel(
       Vec4b targetColor = targetImage.at<Vec4b>(y, x);
       Vec4b adjustColor = imageToAdjust.at<Vec4b>(y, x);
       static const int kAlphaThreshold = 250;
-      static const int kSampleRate = 100;
       if (targetColor[3] > kAlphaThreshold &&
           adjustColor[3] > kAlphaThreshold &&
-          rand() % kSampleRate == 0) {
+          distribution(engine) == 0) {
         vector<float> feature;
         vector<float> target;
         const float dB = adjustColor[0] - targetColor[0];

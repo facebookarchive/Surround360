@@ -60,8 +60,6 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-#include "CameraNonVolatileStorage.h"
-
 #include <flycapture/FlyCapture2.h>
 #include <gflags/gflags.h>
 #include <libusb-1.0/libusb.h>
@@ -581,7 +579,7 @@ static void preview(ConsumerBuffer* previewBuffer) {
 
   for (int i = 0; i < kNumPreviewCams; ++i) {
     source[i] = avfilter_get_by_name("buffer");
-    if (source[i] == nullptr) {
+    if (source == nullptr) {
       throw "could not allocate buffer source filter";
     }
     assert(source[i] != nullptr);
@@ -1124,14 +1122,6 @@ int main(int argc, char *argv[]) {
   saveCMDArgs(captureDir, argc, argv);
   checkCameraSpeeds();
 
-  // Create directory to save contents of non volatile storage
-  string internalStorageDir = captureDir + "/internal_storage";
-  ret = mkdir(internalStorageDir.c_str(), kPermissions);
-  if (ret == -1) {
-    const string kErrString(strerror(errno));
-    throw "Can't create destination directory: " + kErrString;
-  }
-
   camStrobeOutSN = FLAGS_master;
   validateWhiteBalance(FLAGS_whitebalance);
 
@@ -1267,13 +1257,6 @@ int main(int argc, char *argv[]) {
 
     // Print camera information
     cout << ppCameras[i] << endl;
-
-    D("Pulling data from camera " << i << " internal storage...");
-
-    // Pull data from internal storage
-    const string filenameInternalStorage =
-      internalStorageDir + "/" + to_string(ppCameras[i]->getSerialNumber()) + ".json";
-    ppCameras[i]->readFromInternalStorage(filenameInternalStorage);
 
     // We will send a software trigger to one camera, which will be configured
     // to send a strobe output to the rest of the cameras at the time of icoming

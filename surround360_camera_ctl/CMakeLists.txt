@@ -56,17 +56,3 @@ ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
   pc_test
 )
-
-### TestCameraNonVolatileStorage ###
-
-ADD_EXECUTABLE(
-  TestCameraNonVolatileStorage
-  source/camera_control/PointGrey.cpp
-  source/camera_control/test/TestCameraNonVolatileStorage.cpp
-)
-TARGET_COMPILE_FEATURES(TestCameraNonVolatileStorage PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestCameraNonVolatileStorage
-  "-lflycapture${D}"
-  "-lgflags"
-)

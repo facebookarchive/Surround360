@@ -13,7 +13,6 @@
 #include <iostream>
 #include <memory>
 #include <set>
-#include <string>
 
 #include <flycapture/FlyCapture2.h>
 
@@ -49,9 +48,6 @@ namespace surround360 {
     void commitShutterSpeedUpdate();
     void prepareGainUpdate(double gain);
     void commitGainUpdate();
-    bool isDataFlashSupported();
-    void readFromInternalStorage(const std::string& filename);
-    void writeToInternalStorage(const std::vector<char> data);
 
     static void printError(int error, bool doExit = true);
     static void printError(fc::Error error, bool doExit = true);
@@ -139,12 +135,6 @@ namespace surround360 {
     void setPixelFormat(fc::PixelFormat pf);
 
     void getPixelFormatFromBitDepth(fc::PixelFormat* pf, unsigned int nBits);
-
-    uint32_t getDataFlashSize();
-
-    uint64_t getDataFlashOffset();
-
-    void commitPageToDataFlash();
 
     friend std::ostream& operator<<(
       std::ostream& stream,

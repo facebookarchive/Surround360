@@ -1,6 +1,9 @@
-/CMakeCache.txt
-/cmake_install.cmake
-/CMakeFiles/
-/Makefile
-/bin/
-/lib/
+Makefile
+bin/
+lib/
+*.[pyc]
+*.[pyo]
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+local/

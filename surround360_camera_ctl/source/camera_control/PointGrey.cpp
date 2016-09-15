@@ -8,10 +8,13 @@
 
 #include <PointGrey.hpp>
 
-#include <gflags/gflags.h>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <unistd.h>
+
+#include <gflags/gflags.h>
 
 using namespace std;
 using namespace surround360;
@@ -585,6 +588,131 @@ void PointGreyCamera::setPixelFormat(PixelFormat pf) {
   printError(m_camera->SetFormat7Configuration(
                &fmt7ImageSettings,
                fmt7PacketInfo.maxBytesPerPacket));
+}
+
+bool PointGreyCamera::isDataFlashSupported() {
+  // see https://www.ptgrey.com/tan/10370
+  const uint32_t kDataFlashCtrl = 0x1240;
+
+  uint32_t value;
+  printError(m_camera->ReadRegister(kDataFlashCtrl, &value));
+
+  // bit 0 https://www.ptgrey.com/tan/10370
+  const uint32_t presenceInc = 0x80000000;
+  return value & presenceInc ? true : false;
+}
+
+uint32_t PointGreyCamera::getDataFlashSize() {
+  // see https://www.ptgrey.com/tan/10370
+  const uint32_t kDataFlashCtrl = 0x1240;
+
+  uint32_t value;
+  printError(m_camera->ReadRegister(kDataFlashCtrl, &value));
+
+  // bit 8-19 https://www.ptgrey.com/tan/10370
+  const uint32_t pageSize = 0x00FFF000;
+  const uint32_t pageSizeExponent = (value & pageSize) >> 12;
+
+  // bit 20-31 https://www.ptgrey.com/tan/10370
+  const uint32_t numPages = 0x00000FFF;
+  const uint32_t numPagesExponent = (value & numPages) >> 0;
+
+  return uint32_t(1) << (pageSizeExponent + numPagesExponent);
+}
+
+uint64_t PointGreyCamera::getDataFlashOffset() {
+  // see https://www.ptgrey.com/tan/10370
+  const uint32_t kDataFlashData = 0x1244;
+
+  uint32_t value;
+  printError(m_camera->ReadRegister(kDataFlashData, &value));
+
+  // from looking at point grey sample code, value appears to be measured in
+  // 'quartets'
+  // Also: 'Addresses are offsets from the IEEE-1394 base address', see
+  // https://www.ptgrey.com/tan/10370
+  const uint64_t baseAddressIEEE1394 = 0xFFFFF0000000;
+  return baseAddressIEEE1394 + value * sizeof(uint32_t);
+}
+
+void PointGreyCamera::commitPageToDataFlash() {
+  // see https://www.ptgrey.com/tan/10370
+  const uint32_t kDataFlashCtrl = 0x1240;
+
+  uint32_t value;
+  printError(m_camera->ReadRegister(kDataFlashCtrl, &value));
+
+  // bit 6 https://www.ptgrey.com/tan/10370
+  const uint32_t cleanPage = 0x02000000;
+  value |= cleanPage;
+
+  printError(m_camera->WriteRegister(kDataFlashCtrl, value));
+}
+
+void PointGreyCamera::readFromInternalStorage(const string& filename) {
+  const uint64_t dataFlashOffset = getDataFlashOffset();
+
+  uint32_t byteCount;
+  printError(m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(dataFlashOffset >> 32),
+    static_cast<uint32_t>(dataFlashOffset),
+    &byteCount,
+    1));
+
+  // the flash storage is comprised of 'quartets', i.e. uint32s
+  // store the size in the first quartet, followed by the rest
+  const uint32_t quartetsRequired =
+      1 + (byteCount + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  if (quartetsRequired * sizeof(uint32_t) > getDataFlashSize()) {
+    std::cout << "Empty internal storage..." << endl;
+    return;
+  }
+
+  std::vector<uint32_t> quartets(quartetsRequired);
+
+  printError(m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(dataFlashOffset >> 32),
+    static_cast<uint32_t>(dataFlashOffset),
+    reinterpret_cast<uint32_t*>(&quartets[0]),
+    quartets.size()));
+
+  std::ofstream file(filename.c_str(), std::ios::binary);
+  if (!file) {
+    std::cout << "Unable to open file for writing: " << filename << endl;
+    throw std::runtime_error("Unable to open file");
+  }
+
+  file.write(reinterpret_cast<char*>(&quartets[1]), byteCount);
+}
+
+void PointGreyCamera::writeToInternalStorage(const std::vector<char> data) {
+  // the flash storage is comprised of 'quartets', i.e. uint32s
+  // store the size in the first quartet, followed by the rest
+  const uint32_t quartetsRequired =
+      1 + (data.size() + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+  if (quartetsRequired * sizeof(uint32_t) > getDataFlashSize()) {
+    std::cout << "Insufficient storage on device" << endl;
+    throw std::runtime_error("Insufficient storage on device");
+  }
+
+  std::vector<uint32_t> quartets(quartetsRequired);
+  quartets.front() = data.size();
+  std::copy(
+    data.begin(),
+    data.end(),
+    reinterpret_cast<char*>(&quartets[1]));
+
+  const uint64_t dataFlashOffset = getDataFlashOffset();
+
+  printError(m_camera->WriteRegisterBlock(
+    static_cast<uint32_t>(dataFlashOffset >> 32),
+    static_cast<uint32_t>(dataFlashOffset),
+    reinterpret_cast<uint32_t*>(&quartets[0]),
+    quartets.size()));
+
+  // the write needs to be committed to flash
+  std::cout << "Committing write to flash...." << endl;
+  commitPageToDataFlash();
 }
 
 PointGreyCamera::~PointGreyCamera() {

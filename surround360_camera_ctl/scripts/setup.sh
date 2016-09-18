@@ -1,5 +1,6 @@
 #!/bin/bash
 
+mkdir -p /media/snoraid
 mount -o noatime /dev/sda /media/snoraid
 echo noop > /sys/block/sda/queue/scheduler
 echo 0 > /sys/block/sda/queue/rotational

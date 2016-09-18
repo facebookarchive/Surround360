@@ -106,7 +106,7 @@ After installing all of the dependencies as described above, run:
 To test that compilation is successful, run:
 
 <pre>
-  ./bin/CameraControl -numcams 17 -raw -nbits 8 -shutter 20 -gain 0 -debug
+  sudo ./bin/CameraControl -numcams 17 -raw -nbits 8 -shutter 20 -gain 0 -debug
 </pre>
 
 We recommend configuring CMake to compile in Release mode because the code will execute faster. However, you can also set it up for debug mode with:

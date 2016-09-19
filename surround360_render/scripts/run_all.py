@@ -145,7 +145,7 @@ def parse_args():
   parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
   parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
   parser.add_argument('--steps',                      metavar='Steps', help='[unpack,arrange,isp,rectify,render,ffmpeg,all]', required=False, default='all')
-  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_med',  'pixflow_ultra'], default='pixflow_low')
+  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_search_20'], default='pixflow_low')
   parser.add_argument('--cam_to_isp_config_file',     metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
   parser.add_argument('--pole_masks_dir',             metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
   parser.add_argument('--src_intrinsic_param_file',   metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)

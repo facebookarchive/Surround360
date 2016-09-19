@@ -21,6 +21,8 @@ class OpticalFlowInterface {
 public:
   virtual ~OpticalFlowInterface() {};
 
+  enum class DirectionHint { UNKNOWN, RIGHT, DOWN, LEFT, UP };
+
   // compute the flow field that warps image I1 so that it becomes like image I0.
   // I0 and I1 are 1 byte/channel BGRA format, i.e. they have an alpha channel.
   // it may be the case that I0 and I1 are frames in a video sequence, and some form
@@ -35,7 +37,8 @@ public:
     const Mat& prevFlow,
     const Mat& prevI0BGRA,
     const Mat& prevI1BGRA,
-    Mat& flow) = 0;
+    Mat& flow,
+    DirectionHint hint) = 0;
 };
 
 } // namespace optical_flow

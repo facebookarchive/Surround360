@@ -28,7 +28,10 @@ using namespace surround360::math_util;
 using namespace cv;
 using namespace cv::detail;
 
-template <bool UseDirectionalRegularization>
+template <
+  bool UseDirectionalRegularization,
+  int MaxPercentage = 0 // how far to look when initializing flow
+>
 struct PixFlow : public OpticalFlowInterface {
 
   static constexpr int kPyrMinImageSize               = 24;
@@ -81,7 +84,8 @@ struct PixFlow : public OpticalFlowInterface {
       const Mat& prevFlow,
       const Mat& prevI0BGRA,
       const Mat& prevI1BGRA,
-      Mat& flow) {
+      Mat& flow,
+      DirectionHint hint) {
 
     assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 
@@ -147,7 +151,7 @@ struct PixFlow : public OpticalFlowInterface {
           float(prevFlowPyramid[level].rows) / float(prevFlowPyramid[0].rows);
       }
     }
-    flow = Mat::zeros(pyramidI0.back().size(), CV_32FC2);
+    flow = Mat();
 
     for (int level = pyramidI0.size() - 1; level >= 0; --level) {
       patchMatchPropagationAndSearch(
@@ -155,7 +159,8 @@ struct PixFlow : public OpticalFlowInterface {
         pyramidI1[level],
         pyramidAlpha0[level],
         pyramidAlpha1[level],
-        flow);
+        flow,
+        hint);
 
       if (usePrevFlowTemporalRegularization) {
         adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
@@ -211,12 +216,138 @@ struct PixFlow : public OpticalFlowInterface {
     return Point2f((fx - currErr) / kGradEpsilon, (fy - currErr) / kGradEpsilon);
   }
 
+  static inline int computeSearchDistance() {
+    // we search a fraction of the coarsest pyramid level
+    return (kPyrMinImageSize * MaxPercentage + 50) / 100;
+  }
+
+  // compare patch at (i0x,i0y) in i0 to patch at (i1x,i1y) in i1
+  float computePatchError(
+      const Mat& i0, const Mat& alpha0, int i0x, int i0y,
+      const Mat& i1, const Mat& alpha1, int i1x, int i1y)
+  {
+    // compute sum-of-absolute-differences in 5x5 patch
+    static const int kPatchRadius = 2;
+    float sad = 0;
+    float alpha = 0;
+    for (int dy = -kPatchRadius; dy <= kPatchRadius; ++dy) {
+      const int d0y = i0y + dy;
+      if (0 <= d0y && d0y < i0.rows) {
+        const int d1y = clamp(i1y + dy, 0, i1.rows - 1);
+        for (int dx = -kPatchRadius; dx <= kPatchRadius; ++dx) {
+          const int d0x = i0x + dx;
+          if (0 <= d0x && d0x < i0.cols) {
+            const int d1x = clamp(i1x + dx, 0, i1.cols - 1);
+            const float difference =
+              i0.at<float>(d0y, d0x) -
+              i1.at<float>(d1y, d1x);
+            sad += std::abs(difference);
+            alpha +=
+              alpha0.at<float>(d0y, d0x) *
+              alpha1.at<float>(d1y, d1x);
+          }
+        }
+      }
+    }
+    // normalize sad to sum of alphas (fine to go to infinity)
+    sad /= alpha;
+    // scale sad as flow vector length increases to favor short vectors
+    const float length = norm(Point2f(i1x - i0x, i1y - i0y));
+    sad *= 1 + length / computeSearchDistance();
+    return sad;
+  }
+
+  // compute the average intensity ratio of lhs / rhs
+  float computeIntensityRatio(
+      const Mat& lhs, const Mat& lhsAlpha,
+      const Mat& rhs, const Mat& rhsAlpha)
+  {
+    // just scale by the ratio between the sums, attenuated by alpha
+    CHECK_EQ(lhs.size(), rhs.size());
+    float sumLhs = 0;
+    float sumRhs = 0;
+    for (int y = 0; y < lhs.rows; ++y) {
+      for (int x = 0; x < lhs.cols; ++x) {
+        float alpha = lhsAlpha.at<float>(y, x) * rhsAlpha.at<float>(y, x);
+        sumLhs += alpha * lhs.at<float>(y, x);
+        sumRhs += alpha * rhs.at<float>(y, x);
+      }
+    }
+    return sumLhs / sumRhs;
+  }
+
+  Rect computeSearchBox(DirectionHint hint) {
+    // we search a rectangle that is a fraction of the coarsest pyramid level
+    const int dist = computeSearchDistance();
+    // the rectangle extends ortho to each side of the search direction
+    static const int kRatio = 8; // aspect ratio of search box
+    const int ortho = (dist + kRatio / 2) / kRatio;
+    const int thickness = 2 * ortho + 1;
+    switch (hint) {
+      // opencv rectangles are left, top, width, height
+      case DirectionHint::RIGHT: return Rect(0, -ortho, dist + 1, thickness);
+      case DirectionHint::DOWN: return Rect(-ortho, 0, thickness, dist + 1);
+      case DirectionHint::LEFT: return Rect(-dist, -ortho, dist + 1, thickness);
+      case DirectionHint::UP: return Rect(-ortho, -dist, thickness, dist + 1);
+      case DirectionHint::UNKNOWN: break; // silence warning
+    }
+    LOG(FATAL) << "unexpected direction " << int(hint);
+    return Rect();
+  }
+
+  void adjustInitialFlow(
+      const Mat& I0,
+      const Mat& I1,
+      const Mat& alpha0,
+      const Mat& alpha1,
+      Mat& flow,
+      const DirectionHint hint) {
+    // compute a version of I1 that matches I0's intensity
+    // this is basically poor man's color correction
+    Mat I1eq = I1 * computeIntensityRatio(I0, alpha0, I1, alpha1);
+
+    // estimate the flow of each pixel in I0 by searching a rectangle
+    Rect box = computeSearchBox(hint);
+    for (int i0y = 0; i0y < I0.rows; ++i0y) {
+      for (int i0x = 0; i0x < I0.cols; ++i0x) {
+        if (alpha0.at<float>(i0y, i0x) > kUpdateAlphaThreshold) {
+          // create affinity for (0,0) by using fraction of the actual error
+          float kFraction = 0.8f; // lower the fraction to increase affinity
+          float errorBest = kFraction * computePatchError(
+            I0, alpha0, i0x, i0y,
+            I1eq, alpha1, i0x, i0y);
+          int i1xBest = i0x, i1yBest = i0y;
+          // look for better patch in the box
+          for (int dy = box.y; dy < box.y + box.height; ++dy) {
+            for (int dx = box.x; dx < box.x + box.width; ++dx) {
+              int i1x = i0x + dx;
+              int i1y = i0y + dy;
+              if (0 <= i1x && i1x < I1.cols && 0 <= i1y && i1y < I1.rows) {
+                float error = computePatchError(
+                  I0, alpha0, i0x, i0y,
+                  I1eq, alpha1, i1x, i1y);
+                if (errorBest > error) {
+                    errorBest = error;
+                    i1xBest = i1x;
+                    i1yBest = i1y;
+                }
+              }
+            }
+          }
+          // use the best match
+          flow.at<Point2f>(i0y, i0x) = Point2f(i1xBest - i0x, i1yBest - i0y);
+        }
+      }
+    }
+  }
+
   void patchMatchPropagationAndSearch(
       const Mat& I0,
       const Mat& I1,
       const Mat& alpha0,
       const Mat& alpha1,
-      Mat& flow) {
+      Mat& flow,
+      DirectionHint hint) {
 
     // image gradients
     Mat I0x, I0y, I1x, I1y;
@@ -233,6 +364,15 @@ struct PixFlow : public OpticalFlowInterface {
     GaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
     GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
     GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
+
+    if (flow.empty()) {
+      // initialize to all zeros
+      flow = Mat::zeros(I0.size(), CV_32FC2);
+      // optionally look for a better flow
+      if (MaxPercentage > 0 && hint != DirectionHint::UNKNOWN) {
+        adjustInitialFlow(I0, I1, alpha0, alpha1, flow, hint);
+      }
+    }
 
     // blur flow. we will regularize against this
     Mat blurredFlow;

@@ -452,7 +452,8 @@ void poleToSideFlowThread(
     prevFisheyeFlow,
     prevExtendedSideSpherical,
     prevExtendedFisheyeSpherical,
-    flow);
+    flow,
+    OpticalFlowInterface::DirectionHint::DOWN);
   delete flowAlg;
 
   VLOG(1) << "Serializing fisheye flow result";

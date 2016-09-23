@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 
 PROJECT(Surround360Render CXX)
 
@@ -11,8 +11,14 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/optical_flow)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_isp)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/calibration)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
+INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR})
 
-IF(NOT DEFINED CMAKE_BUILD_TYPE)
+IF (DEFINED HALIDE_DIR)
+  INCLUDE_DIRECTORIES(${HALIDE_DIR}/include)
+  INCLUDE_DIRECTORIES(${HALIDE_DIR}/src)
+ENDIF()
+
+IF(NOT IS_DIRECTORY CMAKE_BUILD_TYPE)
   SET(${CMAKE_BUILD_TYPE} Release ... FORCE)
 ENDIF()
 
@@ -20,20 +26,47 @@ IF(NOT ${CMAKE_BUILD_TYPE} MATCHES Debug)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast")
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Dinteger=int")
+IF (NOT MSVC)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Dinteger=int")
+ENDIF()
 
-IF(NOT APPLE)
+IF(NOT APPLE AND NOT MSVC)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
+
+### Used to set 8 or 16 bit ISP output
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DISP_OBUFFER_BPP=8")
 
 SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_OSX_ARCHITECTURES "${ARCHS_STANDARD}")
 
 ### Add custom targets to show all source and header files in Xcode ###
 
 FILE(GLOB SRC "${CMAKE_CURRENT_SOURCE_DIR}/source/*")
 ADD_CUSTOM_TARGET( _source SOURCES ${SRC} )
+
+### Halide support
+IF (DEFINED HALIDE_DIR)
+  INCLUDE("${HALIDE_DIR}/HalideGenerator.cmake")
+
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HALIDE")
+
+  FUNCTION(halide_gen_app name folder)
+     ADD_EXECUTABLE("${name}" ${ARGN})
+     TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide)
+     SET_TARGET_PROPERTIES("${name}" PROPERTIES FOLDER "${folder}")
+     IF (MSVC)
+        SET_TARGET_PROPERTIES("${name}" PROPERTIES LINK_FLAGS "/STACK:8388608,1048576")
+        TARGET_COMPILE_DEFINITIONS("${name}" PRIVATE _CRT_SECURE_NO_WARNINGS)
+        TARGET_LINK_LIBRARIES("${name}" PRIVATE Kernel32)
+     ENDIF()
+  ENDFUNCTION(halide_gen_app)
+
+  LINK_DIRECTORIES(${HALIDE_DIR}/build/lib)
+ENDIF()
+
 
 ### LibJSON ###
 
@@ -59,22 +92,41 @@ ADD_LIBRARY(
 )
 TARGET_COMPILE_FEATURES(LibVrCamera PRIVATE cxx_range_for)
 
-
 ### Raw2Rgb ###
+IF (DEFINED HALIDE_DIR)
+   halide_gen_app(CameraIspGen "apps" source/camera_isp/CameraIspGen.cpp)
 
-ADD_EXECUTABLE(
-  Raw2Rgb
-  source/camera_isp/Raw2Rgb.cpp
-)
+   ADD_CUSTOM_COMMAND(OUTPUT "${CMAKE_BINARY_DIR}/CameraIspGen.h" "${CMAKE_BINARY_DIR}/CameraIspGen${CMAKE_STATIC_LIBRARY_SUFFIX}"
+                      COMMAND CameraIspGen
+                      DEPENDS CameraIspGen
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                     COMMENT "Generating Halide CameraIsp header and object file")
 
-TARGET_LINK_LIBRARIES(
-  Raw2Rgb
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-)
+  ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp "${CMAKE_BINARY_DIR}/CameraIspGen.h")
+  ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
+
+  TARGET_LINK_LIBRARIES(
+     Raw2Rgb
+     "${CMAKE_CURRENT_BINARY_DIR}/cameraIspGenFast${CMAKE_STATIC_LIBRARY_SUFFIX}"
+     "${CMAKE_CURRENT_BINARY_DIR}/cameraIspGen${CMAKE_STATIC_LIBRARY_SUFFIX}"
+     LibVrCamera
+     LibJSON
+     glog
+     gflags
+     ${OpenCV_LIBS}
+     Halide
+  )
+ELSE()
+  ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp)
+  TARGET_LINK_LIBRARIES(
+     Raw2Rgb
+     LibVrCamera
+     LibJSON
+     glog
+     gflags
+     ${OpenCV_LIBS}
+  )
+ENDIF()
 
 ### TestRenderStereoPanorama ###
 

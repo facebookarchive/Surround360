@@ -51,7 +51,8 @@ Mat raw2rgb(
     cameraIsp.dumpConfigFile(ispConfigFileOut);
   }
 
-  cameraIsp.getImage();
+  Mat outputImage(raw.rows, raw.cols, CV_8UC3);
+  cameraIsp.getImage(outputImage);
 
   // We want the RGB unclamped [0..1] version
   return cameraIsp.getDemosaicedImage();

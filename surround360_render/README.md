@@ -151,6 +151,18 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   cmake -DCMAKE_BUILD_TYPE=Debug -G Xcode ..
 </pre>
 
+* The ISP has been accelerated using Halide (see http://halide-lang.org).  To use Halide follow the Halide installation instruction which inturn on depends on LLVM. Once Halide is built, make some of their test applications or "lessons" to insure that you have correctly built Halide. Then purge your CMakefiles CMakeCache and renvoke cmake:
+<pre>
+  cmake -DCMAKE_BUILD_TYPE=Release  -DHALIDE_DIR=<path to halide dir>
+</pre>
+
+Use the "--accelerate" flag on the Raw2Rgb command line to use the Halide implementation.  The "--fast" flag in conjunction with the "--accelerate" flag to get real-time (< 30ms per frame) performance.  This super fast version disables certain features like sharpenning and anti-vignetting which is useful for fast preview.
+
+* We have added 16 bit output support for the ISP.  This is a compile time option since it requires a different Halide compilation. The ISP_OBUFFER_BPP flag and feature is itself is independent of the HALIDE_DIR cmake flag.
+<pre>
+  cmake -DCMAKE_BUILD_TYPE=Release -DISP_OBUFFER_BPP=16
+</pre>
+
 ## How the Surround 360 Rendering Software Works
 
 Check out our blog post about how rendering for Surround 360 works here:
@@ -166,4 +178,3 @@ See the CONTRIBUTING file for how to help out.
 ## License
 
 The Surround 360 rendering code is BSD-licensed, as it appears in LICENSE_render.md under /surround360_render. We also provide an additional patent grant.
-

@@ -37,7 +37,7 @@ Mat raw2rgb(
     const string& ispConfigFileOut) {
 
   // Load camera ISP configuration
-  CameraIsp cameraIsp(getJson(ispConfigFile));
+  CameraIsp cameraIsp(getJson(ispConfigFile), 8);
 
   // Imaging pipeline
   cameraIsp.setBlackLevel(blackLevel);
@@ -120,7 +120,7 @@ Point3f getClosestRGB(
     const string& ispConfigFile) {
 
   // Load camera ISP configuration
-  CameraIsp cameraIsp(getJson(ispConfigFile));
+  CameraIsp cameraIsp(getJson(ispConfigFile), 8);
 
   // Search in a 3x3 window surrounding pixel location
   Point3f rgb;

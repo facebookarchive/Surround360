@@ -35,6 +35,7 @@ DEFINE_string(isp_config_path,      "",                     "ISP configuration f
 DEFINE_int32(black_level_offset,    0,                      "amount to add to the blacklevel in the config file");
 DEFINE_int32(demosaic_filter,       EDGE_AWARE_DM_FILTER,   "Demosaic filter type: 0=Bilinear(fast), 1=Frequency, 2=Edge aware");
 DEFINE_int32(resize,                1,                      "Amount to \"bin-down\" the input. Legal values are 1, 2, 4, and 8");
+DEFINE_int32(output_bpp,            8,                      "output image bits per pixel, either 8 or 16");
 #ifdef USE_HALIDE
 DEFINE_bool(accelerate,             false,                  "Use halide accelerated version");
 DEFINE_bool(fast,                   false,                  "Use fastest halide for realtime apps or previews");
@@ -73,17 +74,11 @@ Mat readRaw(
 void runPipeline(
   CameraIsp* cameraIsp,
   Mat& inputImage,
-  const int width,
-  const int height,
+  Mat& outputImage,
   string outputImagePath) {
   cameraIsp->addBlackLevelOffset(FLAGS_black_level_offset);
   cameraIsp->loadImage(inputImage);
 
-#if ISP_OBUFFER_BPP == 8
-  Mat outputImage(height, width, CV_8UC3);
-#else
-  Mat outputImage(height, width, CV_16UC3);
-#endif
   double startTime = getCurrTimeSec();
   cameraIsp->getImage(outputImage);
   double endTime = getCurrTimeSec();
@@ -141,18 +136,20 @@ int main(int argc, char* argv[]) {
       throw VrCamException("input is larger that 16 bits per pixel");
     }
 
+    Mat outputImage(inputImage.rows, inputImage.cols, FLAGS_output_bpp == 8 ? CV_8UC3 : CV_16UC3);
+
 #ifdef USE_HALIDE
     if (FLAGS_accelerate) {
-      CameraIspPipe cameraIsp(json, FLAGS_fast);
-      runPipeline(&cameraIsp, inputImage16, inputImage.cols, inputImage.rows, FLAGS_output_image_path);
+      CameraIspPipe cameraIsp(json, FLAGS_fast, FLAGS_output_bpp);
+      runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
     } else {
 #else
     {
 #endif
-      CameraIsp cameraIsp(json);
+      CameraIsp cameraIsp(json, FLAGS_output_bpp);
       cameraIsp.setDemosaicFilter(FLAGS_demosaic_filter);
       cameraIsp.setResize(FLAGS_resize);
-      runPipeline(&cameraIsp, inputImage16, inputImage.cols, inputImage.rows, FLAGS_output_image_path);
+      runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
     }
   } else {
     throw VrCamException("Unable to open " + FLAGS_input_image_path);

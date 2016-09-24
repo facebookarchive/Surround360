@@ -3,6 +3,11 @@
 #include "Pipeline.h"
 #include "Var.h"
 
+#include <gflags/gflags.h>
+
+DEFINE_int32(output_bpp, 8,  "output image bits per pixel, either 8 or 16");
+
+using namespace std;
 using namespace Halide;
 
 template<bool Fast>
@@ -343,7 +348,8 @@ class CameraIspGen
       Expr sR,
       Expr sG,
       Expr sB,
-      Param<bool> BGR) {
+      Param<bool> BGR,
+      int outputBpp) {
 
     Func lowPass("lowPass");
     Func lowPass0("lowPass0");
@@ -353,20 +359,21 @@ class CameraIspGen
     Func highPass("hp");
     highPass(x, y, c) =  cast<float>(input(x, y, c)) - lowPass(x, y, c);
 
-    Func sharpened("sharpi");
     Expr cp = select(BGR == 0, c, 2 - c);
-    const int range = (1 << ISP_OBUFFER_BPP) - 1;
-    sharpened(x, y, c) =
-#if ISP_OBUFFER_BPP == 8
-      cast<uint8_t>(
-#else
-      cast<uint16_t>(
-#endif
-          clamp(
-              lowPass(x, y, cp) + highPass(x, y, cp) *
-              select(cp == 0, sR, cp == 1, sG, sB),
-              0, range));
+    const int range = (1 << outputBpp) - 1;
 
+    Expr outputVal =
+      clamp(
+          lowPass(x, y, cp) + highPass(x, y, cp) *
+          select(cp == 0, sR, cp == 1, sG, sB),
+          0, range);
+
+    Func sharpened("sharpi");
+    if (outputBpp == 8) {
+      sharpened(x, y, c) = cast<uint8_t>(outputVal);
+    } else {
+      sharpened(x, y, c) = cast<uint16_t>(outputVal);
+    }
 
     const int kStripSize = 32;
     const int kVec = target.natural_vector_size(Float(32));
@@ -403,7 +410,8 @@ class CameraIspGen
       Param<float> sharpenningB,
       ImageParam ccm,
       ImageParam toneTable,
-      Param<bool> BGR) {
+      Param<bool> BGR,
+      int outputBpp) {
 
     this->target = target;
     Expr sR = 1.0f + cast<float>(sharpenningR);
@@ -426,7 +434,7 @@ class CameraIspGen
       Expr cp = select(BGR == 0, c, 2 - c);
       ispOutput(x, y, c) = toneCorrected(x , y, cp);
     } else {
-      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, BGR);
+      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, BGR, outputBpp);
     }
 
     // Schedule it using local vars
@@ -465,6 +473,8 @@ class CameraIspGen
 
 
 int main(int argc, char **argv) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+
   ImageParam input(UInt(16), 2);
   Param<int> width;
   Param<int> height;
@@ -482,7 +492,7 @@ int main(int argc, char **argv) {
   Param<float> sharpenningG("sharpenningG");
   Param<float> sharpenningB("sharpenninngB");
   ImageParam ccm(Float(32), 2, "ccm");
-  ImageParam toneTable(UInt(ISP_OBUFFER_BPP), 2, "toneTable");
+  ImageParam toneTable(UInt(FLAGS_output_bpp), 2, "toneTable");
   Param<bool> BGR;
 
   // Pick a target architecture
@@ -503,12 +513,12 @@ int main(int argc, char **argv) {
 
   Func cameraIsp = cameraIspGen.generate(
       target, rawM, width, height, denoise, denoiseRadius, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
-      whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR);
+      whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR, FLAGS_output_bpp);
 
   Func cameraIspFast =
     cameraIspGenFast.generate(
         target, rawM, width, height, denoise, denoiseRadius, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
-        whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR);
+        whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
     input, width, height, denoise, denoiseRadius, vignetteTableH, vignetteTableV, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR, whiteBalanceGainG,
@@ -516,12 +526,12 @@ int main(int argc, char **argv) {
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling
-  std::cout << "Halide: " << "Generating isp" << std::endl;
-  cameraIsp.compile_to_static_library("CameraIspGen", args, target);
-  cameraIsp.compile_to_assembly("CameraIspGen.s", args, target);
+  std::cout << "Halide: " << "Generating " << FLAGS_output_bpp << " bit isp" << std::endl;
+  cameraIsp.compile_to_static_library("CameraIspGen" + to_string(FLAGS_output_bpp), args, target);
+  cameraIsp.compile_to_assembly("CameraIspGen" + to_string(FLAGS_output_bpp) + ".s", args, target);
 
-  std::cout << "Halide: " << "Generating fastest isp" << std::endl;
-  cameraIspFast.compile_to_static_library("CameraIspGenFast", args, target);
-  cameraIspFast.compile_to_assembly("CameraIspGenFast.s", args, target);
+  std::cout << "Halide: " << "Generating " << FLAGS_output_bpp << " bit fastest isp" << std::endl;
+  cameraIspFast.compile_to_static_library("CameraIspGenFast" + to_string(FLAGS_output_bpp), args, target);
+  cameraIspFast.compile_to_assembly("CameraIspGenFast" + to_string(FLAGS_output_bpp) + ".s", args, target);
   return EXIT_SUCCESS;
 }

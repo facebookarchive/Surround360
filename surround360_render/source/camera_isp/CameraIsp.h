@@ -73,6 +73,7 @@ class CameraIsp {
   vector<Vec3f> toneCurveLut;
   shared_ptr<BezierCurve<float, cv::Point3f > > vignetteCurve;
 
+  const int outputBpp;
   const int width;
   const int height;
   const float halfWidth;
@@ -489,9 +490,10 @@ class CameraIsp {
   }
 
  public:
-  CameraIsp(string jsonInput) :
+  CameraIsp(const string jsonInput, const int outputBpp) :
       demosaicFilter(EDGE_AWARE_DM_FILTER),
       resize(1),
+      outputBpp(outputBpp),
       width(0),
       height(0),
       halfWidth(0),
@@ -1198,7 +1200,7 @@ class CameraIsp {
   virtual void getImage(Mat& outputImage, const bool swizzle = true) {
     executePipeline(swizzle);
 
-    const float range = float((1 << ISP_OBUFFER_BPP) - 1);
+    const float range = float((1 << outputBpp) - 1);
 
     // Copy and convert to byte swizzling to BGR
     const int c0 = swizzle ? 2 : 0;
@@ -1206,14 +1208,21 @@ class CameraIsp {
     const int c2 = swizzle ? 0 : 2;
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
-#if ISP_OBUFFER_BPP == 8
-        Vec3b& p = outputImage.at<Vec3b>(i, j);
-#else
-        Vec3s& p = outputImage.at<Vec3s>(i, j);
-#endif
-        p[c0] = clamp(demosaicedImage.at<Vec3f>(i, j)[0] * range, 0.0f, range);
-        p[c1] = clamp(demosaicedImage.at<Vec3f>(i, j)[1] * range, 0.0f, range);
-        p[c2] = clamp(demosaicedImage.at<Vec3f>(i, j)[2] * range, 0.0f, range);
+        Vec3f& dp = demosaicedImage.at<Vec3f>(i, j);
+
+        dp[0] = clamp(dp[0] * range, 0.0f, range);
+        dp[1] = clamp(dp[1] * range, 0.0f, range);
+        dp[2] = clamp(dp[2] * range, 0.0f, range);
+
+        if (outputBpp == 8) {
+          outputImage.at<Vec3b>(i, j)[c0] = dp[0];
+          outputImage.at<Vec3b>(i, j)[c1] = dp[1];
+          outputImage.at<Vec3b>(i, j)[c2] = dp[2];
+        } else {
+          outputImage.at<Vec3s>(i, j)[c0] = dp[0];
+          outputImage.at<Vec3s>(i, j)[c1] = dp[1];
+          outputImage.at<Vec3s>(i, j)[c2] = dp[2];
+        }
       }
     }
   }

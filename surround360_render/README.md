@@ -158,11 +158,6 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 
 Use the "--accelerate" flag on the Raw2Rgb command line to use the Halide implementation.  The "--fast" flag in conjunction with the "--accelerate" flag to get real-time (< 30ms per frame) performance.  This super fast version disables certain features like sharpenning and anti-vignetting which is useful for fast preview.
 
-* We have added 16 bit output support for the ISP.  This is a compile time option since it requires a different Halide compilation. The ISP_OBUFFER_BPP flag and feature is itself is independent of the HALIDE_DIR cmake flag.
-<pre>
-  cmake -DCMAKE_BUILD_TYPE=Release -DISP_OBUFFER_BPP=16
-</pre>
-
 ## How the Surround 360 Rendering Software Works
 
 Check out our blog post about how rendering for Surround 360 works here:

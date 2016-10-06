@@ -53,8 +53,6 @@ class CameraIsp {
   int bitsPerPixel;
   int maxPixelValue;
   cv::Point3f whiteBalanceGain;
-  float denoise;
-  int denoiseRadius;
   Mat ccm; // 3x3
   Mat compositeCCM;
   float saturation;
@@ -80,56 +78,6 @@ class CameraIsp {
   const float halfHeight;
   const float maxD; // max diagonal distance
   const float sqrtMaxD; // max diagonal distance
-
-  void denoisePlaneAdaptiveBilateral(Mat& inputImage, const int c) {
-    Mat outputImage(inputImage.rows, inputImage.cols, CV_32F);
-
-    outputImage = 0;
-    const int radius = denoiseRadius;
-
-    GaussianApproximation<float> gVariance(-0.001f, 0.001f, 0.0f, 1.0f);
-    GaussianApproximation<float> gData(-denoise, denoise, 0.0f, 1.0f);
-
-    for (int i = 0; i < height; ++i) {
-      for (int j = 0; j < width; j++) {
-        int n = 0;
-        float mean = 0.0f;
-        float m2 = 0.0f;
-        float sum = 0.0f;
-        float wSum = 0.0f;
-        const float currentPixel = inputImage.at<Vec3f>(i, j)[c];
-
-        for (int ip = -radius; ip <= radius; ip++) {
-          const int ipp = reflect(i + ip, height);
-          for (int jp = -radius; jp <= radius; jp++) {
-            const int jpp = reflect(j + jp, width);
-            // Compute incremental variance
-            const float val = inputImage.at<Vec3f>(ipp, jpp)[c];
-            const float delta = val - mean;
-            n++;
-            mean += delta / n;
-            m2 +=  delta * (val - mean);
-
-            // Sum the bilateral filter
-            const float w = gData(val - currentPixel);
-            sum += val * w;
-            wSum += w;
-          }
-        }
-        const float variance = m2 / (n - 1);
-        const float gv = gVariance(variance);
-        outputImage.at<float>(i, j) =
-          (wSum > 0.0f)
-          ? lerp(currentPixel, sum / wSum, gv)
-          : currentPixel;
-      }
-    }
-    for (int i = 0; i < height; ++i) {
-      for (int j = 0; j < width; j++) {
-        inputImage.at<Vec3f>(i, j)[c] = outputImage.at<float>(i, j);
-      }
-    }
-  }
 
   void demosaicBilinearFilter(Mat& r,  Mat& g, Mat& b) const {
     for (int i = 0; i < height; ++i) {
@@ -254,23 +202,23 @@ class CameraIsp {
           gH.at<float>(i, j) = green.at<float>(i, j);
 
           dV.at<float>(i, j) =
-            fabsf(green.at<float>(i2, j) - green.at<float>(i, j)) +
-            fabsf(green.at<float>(i, j) - green.at<float>(i_2, j));
+            (fabsf(green.at<float>(i2, j) - green.at<float>(i, j)) +
+             fabsf(green.at<float>(i, j) - green.at<float>(i_2, j))) / 2.0f;
 
           dH.at<float>(i, j) =
-            fabsf(green.at<float>(i,  j2) - green.at<float>(i, j)) +
-            fabsf(green.at<float>(i, j) - green.at<float>(i,  j_2));
+            (fabsf(green.at<float>(i,  j2) - green.at<float>(i, j)) +
+             fabsf(green.at<float>(i, j) - green.at<float>(i,  j_2))) / 2.0f;
         } else {
           gV.at<float>(i, j) = (green.at<float>(i_1, j) + green.at<float>(i1, j)) / 2.0f;
           gH.at<float>(i, j) = (green.at<float>(i, j_1) + green.at<float>(i, j1)) / 2.0f;
-          dV.at<float>(i, j) = fabsf(green.at<float>(i_1, j) - green.at<float>(i1, j));
-          dH.at<float>(i, j) = fabsf(green.at<float>(i, j_1) - green.at<float>(i, j1));
+          dV.at<float>(i, j) = (fabsf(green.at<float>(i_1, j) - green.at<float>(i1, j))) / 2.0f;
+          dH.at<float>(i, j) = (fabsf(green.at<float>(i, j_1) - green.at<float>(i, j1))) / 2.0f;
 
           Mat& ch = redPixel(i, j) ? red : blue;
           gV.at<float>(i, j) += (2.0f * ch.at<float>(i, j) - ch.at<float>(i_2, j) - ch.at<float>(i2, j)) / 4.0f;
           gH.at<float>(i, j) += (2.0f * ch.at<float>(i, j) - ch.at<float>(i, j_2) - ch.at<float>(i, j2)) / 4.0f;
-          dV.at<float>(i, j) += fabsf(-2.0f * ch.at<float>(i, j) + ch.at<float>(i_2, j) + ch.at<float>(i2, j));
-          dH.at<float>(i, j) += fabsf(-2.0f * ch.at<float>(i, j) + ch.at<float>(i, j_2) + ch.at<float>(i, j2));
+          dV.at<float>(i, j) += fabsf(-2.0f * ch.at<float>(i, j) + ch.at<float>(i_2, j) + ch.at<float>(i2, j)) / 2.0f;
+          dH.at<float>(i, j) += fabsf(-2.0f * ch.at<float>(i, j) + ch.at<float>(i, j_2) + ch.at<float>(i, j2)) / 2.0f;
         }
       }
     }
@@ -278,39 +226,17 @@ class CameraIsp {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; ++j) {
         // Homogenity test
-        int n = 0;
-        int vCount = 0;
         int hCount = 0;
-        bool isHorizontal = false;
-
-        for (int l = -2; l <= 2; ++l) {
+        const int w = 2;
+        for (int l = -w; l <= w; ++l) {
           const int il = reflect(i + l, height);
-          for (int k = -2; k <= 2; ++k) {
+          for (int k = -w; k <= w; ++k) {
             const int jk = reflect(j + k, width);
-            const float grad = gH.at<float>(il, jk) + gV.at<float>(il, jk);
-            if (grad * dH.at<float>(il, jk) <= grad * dV.at<float>(il, jk)) {
-              hCount++;
-              if (l == 0 && k == 0) {
-                isHorizontal = true;
-              }
-            } else {
-              vCount++;
-            }
-          }
-          if (isHorizontal) {
-            if (vCount < hCount) {
-              green.at<float>(i, j) = gH.at<float>(i, j);
-            } else {
-              green.at<float>(i, j) = gV.at<float>(i, j);
-            }
-          } else {
-            if (vCount > hCount) {
-              green.at<float>(i, j) = gV.at<float>(i, j);
-            } else {
-              green.at<float>(i, j) = gH.at<float>(i, j);
-            }
+            hCount += (dH.at<float>(il, jk) <= dV.at<float>(il, jk));
           }
         }
+        const float alpha = float(hCount) / square(2.0f * w + 1.0f);
+        green.at<float>(i, j) = lerp(gV.at<float>(i, j), gH.at<float>(i, j), alpha);
       }
     }
 
@@ -329,7 +255,7 @@ class CameraIsp {
         }
       }
     }
-    // Now use a constant hue based red/blue bilinear interopaltion
+    // Now use a constant hue based red/blue bilinear interpolation
     for (int i = 0; i < height; ++i) {
       const int i_1 = reflect(i - 1, height);
       const int i1  = reflect(i + 1, height);
@@ -369,21 +295,21 @@ class CameraIsp {
           Mat& ch2 = redGreenRow ? red :  blue;
 
           ch1.at<float>(i, j) =
-            (diffCh1.at<float>(i_1, j) +
-             diffCh1.at<float>(i1, j) +
-             diffCh1.at<float>(i_1, j_2) +
-             diffCh1.at<float>(i1, j_2) +
+            (diffCh1.at<float>(i_1, j_2) +
+             diffCh1.at<float>(i_1, j) +
              diffCh1.at<float>(i_1, j2) +
-             diffCh1.at<float>(i1, j2)) / 6.0f +
+             diffCh1.at<float>(i1,  j_2) +
+             diffCh1.at<float>(i1,  j2) +
+             diffCh1.at<float>(i1,  j2)) / 6.0f +
             pGreen.at<float>(i, j);
 
           ch2.at<float>(i, j) =
-            (diffCh2.at<float>(i, j_1) +
-             diffCh2.at<float>(i, j1) +
-             diffCh2.at<float>(i_2, j_1) +
-             diffCh2.at<float>(i2, j_1) +
+            (diffCh2.at<float>(i_2, j_1) +
+             diffCh2.at<float>(i,   j_1) +
+             diffCh2.at<float>(i2,  j_1) +
              diffCh2.at<float>(i_2, j1) +
-             diffCh2.at<float>(i2, j1)) / 6.0f +
+             diffCh2.at<float>(i,   j1) +
+             diffCh2.at<float>(i2,  j1)) / 6.0f +
             pGreen.at<float>(i, j);
         } else {
           red.at<float>(i, j) =
@@ -394,7 +320,7 @@ class CameraIsp {
             pGreen.at<float>(i, j);
 
           blue.at<float>(i, j) =
-            (blueMinusGreen.at<float>(i, j) +
+            (blueMinusGreen.at<float>(i,  j) +
              blueMinusGreen.at<float>(i_2, j) +
              blueMinusGreen.at<float>(i2, j) +
              blueMinusGreen.at<float>(i, j_2) +
@@ -515,8 +441,6 @@ class CameraIsp {
     vignetteRollOff.push_back(Point3f(0.0f, 0.0f, 0.0f));
     vignetteRollOff.push_back(Point3f(1.0f, 1.0f, 1.0f));
     whiteBalanceGain = Point3f(1.0f, 1.0f, 1.0f);
-    denoise = 0.0;
-    denoiseRadius = 0;
     ccm = Mat::eye(3, 3, CV_32F);
     saturation = 1.0f;
     contrast = 1.0f;
@@ -582,15 +506,11 @@ class CameraIsp {
 
 
       if (config["CameraIsp"].HasKey("denoise")) {
-        denoise = getDouble(config, "CameraIsp", "denoise");
-      } else {
-        VLOG(1) << "Using default denoise = " << denoise << endl;
+        VLOG(1) << "[Depricated] chroma denoising folded into demosaicing" << endl;
       }
 
       if (config["CameraIsp"].HasKey("denoiseRadius")) {
-        denoiseRadius = getInteger(config, "CameraIsp", "denoiseRadius");
-      } else {
-        VLOG(1) << "Using default denoiseRadius = " << denoiseRadius << endl;
+        VLOG(1) << "[Depricated] chroma denoising folded into demosaicing" << endl;
       }
 
       if (config["CameraIsp"].HasKey("ccm")) {
@@ -778,8 +698,6 @@ class CameraIsp {
       ofs << "        \"stuckPixelThreshold\" : " << stuckPixelThreshold << ",\n";
       ofs << "        \"stuckPixelDarknessThreshold\" : " << stuckPixelDarknessThreshold<< ",\n";
       ofs << "        \"stuckPixelRadius\" : " << stuckPixelRadius << ",\n";
-      ofs << "        \"denoise\" : " << denoise << ",\n";
-      ofs << "        \"denoiseRadius\" : " << denoiseRadius << ",\n";
       ofs.precision(5);
       ofs << fixed;
       ofs << "        \"ccm\" : [["
@@ -1126,21 +1044,6 @@ class CameraIsp {
     }
   }
 
-  void denoiseFilter() {
-    // Disable if denoising factor is zero
-    if (denoise != 0.0f) {
-      Mat Yuv(height, width, CV_32FC3);
-      cvtColor(demosaicedImage, Yuv, CV_RGB2YCrCb);
-
-      thread t2([&]{denoisePlaneAdaptiveBilateral(Yuv, 1);});
-      thread t3([&]{denoisePlaneAdaptiveBilateral(Yuv, 2);});
-      t2.join();
-      t3.join();
-
-      cvtColor(Yuv, demosaicedImage, CV_YCrCb2RGB);
-    }
-  }
-
   void colorCorrect() {
     const float kToneCurveLutRange = kToneCurveLutSize - 1;
     for (int i = 0; i < height; ++i) {
@@ -1191,7 +1094,6 @@ class CameraIsp {
     whiteBalance();
     removeStuckPixels();
     demosaic();
-    denoiseFilter();
     colorCorrect();
     sharpen();
   }

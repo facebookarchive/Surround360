@@ -1,7 +1,4 @@
-#include "ImageParam.h"
 #include "Halide.h"
-#include "Pipeline.h"
-#include "Var.h"
 
 #include <gflags/gflags.h>
 
@@ -36,6 +33,29 @@ class CameraIspGen
     return out;
   }
 
+
+  Expr redPixel() {
+    return (x % 2) == 0 && (y % 2) == 1;
+  }
+
+  Expr greenRedPixel() {
+    return (x % 2) == 1 && (y % 2) == 1;
+  }
+
+
+  Expr bluePixel() {
+    return (x % 2) == 1 && (y % 2) == 0;
+   }
+
+  Expr greenBluePixel() {
+    return (x % 2) == 0 && (y % 2) == 0;
+  }
+
+  Expr greenPixel() {
+    return greenBluePixel() || greenRedPixel();
+  }
+
+
   Func deinterleave(Func raw) {
     // Deinterleave the color channels
     Func deinterleaved("deinterleaved");
@@ -45,28 +65,33 @@ class CameraIspGen
     // R G
     deinterleaved(x, y, c) =
       cast<float>(
-          select(c == 1 && (x % 2) == 0 && (y % 2) == 0, raw(x, y), // green on blue row
-          select(c == 2 && (x % 2) == 1 && (y % 2) == 0, raw(x, y), // blue
-          select(c == 0 && (x % 2) == 0 && (y % 2) == 1, raw(x, y), // red
-          select(c == 1 && (x % 2) == 1 && (y % 2) == 1, raw(x, y), // green on red row
+          select(c == 1 && greenBluePixel(), raw(x, y), // green on blue row
+          select(c == 2 && bluePixel(),      raw(x, y), // blue
+          select(c == 0 && redPixel(),       raw(x, y), // red
+          select(c == 1 && greenRedPixel(),  raw(x, y), // green on red row
           0)))));
 
     return deinterleaved;
   }
 
   void bilinearDemosaic(
-      Func r_r,
-      Func b_b,
-      Func g_gb,
-      Func g_gr,
-      Func& r_gb,
-      Func& b_gb,
-      Func& b_gr,
-      Func& r_gr,
-      Func& b_r,
-      Func& r_b,
-      Func& g_r,
-      Func& g_b ) {
+      Func rawRed,
+      Func rawBlue,
+      Func rawGreenB,
+      Func rawGreenR,
+      Func& redOnGreenBlue,
+      Func& greenOnGreenBlue,
+      Func& blueOnGreenBlue,
+      Func& redOnGreenRed,
+      Func& greenOnGreenRed,
+      Func& blueOnGreenRed,
+      Func& redOnBlue,
+      Func& greenOnBlue,
+      Func& blueOnBlue,
+      Func& redOnRed,
+      Func& greenOnRed,
+      Func& blueOnRed,
+      Func& demosaiced) {
     // Neighbor indices
     Expr x1 = x + 1;
     Expr x_1 = x - 1;
@@ -75,37 +100,58 @@ class CameraIspGen
     Expr y_1 = y - 1;
 
     // Horizontally or vertically average the red and blue channels at
-    // green-red and green blue pixels.
-    r_gb(x, y) = avg(r_r(x, y_1), r_r(x,y1));
-    b_gb(x, y) = avg(b_b(x_1, y), b_b(x1,y));
+    // green-red and green-blue pixels.
+    redOnGreenBlue(x, y) = avg(rawRed(x, y_1), rawRed(x,y1));
+    greenOnGreenBlue(x, y) = rawGreenB(x, y);
+    blueOnGreenBlue(x, y) = avg(rawBlue(x_1, y), rawBlue(x1,y));
 
-    b_gr(x, y) = avg(b_b(x, y_1), b_b(x,y1));
-    r_gr(x, y) = avg(r_r(x_1, y), r_r(x1,y));
+    blueOnGreenRed(x, y) = avg(rawBlue(x, y_1), rawBlue(x,y1));
+    greenOnGreenRed(x, y) = rawGreenR(x, y);
+    redOnGreenRed(x, y) = avg(rawRed(x_1, y), rawRed(x1,y));
 
     // Box average pixels surrounding the red or blue channels when
     // they are alternatively on blue and red pixels respectively.
-    r_b(x, y) = avg(avg(r_r(x_1, y_1), r_r(x1, y_1)), avg(r_r(x_1, y1), r_r(x1, y1)));
-    b_r(x, y) = avg(avg(b_b(x_1, y_1), b_b(x1, y_1)), avg(b_b(x_1, y1), b_b(x1, y1)));
+    redOnBlue(x, y) = avg(avg(rawRed(x_1, y_1), rawRed(x1, y_1)), avg(rawRed(x_1, y1), rawRed(x1, y1)));
+    greenOnBlue(x, y) = avg(avg(rawGreenB(x_1, y), rawGreenB(x1, y)), avg(rawGreenR(x, y_1), rawGreenR(x, y1)));
+    blueOnBlue(x, y) = rawBlue(x, y);
 
     // Average the green colors that are above, below, left and right
     // at red and blue pixels.
-    g_r(x, y) = avg(avg(g_gr(x_1, y), g_gr(x1, y)), avg(g_gb(x, y_1), g_gb(x, y1)));
-    g_b(x, y) = avg(avg(g_gb(x_1, y), g_gb(x1, y)), avg(g_gr(x, y_1), g_gr(x, y1)));
+    redOnRed(x, y) = rawRed(x, y);
+    greenOnRed(x, y) = avg(avg(rawGreenR(x_1, y), rawGreenR(x1, y)), avg(rawGreenB(x, y_1), rawGreenB(x, y1)));
+    blueOnRed(x, y) = avg(avg(rawBlue(x_1, y_1), rawBlue(x1, y_1)), avg(rawBlue(x_1, y1), rawBlue(x1, y1)));
+
+    // Interleave the resulting channels
+    Func r, g, b;
+    r = interleave_y(interleave_x(redOnGreenBlue,  redOnBlue),    interleave_x(redOnRed, redOnGreenRed));
+    g = interleave_y(interleave_x(greenOnGreenBlue,greenOnBlue),  interleave_x(greenOnRed, greenOnGreenRed));
+    b = interleave_y(interleave_x(blueOnGreenBlue, blueOnBlue),   interleave_x(blueOnRed, blueOnGreenRed));
+
+    demosaiced(x, y, c) =
+      select(
+          c == 0, r(x, y),
+          c == 1, g(x, y),
+          b(x, y));
   }
 
   void edgeAwareDemosaic(
-      Func r_r,
-      Func b_b,
-      Func g_gb,
-      Func g_gr,
-      Func& r_gb,
-      Func& b_gb,
-      Func& b_gr,
-      Func& r_gr,
-      Func& b_r,
-      Func& r_b,
-      Func& g_r,
-      Func& g_b ) {
+      Func rawRed,
+      Func rawBlue,
+      Func rawGreenB,
+      Func rawGreenR,
+      Func& redOnGreenBlue,
+      Func& greenOnGreenBlue,
+      Func& blueOnGreenBlue,
+      Func& redOnGreenRed,
+      Func& greenOnGreenRed,
+      Func& blueOnGreenRed,
+      Func& redOnBlue,
+      Func& greenOnBlue,
+      Func& blueOnBlue,
+      Func& redOnRed,
+      Func& greenOnRed,
+      Func& blueOnRed,
+      Func& demosaiced) {
     // Neighbor indices
     Expr x1 = x + 1;
     Expr x2 = x + 2;
@@ -117,60 +163,134 @@ class CameraIspGen
     Expr y_1 = y - 1;
     Expr y_2 = y - 2;
 
-    Expr gv_r  = avg(g_gb(x, y_1), g_gb(x, y1));
-    Expr gvd_r = absd(g_gb(x, y_1), g_gb(x, y1));
-    Expr gh_r  = avg(g_gr(x1, y), g_gr(x_1, y));
-    Expr ghd_r = absd(g_gr(x1, y), g_gr(x_1, y));
+    // Green horizonal & vertical value interpolates at green input pixels
+    Func gV("gV"), gH("gH");
+    gV(x, y) =
+      select(greenBluePixel(), rawGreenB(x, y), // green on blue row
+      select(bluePixel(),      avg(rawGreenR(x, y1), rawGreenR(x, y_1)) + (2.0f * rawBlue(x, y) - rawBlue(x, y2) - rawBlue(x, y_2)) / 4.0f, // blue
+      select(redPixel(),       avg(rawGreenB(x, y1), rawGreenB(x, y_1)) + (2.0f * rawRed(x, y)  - rawRed(x, y2)  - rawRed(x, y_2)) / 4.0f, // red
+      select(greenRedPixel(),  rawGreenR(x, y), // green on red row
+      0))));
 
-    g_r(x, y)  = select(ghd_r < gvd_r, gh_r, gv_r);
+    gH(x, y) =
+      select(greenBluePixel(), rawGreenB(x, y), // green on blue row
+      select(bluePixel(),      avg(rawGreenB(x1, y), rawGreenB(x_1, y)) + (2.0f * rawBlue(x, y) - rawBlue(x2, y) - rawBlue(x_2, y)) / 4.0f, // blue
+      select(redPixel(),       avg(rawGreenR(x1, y), rawGreenR(x_1, y)) + (2.0f * rawRed(x, y)  - rawRed(x2, y)  - rawRed(x_2, y)) / 4.0f, // red
+      select(greenRedPixel(),  rawGreenR(x, y), // green on red row
+      0))));
 
-    Expr gv_b  = avg(g_gr(x, y1), g_gr(x, y_1));
-    Expr gvd_b = absd(g_gr(x, y1), g_gr(x, y_1));
-    Expr gh_b  = avg(g_gb(x_1, y), g_gb(x1, y));
-    Expr ghd_b = absd(g_gb(x_1, y), g_gb(x1, y));
+    // And the derivatives
+    Func dV("dV"), dH("dh");
+    dV(x, y) =
+      select(greenBluePixel(), avg(absd(rawGreenB(x, y2), rawGreenB(x, y)), absd(rawGreenB(x, y_2), rawGreenB(x, y))), // green on blue row
+      select(bluePixel(),      avg(absd(rawGreenR(x, y1), rawGreenR(x, y_1)), absd(rawBlue(x, y2) + rawBlue(x, y_2), 2.0f*rawBlue(x, y))), // blue
+      select(redPixel(),       avg(absd(rawGreenB(x, y1), rawGreenB(x, y_1)), absd(rawRed(x, y2)  + rawRed(x, y_2),  2.0f*rawRed(x, y))), // red
+      select(greenRedPixel(),  avg(absd(rawGreenR(x, y2), rawGreenR(x, y)), absd(rawGreenR(x, y_2), rawGreenR(x, y))), // green on red row
+      0))));
 
-    g_b(x, y)  = select(ghd_b < gvd_b, gh_b, gv_b);
+    dH(x, y) =
+      select(greenBluePixel(), avg(absd(rawGreenB(x2, y), rawGreenB(x,   y)), absd(rawGreenB(x_2, y), rawGreenB(x, y))), // green on blue row
+      select(bluePixel(),      avg(absd(rawGreenB(x1, y), rawGreenB(x_1, y)), absd(rawBlue(x2, y) + rawBlue(x_2, y), 2.0f*rawBlue(x, y))), // blue
+      select(redPixel(),       avg(absd(rawGreenR(x1, y), rawGreenR(x_1, y)), absd(rawRed(x2, y)  + rawRed(x_2, y),  2.0f*rawRed(x, y))), // red
+      select(greenRedPixel(),  avg(absd(rawGreenR(x2, y), rawGreenR(x,   y)), absd(rawGreenR(x_2, y), rawGreenR(x, y))), // green on red row
+      0))));
 
-    // Next interpolate red at gr by first interpolating, then
-    // correcting using the error green would have had if we had
-    // interpolated it in the same way (i.e. add the second derivative
-    // of the green channel at the same place).
-    Expr correction;
-    correction = g_gr(x, y) - avg(g_r(x1, y), g_r(x_1, y));
-    r_gr(x, y) = correction + avg(r_r(x_1, y), r_r(x1, y));
 
-    // Do the same for other reds and blues at green sites
-    correction = g_gr(x, y) - avg(g_b(x, y1), g_b(x, y_1));
-    b_gr(x, y) = correction + avg(b_b(x, y1), b_b(x, y_1));
+    // Homogenity calulation over a diameter size region
+    const int w = 2;
+    const int diameter = 2*w + 1;
+    RDom d(0, diameter, 0, diameter);
+    Expr xp = x + d.x - w;
+    Expr yp = y + d.y - w;
 
-    correction = g_gb(x, y) - avg(g_r(x, y_1), g_r(x, y1));
-    r_gb(x, y) = correction + avg(r_r(x, y_1), r_r(x, y1));
+    // Count the number of pixels in the region that are horizontal.
+    // This is given by determining when the vertical gradient is
+    // greater than the horizontal gradient. Remember that a strong
+    // vertical gradiant means that the local area is horizontal since
+    // the gradient is orthogonal to the direction of the local
+    // feature.
+    Func hCount("hCount");
+    hCount(x, y) = sum(cast<int>(dH(xp, yp) <= dV(xp, yp)));
 
-    correction = g_gb(x, y) - avg(g_b(x1, y), g_b(x1, y));
-    b_gb(x, y) = correction + avg(b_b(x1, y), b_b(x1, y));
+    // The local green estimate is a blend the horizontal and vertical
+    // green channel estimate based on how horizontal or vertical the
+    // region is.
+    Expr alpha = cast<float>(hCount(x, y)) / float(diameter * diameter);
+    Func g;
+    g(x, y) = lerp(gV(x, y), gH(x, y), alpha);
 
-    // Interpolate diagonally to get red at blue and blue at
-    // red.
-    correction = g_b(x, y)  - avg(g_r(x1, y_1), g_r(x_1, y1));
-    Expr rp_b  = correction + avg(r_r(x1, y_1), r_r(x_1, y1));
-    Expr rpd_b = absd(r_r(x1, y_1), r_r(x_1, y1));
+    // We take the log of green channel which helps to supress chroma
+    // ringing and noise.
+    Func gp;
+    gp(x, y) = log(1.0f + g(x, y));
 
-    correction = g_b(x, y)  - avg(g_r(x_1, y_1), g_r(x1, y1));
-    Expr rn_b  = correction + avg(r_r(x_1, y_1), r_r(x1, y1));
-    Expr rnd_b = absd(r_r(x_1, y_1), r_r(x1, y1));
+    // Red and blue minus the log of the green channel
+    Func rmg, bmg;
+    rmg(x, y) = rawRed(x, y) - gp(x, y);
+    bmg(x, y) = rawBlue(x, y) - gp(x, y);
 
-    r_b(x, y)  = select(rpd_b < rnd_b, rp_b, rn_b);
+    // Use local box style filtering to estimate r-g and b-g
+    // channels. Adding the g channel back in.
+    Func r, b;
+    r(x, y) =
+      select(redPixel(),       (rmg(x, y) + rmg(x, y2) + rmg(x, y_2) + rmg(x2, y) + rmg(x_2, y)) / 5.0f,
+      select(greenRedPixel(),  (rmg(x_1, y_2) + rmg(x_1, y) + rmg(x_1, y2) + rmg(x1, y_2) + rmg(x1, y) + rmg(x1, y2)) / 6.0f,
+      select(greenBluePixel(), (rmg(x_2, y_1) + rmg(x, y_1) + rmg(x2, y_1) + rmg(x_2, y1) + rmg(x, y1) + rmg(x2, y1)) / 6.0f,
+      select(bluePixel(),      (rmg(x1, y1) + rmg(x1, y_1) + rmg(x_1, y1) + rmg(x_1, y_1)) / 4.0f,
+      0))))
+      + gp(x, y);
 
-    // Same thing for blue at red
-    correction = g_r(x, y)  - avg(g_b(x_1, y1), g_b(x1, y_1));
-    Expr bp_r  = correction + avg(b_b(x_1, y1), b_b(x1, y_1));
-    Expr bpd_r = absd(b_b(x_1, y1), b_b(x1, y_1));
+    b(x, y) =
+      select(redPixel(),       (bmg(x1, y1) + bmg(x1, y_1) + bmg(x_1, y1) + bmg(x_1, y_1)) / 4.0f,
+      select(greenRedPixel(),  (bmg(x_2, y_1) + bmg(x, y_1) + bmg(x2, y_1) + bmg(x_2, y1) + bmg(x, y1) + bmg(x2, y1)) / 6.0f,
+      select(greenBluePixel(), (bmg(x_1, y_2) + bmg(x_1, y) + bmg(x_1, y2) + bmg(x1, y_2) + bmg(x1, y) + bmg(x1, y2)) / 6.0f,
+      select(bluePixel(),      (bmg(x, y) + bmg(x, y2) + bmg(x, y_2) + bmg(x2, y) + bmg(x_2, y)) / 5.0f,
+      0))))
+      + gp(x, y);
 
-    correction = g_r(x, y)  - avg(g_b(x1, y1), g_b(x_1, y_1));
-    Expr bn_r  = correction + avg(b_b(x1, y1), b_b(x_1, y_1));
-    Expr bnd_r = absd(b_b(x1, y1), b_b(x_1, y_1));
+    demosaiced(x, y, c) =
+      select(
+          c == 0, r(x, y),
+          c == 1, g(x, y),
+          b(x, y));
 
-    b_r(x, y)  =  select(bpd_r < bnd_r, bp_r, bn_r);
+    int kVec = target.natural_vector_size(Float(32));
+
+    gV.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    gH.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    dV.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .parallel(y)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    dH.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    g.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    r.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
+
+    b.compute_at(toneCorrected, yi)
+      .store_at(toneCorrected, yo)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .fold_storage(y, 64);
   }
 
   Func demosaic(
@@ -197,74 +317,65 @@ class CameraIspGen
     Expr invRangeG = whiteBalanceGainG / (maxRaw - minRawG);
     Expr invRangeB = whiteBalanceGainB / (maxRaw - minRawB);
 
-    // Bayer pixels
-    Func r_r("r_r");
-    Func b_b("b_b");
-    Func g_gb("g_gb");
-    Func g_gr("g_gr");
+    // Raw bayer pixels
+    Func rawRed("rawRed");
+    Func rawBlue("rawBlue");
+    Func rawGreenB("rawGreenB");
+    Func rawGreenR("rawGreenR");
 
     if (Fast) {
-      r_r(x, y)  = (deinterleaved(x, y, 0) - minRawR) * invRangeR;
-      b_b(x, y)  = (deinterleaved(x, y, 2) - minRawB) * invRangeB;
-      g_gb(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
-      g_gr(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
+      rawRed(x, y)    = (deinterleaved(x, y, 0) - minRawR) * invRangeR;
+      rawBlue(x, y)   = (deinterleaved(x, y, 2) - minRawB) * invRangeB;
+      rawGreenB(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
+      rawGreenR(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
     } else {
-      r_r(x, y)  = (deinterleaved(x, y, 0) - minRawR) * invRangeR * vignetteTableH(0, x) * vignetteTableV(0, y);
-      b_b(x, y)  = (deinterleaved(x, y, 2) - minRawB) * invRangeB * vignetteTableH(2, x) * vignetteTableV(2, y);
-      g_gb(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
-      g_gr(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
+      rawRed(x, y)    = (deinterleaved(x, y, 0) - minRawR) * invRangeR * vignetteTableH(0, x) * vignetteTableV(0, y);
+      rawBlue(x, y)   = (deinterleaved(x, y, 2) - minRawB) * invRangeB * vignetteTableH(2, x) * vignetteTableV(2, y);
+      rawGreenB(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
+      rawGreenR(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
     }
 
     // These are the ones we need to interpolate
     // Rename build up planar bayer channels
-    Func r_gb("r_gb"); // Red on a greeb/blue pixel
-    Func b_gb("b_gb"); // Blue on a green/blue pixel
+    Func redOnGreenBlue("redOnGreenBlue"); // Red on a greeb/blue pixel
+    Func greenOnGreenBlue("greenOnGreenBlue"); // Green on a green/blue pixel
+    Func blueOnGreenBlue("blueOnGreenBlue"); // Blue on a green/blue pixel
 
-    Func b_gr("b_gr"); // Blue on a green/red pixel
-    Func r_gr("r_gr");  // Red on a green/red pixel
+    Func redOnGreenRed("redOnGreenRed");  // Red on a green/red pixel
+    Func greenOnGreenRed("greenOnGreenRed"); // Green on a green/red pixel
+    Func blueOnGreenRed("blueOnGreenRed"); // Blue on a green/red pixel
 
-    Func b_r("b_r"); // Blue on a red pixel
-    Func r_b("r_b");  // Red on a blue pixel
+    Func redOnBlue("redOnBlue");  // Red on a blue pixel
+    Func greenOnBlue("greenOnBlue"); // Green on a blue pixel
+    Func blueOnBlue("blueOnBlue");  // Blue on a blue pixel
 
-    Func g_r("g_r"); // Green on a red pixel
-    Func g_b("g_b"); // Green on a blue pixel
-
-    if (Fast) {
-      bilinearDemosaic(r_r, b_b, g_gb, g_gr, r_gb, b_gb, b_gr, r_gr, b_r, r_b, g_r, g_b);
-    } else {
-      edgeAwareDemosaic(r_r, b_b, g_gb, g_gr, r_gb, b_gb, b_gr, r_gr, b_r, r_b, g_r, g_b);
-    }
-
-    // Interleave the resulting channels
-    Func r = interleave_y(interleave_x(r_gb, r_b), interleave_x(r_r, r_gr));
-    Func g = interleave_y(interleave_x(g_gb, g_b), interleave_x(g_r, g_gr));
-    Func b = interleave_y(interleave_x(b_gb, b_b), interleave_x(b_r, b_gr));
+    Func redOnRed("redOnRed"); // red on a red pixel
+    Func greenOnRed("greenOnRed"); // Green on a red pixel
+    Func blueOnRed("blueOnRed"); // Blue on a red pixel
 
     Func demosaiced("demosaiced");
-    demosaiced(x, y, c) =
-      select(
-          c == 0, r(x, y),
-          c == 1, g(x, y),
-          b(x, y));
+    if (Fast) {
+      bilinearDemosaic(rawRed, rawBlue, rawGreenB, rawGreenR,
+          redOnGreenBlue, greenOnGreenBlue, blueOnGreenBlue,
+          redOnGreenRed, greenOnGreenRed, blueOnGreenRed,
+          redOnBlue, greenOnBlue, blueOnBlue,
+          redOnRed, greenOnRed, blueOnRed,
+          demosaiced);
+    } else {
+      edgeAwareDemosaic(rawRed, rawBlue, rawGreenB, rawGreenR,
+          redOnGreenBlue, greenOnGreenBlue, blueOnGreenBlue,
+          redOnGreenRed, greenOnGreenRed, blueOnGreenRed,
+          redOnBlue, greenOnBlue, blueOnBlue,
+          redOnRed, greenOnRed, blueOnRed,
+          demosaiced);
+    }
 
     int kVec = target.natural_vector_size(Float(32));
 
-    g_r
-      .compute_at(toneCorrected, yi)
-      .store_at(toneCorrected, yo)
-      .vectorize(x, kVec, TailStrategy::RoundUp)
-      .fold_storage(y, 64);
-
-    g_b
-      .compute_at(toneCorrected, yi)
-      .store_at(toneCorrected, yo)
-      .vectorize(x, kVec, TailStrategy::RoundUp)
-      .fold_storage(y, 64);
-
     demosaiced
       .compute_at(toneCorrected, x)
-      .vectorize(x, kVec)
-      .reorder(c, x, y)
+      .vectorize(x, kVec, TailStrategy::RoundUp)
+      .reorder(y, x, c)
       .unroll(c);
 
     return demosaiced;
@@ -395,8 +506,6 @@ class CameraIspGen
       Func raw,
       Param<int> width,
       Param<int> height,
-      Param<float> denoise,
-      Param<int> denoiseRadius,
       Func vignetteTableH,
       Func vignetteTableV,
       Param<float> blackLevelR,
@@ -478,8 +587,6 @@ int main(int argc, char **argv) {
   ImageParam input(UInt(16), 2);
   Param<int> width;
   Param<int> height;
-  Param<float> denoise;
-  Param<int> denoiseRadius;
   ImageParam vignetteTableH(Float(32), 2, "vignetteH");
   ImageParam vignetteTableV(Float(32), 2, "vignetteV");
   Param<float> blackLevelR("blackLevelR");
@@ -503,7 +610,7 @@ int main(int argc, char **argv) {
   CameraIspGen<true> cameraIspGenFast;
 
   Func rawM("rawm");
-  rawM = BoundaryConditions::mirror_image(input);
+  rawM = BoundaryConditions::mirror_interior(input);
 
   Func vignetteTableHM("vhm");
   vignetteTableHM = BoundaryConditions::mirror_image(vignetteTableH);
@@ -512,16 +619,16 @@ int main(int argc, char **argv) {
   vignetteTableVM = BoundaryConditions::mirror_image(vignetteTableV);
 
   Func cameraIsp = cameraIspGen.generate(
-      target, rawM, width, height, denoise, denoiseRadius, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
+      target, rawM, width, height, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
       whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR, FLAGS_output_bpp);
 
   Func cameraIspFast =
     cameraIspGenFast.generate(
-        target, rawM, width, height, denoise, denoiseRadius, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
+        target, rawM, width, height, vignetteTableHM, vignetteTableVM, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR,
         whiteBalanceGainG, whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB, ccm, toneTable, BGR, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
-    input, width, height, denoise, denoiseRadius, vignetteTableH, vignetteTableV, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR, whiteBalanceGainG,
+    input, width, height, vignetteTableH, vignetteTableV, blackLevelR, blackLevelG, blackLevelB, whiteBalanceGainR, whiteBalanceGainG,
     whiteBalanceGainB, sharpenningR, sharpenningG, sharpenningB,  ccm, toneTable,  BGR};
 
   // Compile the pipelines

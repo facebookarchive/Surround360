@@ -46,7 +46,7 @@ ADD_CUSTOM_TARGET( _source SOURCES ${SRC} )
 
 ### Halide support
 IF (DEFINED HALIDE_DIR)
-  INCLUDE("${HALIDE_DIR}/HalideGenerator.cmake")
+  INCLUDE("${HALIDE_DIR}/../HalideGenerator.cmake")
 
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HALIDE")
 
@@ -61,7 +61,7 @@ IF (DEFINED HALIDE_DIR)
      ENDIF()
   ENDFUNCTION(halide_gen_app)
 
-  LINK_DIRECTORIES(${HALIDE_DIR}/build/lib)
+  LINK_DIRECTORIES(${HALIDE_DIR}/lib)
 ENDIF()
 
 

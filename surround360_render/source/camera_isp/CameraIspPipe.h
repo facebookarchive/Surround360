@@ -6,7 +6,6 @@
 #include "CameraIspGen16.h"
 #include "CameraIspGenFast16.h"
 #include "Halide.h"
-#include "Image.h"
 
 namespace surround360 {
 
@@ -79,24 +78,24 @@ class CameraIspPipe : public CameraIsp {
     if (outputBpp == 8) {
       if (fast) {
         CameraIspGenFast8(
-            inputBufferBp, width, height, denoise, denoiseRadius, vignetteTableHBp, vignetteTableVBp,
+            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
       } else {
         CameraIspGen8(
-            inputBufferBp, width, height, denoise, denoiseRadius, vignetteTableHBp, vignetteTableVBp,
+            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
       }
     } else {
       if (fast) {
         CameraIspGenFast16(
-            inputBufferBp, width, height, denoise, denoiseRadius, vignetteTableHBp, vignetteTableVBp,
+            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
       } else {
         CameraIspGen16(
-            inputBufferBp, width, height, denoise, denoiseRadius, vignetteTableHBp, vignetteTableVBp,
+            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
       }

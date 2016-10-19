@@ -563,6 +563,7 @@ void prepareBottomImagesThread(
       true, // save data that will be used in the next frame
       FLAGS_poleremoval_flow_alg,
       FLAGS_std_alpha_feather_size,
+      FLAGS_enable_render_coloradjust,
       camModelArrayWithTop,
       *bottomCamModel,
       bottomImage);

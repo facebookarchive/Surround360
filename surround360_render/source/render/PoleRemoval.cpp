@@ -38,6 +38,7 @@ void combineBottomImagesWithPoleRemoval(
     const bool saveFlowDataForNextFrame,
     const string& flowAlgName,
     const int alphaFeatherSize,
+    const bool enableAutoColorAdjust,
     const vector<CameraMetadata>& camModelArrayWithTop,
     CameraMetadata& bottomCamModel,
     Mat& bottomImage) {
@@ -140,10 +141,15 @@ void combineBottomImagesWithPoleRemoval(
     imwriteExceptionOnFail(outputDataDir + "/bottomWarp2.png", warpedBottomImage2);
   }
 
-  const vector<vector<float>> colorAdjustModel = buildColorAdjustmentModel(
-    bottomImage, warpedBottomImage2);
-  const Mat adjustedBottomImage2 = applyColorAdjustmentModel(
-    warpedBottomImage2, colorAdjustModel);
+  Mat adjustedBottomImage2;
+  if (enableAutoColorAdjust) {
+    const vector<vector<float>> colorAdjustModel = buildColorAdjustmentModel(
+      bottomImage, warpedBottomImage2);
+    adjustedBottomImage2 = applyColorAdjustmentModel(
+      warpedBottomImage2, colorAdjustModel);
+  } else {
+    adjustedBottomImage2 = warpedBottomImage2;
+  }
 
   VLOG(1) << "Combining the primary bottom image and the secondary warped image";
   for (int y = 0; y < bottomImage.rows; ++y) {

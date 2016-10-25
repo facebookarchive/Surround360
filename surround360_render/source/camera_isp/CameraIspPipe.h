@@ -19,23 +19,18 @@ using namespace Halide;
 class CameraIspPipe : public CameraIsp {
  protected:
   Mat inputImage;
-  shared_ptr<Buffer> inputBuffer;
-  buffer_t* inputBufferBp;
-  shared_ptr<Buffer> outputBuffer;
-  buffer_t* outputBufferBp;
+  buffer_t inputBufferBp;
+  buffer_t outputBufferBp;
+
   Mat toneCurveTable;
   Mat vignetteCurveTableH;
   Mat vignetteCurveTableV;
 
-  shared_ptr<Buffer> ccMat;
-  shared_ptr<Buffer> toneTable;
-  shared_ptr<Buffer> vignetteTableH;
-  shared_ptr<Buffer> vignetteTableV;
 
-  buffer_t* ccMatBp;
-  buffer_t* toneTableBp;
-  buffer_t* vignetteTableHBp;
-  buffer_t* vignetteTableVBp;
+  buffer_t ccMatBp;
+  buffer_t toneTableBp;
+  buffer_t vignetteTableHBp;
+  buffer_t vignetteTableVBp;
 
   const bool fast;
 
@@ -48,21 +43,28 @@ class CameraIspPipe : public CameraIsp {
     *const_cast<float*>(&maxD) = square(width) + square(width);
     *const_cast<float*>(&sqrtMaxD) = sqrt(maxD);
     this->inputImage = inputImage;
-
-    inputBuffer = shared_ptr<Buffer>(new Buffer(UInt(16), width, height, 1, 1, inputImage.data));
-    inputBufferBp = inputBuffer->raw_buffer();
+    inputBufferBp.host = reinterpret_cast<uint8_t*>(inputImage.data);
+    inputBufferBp.extent[0] = width;
+    inputBufferBp.extent[1] = height;
+    inputBufferBp.stride[0] = 1;
+    inputBufferBp.stride[1] = width;
+    inputBufferBp.elem_size = 2;
   }
 
   void loadImage(uint8_t* inputImageData, const int xRes, const int yRes) {
     *const_cast<int*>(&width) = xRes;
     *const_cast<int*>(&height) = yRes;
 
-    inputBuffer = shared_ptr<Buffer>(new Buffer(UInt(16), width, height, 1, 1, inputImageData));
-    inputBufferBp = inputBuffer->raw_buffer();
     *const_cast<float*>(&halfWidth) = width / 2.0f;
     *const_cast<float*>(&halfHeight) = height / 2.0f;
     *const_cast<float*>(&maxD) = square(width) + square(width);
     *const_cast<float*>(&sqrtMaxD) = sqrt(maxD);
+    inputBufferBp.host = reinterpret_cast<uint8_t*>(inputImageData);
+    inputBufferBp.extent[0] = width;
+    inputBufferBp.extent[1] = height;
+    inputBufferBp.stride[0] = 1;
+    inputBufferBp.stride[1] = width;
+    inputBufferBp.elem_size = 2;
   }
 
  public:
@@ -71,6 +73,12 @@ class CameraIspPipe : public CameraIsp {
       const int outputBpp = 8) :
       CameraIsp(jsonInput, outputBpp),
       fast(fast) {
+    memset(&inputBufferBp, 0, sizeof(buffer_t));
+    memset(&outputBufferBp, 0, sizeof(buffer_t));
+    memset(&ccMatBp, 0, sizeof(buffer_t));
+    memset(&toneTableBp, 0, sizeof(buffer_t));
+    memset(&vignetteTableHBp, 0, sizeof(buffer_t));
+    memset(&vignetteTableVBp, 0, sizeof(buffer_t));
   }
 
   void runPipe(const bool swizzle) {
@@ -78,46 +86,45 @@ class CameraIspPipe : public CameraIsp {
     if (outputBpp == 8) {
       if (fast) {
         CameraIspGenFast8(
-            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
+            &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen8(
-            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
+            &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     } else {
       if (fast) {
         CameraIspGenFast16(
-            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
+            &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen16(
-            inputBufferBp, width, height, vignetteTableHBp, vignetteTableVBp,
+            &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, ccMatBp, toneTableBp, swizzle, outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     }
   }
 
   void runPipe(void* inputImageData, void* outputImageData, const bool swizzle) {
-    inputBufferBp->host = reinterpret_cast<uint8_t*>(inputImageData);
-    outputBufferBp->host = reinterpret_cast<uint8_t*>(outputImageData);
+    inputBufferBp.host = reinterpret_cast<uint8_t*>(inputImageData);
+    outputBufferBp.host = reinterpret_cast<uint8_t*>(outputImageData);
     runPipe(swizzle);
   }
 
   void getImage(uint8_t* outputImageData, const bool swizzle = true) {
-    outputBuffer = shared_ptr<Buffer>(new Buffer(UInt(outputBpp), width, height, 3, 1, outputImageData));
-    outputBufferBp = outputBuffer->raw_buffer();
-    outputBufferBp->elem_size = outputBpp / 8;
-    outputBufferBp->extent[0] = width;
-    outputBufferBp->extent[1] = height;
-    outputBufferBp->extent[2] = 3;
-    outputBufferBp->stride[0] = 3;
-    outputBufferBp->stride[1] = 3*width;
-    outputBufferBp->stride[2] = 1;
+    outputBufferBp.host = reinterpret_cast<uint8_t*>(outputImageData);
+    outputBufferBp.elem_size = outputBpp / 8;
+    outputBufferBp.extent[0] = width;
+    outputBufferBp.extent[1] = height;
+    outputBufferBp.extent[2] = 3;
+    outputBufferBp.stride[0] = 3;
+    outputBufferBp.stride[1] = 3 * width;
+    outputBufferBp.stride[2] = 1;
 
     // The stage following the CCM maps tone curve lut to 256 so we
     // scale the pixel by the lut size here once instead of doing it
@@ -166,15 +173,34 @@ class CameraIspPipe : public CameraIsp {
     }
 
     // Marshal these tables into Halide buffers
-    ccMat = shared_ptr<Buffer>(new Buffer(Float(32), 3, 3, 1, 1, compositeCCM.data));
-    toneTable = shared_ptr<Buffer>(new Buffer(UInt(outputBpp), 3, kToneCurveLutSize, 1, 1, toneCurveTable.data));
-    vignetteTableH = shared_ptr<Buffer>(new Buffer(Float(32), 3, width, 1, 1, vignetteCurveTableH.data));
-    vignetteTableV = shared_ptr<Buffer>(new Buffer(Float(32), 3, height, 1, 1, vignetteCurveTableV.data));
 
-    ccMatBp = ccMat->raw_buffer();
-    toneTableBp = toneTable->raw_buffer();
-    vignetteTableHBp = vignetteTableH->raw_buffer();
-    vignetteTableVBp = vignetteTableV->raw_buffer();
+    ccMatBp.host = compositeCCM.data;
+    ccMatBp.extent[0] = 3;
+    ccMatBp.extent[1] = 3;
+    ccMatBp.stride[0] = 1;
+    ccMatBp.stride[1] = 3;
+    ccMatBp.elem_size = sizeof(float);
+
+    toneTableBp.host = toneCurveTable.data;
+    toneTableBp.extent[0] = 3;
+    toneTableBp.extent[1] = kToneCurveLutSize;
+    toneTableBp.stride[0] = 1;
+    toneTableBp.stride[1] = 3;
+    toneTableBp.elem_size = outputBpp / 8;
+
+    vignetteTableHBp.host = vignetteCurveTableH.data;
+    vignetteTableHBp.extent[0] = 3;
+    vignetteTableHBp.extent[1] = width;
+    vignetteTableHBp.stride[0] = 1;
+    vignetteTableHBp.stride[1] = 3;
+    vignetteTableHBp.elem_size = sizeof(float);
+
+    vignetteTableVBp.host =vignetteCurveTableV.data;
+    vignetteTableVBp.extent[0] = 3;
+    vignetteTableVBp.extent[1] = height;
+    vignetteTableVBp.stride[0] = 1;
+    vignetteTableVBp.stride[1] = 3;
+    vignetteTableVBp.elem_size = sizeof(float);
 
     // Pull the first image through the pipe
     runPipe(swizzle);

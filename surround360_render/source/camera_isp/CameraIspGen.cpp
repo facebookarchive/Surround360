@@ -195,7 +195,6 @@ class CameraIspGen
       select(greenRedPixel(),  avg(absd(rawGreenR(x2, y), rawGreenR(x,   y)), absd(rawGreenR(x_2, y), rawGreenR(x, y))), // green on red row
       0))));
 
-
     // Homogenity calulation over a diameter size region
     const int w = 2;
     const int diameter = 2*w + 1;
@@ -206,13 +205,13 @@ class CameraIspGen
     // Count the number of pixels in the region that are horizontal.
     // This is given by determining when the vertical gradient is
     // greater than the horizontal gradient. Remember that a strong
-    // vertical gradiant means that the local area is horizontal since
+    // vertical gradient means that the local area is horizontal since
     // the gradient is orthogonal to the direction of the local
     // feature.
     Func hCount("hCount");
     hCount(x, y) = sum(cast<int>(dH(xp, yp) <= dV(xp, yp)));
 
-    // The local green estimate is a blend the horizontal and vertical
+    // The local green estimate is a blend of the horizontal and vertical
     // green channel estimate based on how horizontal or vertical the
     // region is.
     Expr alpha = cast<float>(hCount(x, y)) / float(diameter * diameter);
@@ -258,11 +257,13 @@ class CameraIspGen
 
     gV.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     gH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
@@ -274,21 +275,25 @@ class CameraIspGen
 
     dH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     g.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     r.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     b.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
+      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
   }
@@ -426,6 +431,7 @@ class CameraIspGen
     transpose(x, y, c) = blur(y, x, c);
 
     const int kVec = target.natural_vector_size(Float(32));
+
     Var xo, xi, yo, yi, si;
     transpose
       .compute_root()
@@ -488,8 +494,8 @@ class CameraIspGen
 
     const int kStripSize = 32;
     const int kVec = target.natural_vector_size(Float(32));
-    Var xo, xi;
 
+    Var xo, xi;
     sharpened
       .compute_root()
       .split(y, yo, yi, kStripSize)
@@ -545,7 +551,6 @@ class CameraIspGen
     } else {
       ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, BGR, outputBpp);
     }
-
     // Schedule it using local vars
     Var yii("yii"), xi("xi");
 
@@ -634,11 +639,14 @@ int main(int argc, char **argv) {
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling
   std::cout << "Halide: " << "Generating " << FLAGS_output_bpp << " bit isp" << std::endl;
-  cameraIsp.compile_to_static_library("CameraIspGen" + to_string(FLAGS_output_bpp), args, target);
-  cameraIsp.compile_to_assembly("CameraIspGen" + to_string(FLAGS_output_bpp) + ".s", args, target);
+  string cigName = "CameraIspGen" + to_string(FLAGS_output_bpp);
+  cameraIsp.compile_to_static_library(cigName, args, cigName, target);
+  cameraIsp.compile_to_assembly(cigName + ".s", args, target);
 
   std::cout << "Halide: " << "Generating " << FLAGS_output_bpp << " bit fastest isp" << std::endl;
-  cameraIspFast.compile_to_static_library("CameraIspGenFast" + to_string(FLAGS_output_bpp), args, target);
-  cameraIspFast.compile_to_assembly("CameraIspGenFast" + to_string(FLAGS_output_bpp) + ".s", args, target);
+  cigName = "CameraIspGenFast" + to_string(FLAGS_output_bpp);
+  cameraIspFast.compile_to_static_library(cigName, args,  cigName, target);
+  cameraIspFast.compile_to_assembly(cigName + ".s", args, target);
+
   return EXIT_SUCCESS;
 }

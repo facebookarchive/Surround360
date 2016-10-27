@@ -120,6 +120,7 @@ IF (DEFINED HALIDE_DIR)
      gflags
      ${OpenCV_LIBS}
      Halide
+     dl
   )
 ELSE()
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp)

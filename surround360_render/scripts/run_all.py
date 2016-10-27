@@ -41,7 +41,9 @@ UNPACK_COMMAND_TEMPLATE = """
 --dest_path {ROOT_DIR}/raw
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
---disk_count {DISK_COUNT}
+--file_count {DISK_COUNT}
+--nbits 12
+--image_width 2448
 """
 
 ARRANGE_COMMAND_TEMPLATE = """

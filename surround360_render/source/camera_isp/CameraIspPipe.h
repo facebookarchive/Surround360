@@ -34,6 +34,7 @@ class CameraIspPipe : public CameraIsp {
 
   const bool fast;
 
+ public:
   void loadImage(const Mat& inputImage) {
     *const_cast<int*>(&width) = inputImage.cols / resize;
     *const_cast<int*>(&height) = inputImage.rows / resize;
@@ -67,7 +68,6 @@ class CameraIspPipe : public CameraIsp {
     inputBufferBp.elem_size = 2;
   }
 
- public:
   CameraIspPipe(string jsonInput,
       const bool fast = false,
       const int outputBpp = 8) :

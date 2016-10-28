@@ -24,7 +24,7 @@ void PreviewCamComboBox::reload() {
   const unsigned int n = PointGreyCamera::findCameras();
   for (unsigned int k = 0; k < n; ++k) {
     PointGreyCameraPtr c = PointGreyCamera::getCamera(k);
-    serials.push_back(std::make_tuple(k, c->getSerialNumber(), 0));
+    serials.emplace_back(k, c->getSerialNumber(), 0);
   }
 
   sort(serials.begin(), serials.end(),
@@ -34,7 +34,7 @@ void PreviewCamComboBox::reload() {
   for (auto m = 0; m < serials.size(); ++m) {
     TreeModel::Row row = *(m_refTreeModel->append());
     row[m_model.m_num] = m;
-    row[m_model.m_busNum] = get<1>(serials[m]);
+    row[m_model.m_busNum] = get<0>(serials[m]);
 
     if (m == 0) {
       set_active(row);
@@ -45,14 +45,13 @@ void PreviewCamComboBox::reload() {
 }
 
 void PreviewCamComboBox::on_changed() {
-  cout << "Active preview cam changed" << endl;
   try {
     CameraController& ctl = CameraController::get();
-    auto iter = get_active_row_number();
+    auto iter = get_active();
     auto& cfg = CameraConfig::get();
 
-    cfg.previewCam = iter;
-    ctl.setPreviewCamera(iter);
+    cfg.previewCam = (*iter)[m_model.m_busNum];
+    ctl.setPreviewCamera(cfg.previewCam);
   } catch (...) {
     cout << "Error when setting a preview camera" << endl;
   }

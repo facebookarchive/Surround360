@@ -67,7 +67,5 @@ void ShutterComboBox::on_changed() {
   auto& cfg = CameraConfig::get();
   auto iter = get_active();
   auto row = *iter;
-  cout << "setting shutter to "
-       << row[m_shutterSpeedModel.m_speed] * 1000.0f << endl;
   cfg.shutter = row[m_shutterSpeedModel.m_speed] * 1000.0f;
 }

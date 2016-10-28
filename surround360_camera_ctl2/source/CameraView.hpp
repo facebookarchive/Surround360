@@ -79,6 +79,9 @@ namespace surround360 {
     int m_pboIdx;
     GLuint histogramID;
     GLuint fboID;
+    void* rawBytes;
+    CameraIspPipe m_isp;
+    std::unique_ptr<std::vector<float>> cameraRotations;
 
   private:
     GLuint loadShaders(const char* vpath, const char *frgPath);
@@ -86,8 +89,7 @@ namespace surround360 {
     void initTextures();
     void initHistogram();    
     void init();
-    CameraIspPipe m_isp;
-    std::unique_ptr<std::vector<float>> cameraRotations;
+    void convertPreviewFrame();
 
   public:
     CameraView(Gtk::GLArea& glarea);

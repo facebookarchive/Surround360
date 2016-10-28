@@ -49,6 +49,8 @@ static const string defaultIsp = "{"
 CameraView::CameraView(Gtk::GLArea& glarea)
   : m_glAreaRef(glarea),
     m_pboIdx(0),
+    m_rawBuf(nullptr),
+    rawBytes(nullptr),
     m_isp(defaultIsp, true, 8) {
 }
 
@@ -72,11 +74,11 @@ void CameraView::init() {
   m_height = cam->frameHeight();
   if (m_rawBuf == nullptr) {
     auto sz = m_width * m_height * 2u;
-    m_rawBuf = std::make_shared<aligned_vec_t>(sz);
+    m_rawBuf = std::make_shared<aligned_vec_t>(sz, 0);
     cout << "raw buf initialized to hold " << sz << " bytes" << endl;
     
     sz = m_width * m_height * 3u;
-    m_textureBuf = std::make_shared<aligned_vec_t>(sz);
+    m_textureBuf = std::make_shared<aligned_vec_t>(sz, 0);
     cout << "texture buf initialized to hold " << sz << " bytes" << endl;
   }
 
@@ -160,7 +162,7 @@ GLuint CameraView::loadShaders(const char* vpath, const char *frgPath) {
   glGetShaderiv(vshader, GL_COMPILE_STATUS, &result);
   glGetShaderiv(vshader, GL_INFO_LOG_LENGTH, &len);
   
-  if (len > 0) {
+  if (!result) {
     vector<char> errs(len + 1);
     glGetShaderInfoLog(vshader, len, nullptr, &errs[0]);
     printf("Status: %d, Len: %d\n", result, len);
@@ -173,7 +175,7 @@ GLuint CameraView::loadShaders(const char* vpath, const char *frgPath) {
   glCompileShader(frgShader);
   glGetShaderiv(frgShader, GL_COMPILE_STATUS, &result);
   glGetShaderiv(frgShader, GL_INFO_LOG_LENGTH, &len);
-  if (len > 0) {
+  if (!result) {
     vector<char> errs(len + 1);
     glGetShaderInfoLog(frgShader, len, nullptr, &errs[0]);
     printf("Pixel shader error: '%s'\n", &errs[0]);
@@ -190,7 +192,7 @@ GLuint CameraView::loadShaders(const char* vpath, const char *frgPath) {
   glGetProgramiv(progId, GL_LINK_STATUS, &result);
   glGetProgramiv(progId, GL_INFO_LOG_LENGTH, &len);
 
-  if (len > 0) {
+  if (!result) {
     vector<char> errs(len + 1);
     glGetProgramInfoLog(progId, len, nullptr, &errs[0]);
     printf("Program error: '%s'\n", &errs[0]);
@@ -298,9 +300,11 @@ void CameraView::update() {
 }
 
 bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
-  if (m_rawBuf->empty()) {
+  if (m_rawBuf->empty() || rawBytes == nullptr) {
     return false;
   }
+
+  convertPreviewFrame();
 
   glClear(GL_COLOR_BUFFER_BIT);  
   bool raw = CameraConfig::get().raw;
@@ -381,10 +385,15 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
   return true;
 }
 
-void CameraView::updatePreviewFrame(void *bytes) {
+void CameraView::updatePreviewFrame(void* bytes) {
+  rawBytes = bytes;
+  update();
+}
+
+void CameraView::convertPreviewFrame() {
   auto bufPtr = getRawBuffer();
   auto buf = &(*bufPtr)[0];
-  auto raw = (uint8_t*)bytes;
+  auto raw = (uint8_t*)rawBytes;
   uint64_t vaddrRaw = (uint64_t)raw;
   uint64_t vaddrBuf = (uint64_t)buf;
   uint32_t x, y, p;

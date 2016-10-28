@@ -154,7 +154,8 @@ bool CameraController::configureCameras(
 	m_bitsPerPixel)) {
 	throw "error initializing camera " + to_string(k);
       }
-    } catch (...) {
+    } catch (string& s) {
+      cerr << "Exception: " << s << endl;
       camera->toggleStrobeOut(m_pinStrobe, false);
       throw "Error powering on and initializing one of the cameras.";
     }

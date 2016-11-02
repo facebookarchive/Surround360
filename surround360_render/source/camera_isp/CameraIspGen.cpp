@@ -329,15 +329,15 @@ class CameraIspGen
     Func rawGreenR("rawGreenR");
 
     if (Fast) {
-      rawRed(x, y)    = (deinterleaved(x, y, 0) - minRawR) * invRangeR;
-      rawBlue(x, y)   = (deinterleaved(x, y, 2) - minRawB) * invRangeB;
-      rawGreenB(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
-      rawGreenR(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG;
+      rawRed(x, y)    = clamp((deinterleaved(x, y, 0) - minRawR) * invRangeR, 0.0f, 1.0f);
+      rawBlue(x, y)   = clamp((deinterleaved(x, y, 2) - minRawB) * invRangeB, 0.0f, 1.0f);
+      rawGreenB(x, y) = clamp((deinterleaved(x, y, 1) - minRawG) * invRangeG, 0.0f, 1.0f);
+      rawGreenR(x, y) = clamp((deinterleaved(x, y, 1) - minRawG) * invRangeG, 0.0f, 1.0f);
     } else {
-      rawRed(x, y)    = (deinterleaved(x, y, 0) - minRawR) * invRangeR * vignetteTableH(0, x) * vignetteTableV(0, y);
-      rawBlue(x, y)   = (deinterleaved(x, y, 2) - minRawB) * invRangeB * vignetteTableH(2, x) * vignetteTableV(2, y);
-      rawGreenB(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
-      rawGreenR(x, y) = (deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y);
+      rawRed(x, y)    = clamp((deinterleaved(x, y, 0) - minRawR) * invRangeR * vignetteTableH(0, x) * vignetteTableV(0, y), 0.0f, 1.0f);
+      rawBlue(x, y)   = clamp((deinterleaved(x, y, 2) - minRawB) * invRangeB * vignetteTableH(2, x) * vignetteTableV(2, y), 0.0f, 1.0f);
+      rawGreenB(x, y) = clamp((deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y), 0.0f, 1.0f);
+      rawGreenR(x, y) = clamp((deinterleaved(x, y, 1) - minRawG) * invRangeG * vignetteTableH(1, x) * vignetteTableV(1, y), 0.0f, 1.0f);
     }
 
     // These are the ones we need to interpolate

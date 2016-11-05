@@ -50,6 +50,22 @@ void imwriteExceptionOnFail(
   }
 }
 
+Mat convert8bitTo16bit(const Mat& image8) {
+  Mat image16(image8.rows, image8.cols, CV_16U);
+
+  for (int y = 0; y < image8.rows; ++y) {
+    for (int x = 0; x < image8.cols; ++x) {
+      // Use the repeating high order bits in low order bits to
+      // correctly fill 15 bits.
+      image16.at<uint16_t>(y, x) =
+        (uint16_t(image8.at<uint8_t>(y, x)) << 8) |
+        (uint16_t(image8.at<uint8_t>(y, x)) & 0xff);
+    }
+  }
+
+  return image16;
+}
+
 Mat stackHorizontal(const std::vector<Mat>& images) {
   assert(!images.empty());
   if (images.size() == 1) {

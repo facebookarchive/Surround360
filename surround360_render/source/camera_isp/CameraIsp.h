@@ -45,6 +45,8 @@ class CameraIsp {
   string bayerPattern;
   vector<cv::Point3f> compandingLut;
   cv::Point3f blackLevel;
+  cv::Point3f clampMin;
+  cv::Point3f clampMax;
   vector<cv::Point3f> vignetteRollOff;
 
   int stuckPixelThreshold;
@@ -385,6 +387,8 @@ class CameraIsp {
 
   // Build the composite tone curve
   void buildToneCurveLut() {
+    toneCurveLut.clear();
+
     const float dx = 1.0f / float(kToneCurveLutSize - 1);
 
     // Contrast angle constants
@@ -435,6 +439,8 @@ class CameraIsp {
     compandingLut.push_back(Point3f(0.0f, 0.0f, 0.0f));
     compandingLut.push_back(Point3f(1.0f, 1.0f, 1.0f));
     blackLevel = Point3f(0.0f, 0.0f, 0.0f);
+    clampMin = Point3f(0.0f, 0.0f, 0.0f);
+    clampMax = Point3f(1.0f, 1.0f, 1.0f);
     stuckPixelThreshold = 0;
     stuckPixelDarknessThreshold = 0;
     stuckPixelRadius = 0;
@@ -471,6 +477,18 @@ class CameraIsp {
         VLOG(1) << "Using default blackLevel = " << blackLevel << endl;
       }
 
+      if (config["CameraIsp"].HasKey("clampMin")) {
+        clampMin = getVector(config, "CameraIsp", "clampMin");
+      }  else {
+        VLOG(1) << "Using default clampMin = " << clampMin << endl;
+      }
+
+      if (config["CameraIsp"].HasKey("clampMax")) {
+        clampMax = getVector(config, "CameraIsp", "clampMax");
+      }  else {
+        VLOG(1) << "Using default clampMax = " << clampMax << endl;
+      }
+
       if (config["CameraIsp"].HasKey("stuckPixelThreshold")) {
         stuckPixelThreshold =
           getInteger(config, "CameraIsp", "stuckPixelThreshold");
@@ -504,13 +522,12 @@ class CameraIsp {
         VLOG(1) << "Using default whiteBalanceGain = " << whiteBalanceGain << endl;
       }
 
-
       if (config["CameraIsp"].HasKey("denoise")) {
-        VLOG(1) << "[Depricated] chroma denoising folded into demosaicing" << endl;
+        VLOG(1) << "[Deprecated] chroma denoising folded into demosaicing" << endl;
       }
 
       if (config["CameraIsp"].HasKey("denoiseRadius")) {
-        VLOG(1) << "[Depricated] chroma denoising folded into demosaicing" << endl;
+        VLOG(1) << "[Deprecated] chroma denoising folded into demosaicing" << endl;
       }
 
       if (config["CameraIsp"].HasKey("ccm")) {
@@ -564,6 +581,10 @@ class CameraIsp {
       VLOG(1) << "Missing or \"CameraIsp\" using defaults.\n";
     }
 
+    setup();
+  }
+
+  void setup() {
     // Build the bayer pattern tables
     if (bayerPattern.find("RGGB") != std::string::npos) {
       filters = 0x94949494;
@@ -677,6 +698,14 @@ class CameraIsp {
           << blackLevel.x << ", "
           << blackLevel.y << ", "
           << blackLevel.z << "],\n";
+      ofs << "        \"clampMin\" : ["
+          << clampMin.x << ", "
+          << clampMin.y << ", "
+          << clampMin.z << "],\n";
+      ofs << "        \"clampMax\" : ["
+          << clampMax.x << ", "
+          << clampMax.y << ", "
+          << clampMax.z << "],\n";
       ofs << "        \"vignetteRollOff\" : [";
       for (int i = 0; i < vignetteRollOff.size(); ++i) {
         if (i > 0) {
@@ -766,6 +795,18 @@ class CameraIsp {
     return maxPixelValue;
   }
 
+  void setRawImage(const Mat& rawImage) {
+    this->rawImage = rawImage;
+  }
+
+  Mat getRawImage() const {
+    return rawImage;
+  }
+
+  void setDemosaicedImage(const Mat& demosaicedImage) {
+    this->demosaicedImage = demosaicedImage;
+  }
+
   Mat getDemosaicedImage() const {
     return demosaicedImage;
   }
@@ -782,6 +823,22 @@ class CameraIsp {
 
   Point3f getBlackLevel() const {
     return blackLevel;
+  }
+
+  void setClampMin(const Point3f& clampMin) {
+    this->clampMin = clampMin;
+  }
+
+  Point3f getClampMin() const {
+    return clampMin;
+  }
+
+  void setClampMax(const Point3f& clampMax) {
+    this->clampMax = clampMax;
+  }
+
+  Point3f getClampMax() const {
+    return clampMax;
   }
 
   void setCCM(const Mat& ccm) {
@@ -845,18 +902,19 @@ class CameraIsp {
   }
 
   // Set the white point of the camera/scene
-  void whiteBalance() {
+  void whiteBalance(const bool clampOutput = true) {
     for (int i = 0; i < height; ++i) {
-      for (int j = 0; j < width; j++) {
+      for (int j = 0; j < width; ++j) {
         if (redPixel(i, j)) {
-          rawImage.at<float>(i, j) =
-            clamp(rawImage.at<float>(i, j) * whiteBalanceGain.x, 0.0f, 1.0f);
+          rawImage.at<float>(i, j) *= whiteBalanceGain.x;
         } else if (greenPixel(i, j)) {
-          rawImage.at<float>(i, j) =
-            clamp(rawImage.at<float>(i, j) * whiteBalanceGain.y, 0.0f, 1.0f);
+          rawImage.at<float>(i, j) *= whiteBalanceGain.y;
         } else {
-          rawImage.at<float>(i, j) =
-            clamp(rawImage.at<float>(i, j) * whiteBalanceGain.z, 0.0f, 1.0f);
+          rawImage.at<float>(i, j) *= whiteBalanceGain.z;
+        }
+
+        if (clampOutput) {
+          rawImage.at<float>(i, j) = clamp(rawImage.at<float>(i, j), 0.0f, 1.0f);
         }
       }
     }
@@ -967,6 +1025,22 @@ class CameraIsp {
     }
   }
 
+  void clampAndStretch() {
+    for (int i = 0; i < height; ++i) {
+      for (int j = 0; j < width; j++) {
+        const float clampMinVal = redPixel(i, j)
+          ? clampMin.x
+          : (greenPixel(i, j) ? clampMin.y : clampMin.z);
+        const float clampMaxVal = redPixel(i, j)
+          ? clampMax.x
+          : (greenPixel(i, j) ? clampMax.y : clampMax.z);
+        const float v =
+          clamp(rawImage.at<float>(i, j), clampMinVal, clampMaxVal);
+        rawImage.at<float>(i, j) =
+          (v - clampMinVal) / (clampMaxVal - clampMinVal);
+      }
+    }
+  }
 
   void antiVignette() {
     for (int i = 0; i < height; ++i) {
@@ -1073,7 +1147,6 @@ class CameraIsp {
     }
   }
 
-
   void sharpen() {
     Mat lowPass(height, width, CV_32FC3);
     const WrapBoundary<float> wrapB;
@@ -1092,6 +1165,7 @@ class CameraIsp {
     blackLevelAdjust();
     antiVignette();
     whiteBalance();
+    clampAndStretch();
     removeStuckPixels();
     demosaic();
     colorCorrect();

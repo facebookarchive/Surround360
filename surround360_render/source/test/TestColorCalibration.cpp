@@ -31,6 +31,11 @@ DEFINE_string(isp_passthrough_path, "",     "passthrough ISP configuration file 
 DEFINE_int32(num_squares_w,         6,      "number of squares horizontally");
 DEFINE_int32(num_squares_h,         4,      "number of squares vertically");
 DEFINE_string(output_data_dir,      ".",    "path to write data for debugging");
+DEFINE_double(clamp_min,            0.0,    "min clamping threshold");
+DEFINE_double(clamp_max,            1.0,    "max clamping threshold");
+DEFINE_bool(just_intercepts,        false,  "just compute RGB X-intercepts");
+DEFINE_string(black_level,          "",     "space-separated manual black level (8-bit)");
+DEFINE_bool(black_level_darkest,    false,  "if true, assume black level is darkest point");
 DEFINE_bool(save_debug_images,      false,  "save intermediate images");
 
 int main(int argc, char** argv) {
@@ -51,47 +56,31 @@ int main(int argc, char** argv) {
 
   Mat raw = imreadExceptionOnFail(FLAGS_image_path, CV_LOAD_IMAGE_GRAYSCALE);
 
-  LOG(INFO) << "Finding black point...";
-
-  const Point3f blackLevel = findBlackPoint(
-    raw,
-    FLAGS_isp_passthrough_path,
-    FLAGS_save_debug_images,
-    FLAGS_output_data_dir,
-    stepDebugImages);
-
-  // Convert to RGB using passthrough IPS, applying the black level offset
-  // Output image in [0..1]
-  Mat rgb = raw2rgb(FLAGS_isp_passthrough_path, raw, blackLevel);
+  // Working with 16-bit images
+  Mat raw16 = convert8bitTo16bit(raw);
 
   if (FLAGS_save_debug_images) {
-    Mat bgr;
-    cvtColor(rgb, bgr, CV_RGB2BGR);
-    const string rgbPassthroughImageFilename = FLAGS_output_data_dir +
-          "/" + to_string(++stepDebugImages) + "_passthrough.png";
-    imwriteExceptionOnFail(rgbPassthroughImageFilename, 255.0f * bgr);
+    const string rawImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) + "_raw.png";
+    imwriteExceptionOnFail(rawImageFilename, raw16);
   }
 
-  // Resize image with Gaussian kernel. Low pass filter + speed-up
-  Mat rgbSmall;
-  pyrDown(rgb, rgbSmall, Size(rgb.cols / 2, rgb.rows / 2));
+  LOG(INFO) << "Detecting clamped pixels...";
 
+  Mat rawClamped = findClampedPixels(raw);
+
+  if (FLAGS_save_debug_images) {
+    const string rawClampedImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_raw_clamped_pixels.png";
+    imwriteExceptionOnFail(rawClampedImageFilename, rawClamped);
+  }
   LOG(INFO) << "Detecting color chart...";
 
-  Mat rawSmall;
-  pyrDown(raw, rawSmall, Size(raw.cols / 2, raw.rows / 2));
   vector<ColorPatch> colorPatches = detectColorChart(
-    rawSmall,
+    raw,
     FLAGS_num_squares_w,
-    FLAGS_save_debug_images,
-    FLAGS_output_data_dir,
-    stepDebugImages);
-
-  LOG(INFO) << "Computing patches RGB medians..";
-
-  computeRGBMedians(
-    colorPatches,
-    rgbSmall,
+    FLAGS_num_squares_h,
     FLAGS_save_debug_images,
     FLAGS_output_data_dir,
     stepDebugImages);
@@ -104,95 +93,219 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  LOG(INFO) << "Computing white balance gains...";
+  Mat raw16isp = getRaw(FLAGS_isp_passthrough_path, raw16);
 
-  const Vec3f channelRatios = computeChannelRatios(
+  ColorResponse colorResponse = computeRGBResponse(
+    raw16isp.clone(),
+    true,
     colorPatches,
-    FLAGS_num_squares_w);
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "raw");
 
-  if (FLAGS_save_debug_images) {
-    plotWhiteBalanceHistogram(
-      colorPatches,
-      channelRatios,
-      FLAGS_num_squares_w,
-      FLAGS_output_data_dir,
-      stepDebugImages);
+  // Save X-intercepts
+  saveXIntercepts(colorResponse, FLAGS_output_data_dir);
+
+  if (FLAGS_just_intercepts) {
+    return EXIT_SUCCESS;
   }
 
-  // Apply white point ratio to entire image using our ISP
-  // Output image in [0..1]
-  Mat rgbWB = raw2rgb(FLAGS_isp_passthrough_path, raw, blackLevel, channelRatios);
+  Vec3f blackLevel = Vec3f(0.0f, 0.0f, 0.0f);
+  if (FLAGS_black_level != "") {
+    std::istringstream blIs(FLAGS_black_level);
+    vector<float> blVec;
+    blVec.assign(std::istream_iterator<int>(blIs), std::istream_iterator<int>());
+    blackLevel = Vec3f(blVec[0] / 255.0f, blVec[1] / 255.0f, blVec[2] / 255.0f);
+  } else if (FLAGS_black_level_darkest) {
+    // Find black level on original raw
+    blackLevel = findBlackPoint(
+      raw,
+      FLAGS_isp_passthrough_path,
+      FLAGS_save_debug_images,
+      FLAGS_output_data_dir,
+      stepDebugImages);
+  } else {
+    blackLevel = colorResponse.rgbInterceptY;
+  }
+
+  LOG(INFO) << "Adjusting black level: " << blackLevel;
+
+  Mat rawBlackAdjusted = adjustBlackLevel(
+    FLAGS_isp_passthrough_path,
+    raw16,
+    raw16isp.clone(),
+    blackLevel);
+
+  if (FLAGS_save_debug_images) {
+    const string noBlackImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_black_level_adjusted.png";
+    imwriteExceptionOnFail(noBlackImageFilename, 255.0f * rawBlackAdjusted);
+  }
+
+  colorResponse = computeRGBResponse(
+    rawBlackAdjusted,
+    true,
+    colorPatches,
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "raw_black_adjusted");
+
+  LOG(INFO) << "Computing white balance gains...";
+
+  Vec3f wbGains = computeWhiteBalanceGains(colorResponse);
+
+  LOG(INFO) << "White balance gains: " << wbGains;
+
+  // Apply white point ratio to entire image using ISP
+  Mat rawWB = whiteBalance(
+    FLAGS_isp_passthrough_path,
+    raw16,
+    rawBlackAdjusted.clone(),
+    wbGains);
+
+  if (FLAGS_save_debug_images) {
+    const string rawWBImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_white_balance_raw.png";
+    imwriteExceptionOnFail(rawWBImageFilename, 255.0f * rawWB);
+  }
+
+  colorResponse = computeRGBResponse(
+    rawWB,
+    true,
+    colorPatches,
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "wb_raw");
+
+  const float clampMin = float(FLAGS_clamp_min);
+  const float clampMax = float(FLAGS_clamp_max);
+
+  LOG(INFO) << "Clamping at " << clampMin << ", " << clampMax;
+
+  Vec3f rgbClampMin = {clampMin, clampMin, clampMin};
+  Vec3f rgbClampMax = {clampMax, clampMax, clampMax};
+  Mat rawWBClamped = clampAndStretch(
+    FLAGS_isp_passthrough_path,
+    raw16,
+    rawWB.clone(),
+    colorResponse,
+    rgbClampMin,
+    rgbClampMax);
+
+  if (FLAGS_save_debug_images) {
+    const string rawWBClampedImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_white_balance_raw_clamped.png";
+    imwriteExceptionOnFail(rawWBClampedImageFilename, 255.0f * rawWBClamped);
+  }
+
+  colorResponse = computeRGBResponse(
+    rawWBClamped,
+    true,
+    colorPatches,
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "wb_raw_clamped");
+
+  LOG(INFO) << "Demosaicing...";
+
+  Mat rgbWB = demosaic(FLAGS_isp_passthrough_path, raw, rawWBClamped.clone());
+
   if (FLAGS_save_debug_images) {
     Mat bgrWB;
     cvtColor(rgbWB, bgrWB, CV_RGB2BGR);
-    const string rgbWBImageFilename = FLAGS_output_data_dir +
-          "/" + to_string(++stepDebugImages) + "_white_balance.png";
+    const string rgbWBImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_white_balance_rgb.png";
     imwriteExceptionOnFail(rgbWBImageFilename, 255.0f * bgrWB);
   }
 
-  // Update medians to reflect white balance (centroids were found on scaled
-  // down version)
-  for (int i = 0; i < colorPatches.size(); ++i) {
-    Point2f centroid = colorPatches[i].centroid * 2.0f;
-    colorPatches[i].rgbMedian = rgbWB.at<Vec3f>(centroid);
-  }
+  colorResponse = computeRGBResponse(
+    rgbWB,
+    false,
+    colorPatches,
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "wb_rgb");
 
   LOG(INFO) << "Computing CCM...";
 
   Mat ccm = computeCCM(colorPatches);
 
   LOG(INFO) << "ISP: Black level: " << blackLevel;
-  LOG(INFO) << "ISP: White balance gains (RGB): " << channelRatios;
+  LOG(INFO) << "ISP: White balance gains (RGB): " << wbGains;
   LOG(INFO) << "ISP: CCM: " << ccm.t();
 
-  // Apply CCM to entire image
-  Mat rgbCCM = raw2rgb(
-    FLAGS_isp_passthrough_path,
-    raw,
-    blackLevel,
-    channelRatios,
-    ccm.t());
+  LOG(INFO) << "Applying color correction...";
+
+  Mat rgbCCM = colorCorrect(FLAGS_isp_passthrough_path, raw, rgbWB.clone(), ccm.t());
 
   if (FLAGS_save_debug_images) {
     Mat bgrCCM;
     cvtColor(rgbCCM, bgrCCM, CV_RGB2BGR);
-    const string rgbCCMImageFilename = FLAGS_output_data_dir +
-          "/" + to_string(++stepDebugImages) + "_ccm.png";
+    const string rgbCCMImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) + "_ccm.png";
     imwriteExceptionOnFail(rgbCCMImageFilename, 255.0f * bgrCCM);
   }
 
-  LOG(INFO) << "Computing errors...";
-
-  Mat rgbCCMSmall;
-  pyrDown(rgbCCM, rgbCCMSmall, Size(rgbCCM.cols / 2, rgbCCM.rows / 2));
-  pair<Vec4f, Vec4f> errors = computeColorPatchErrors(
-    rgbSmall,
-    rgbCCMSmall,
-    colorPatches);
-
-  LOG(INFO) << "RGB, R, G, B errors (before): " << errors.first;
-  LOG(INFO) << "RGB, R, G, B errors (after): " << errors.second;
+  colorResponse = computeRGBResponse(
+    rgbCCM,
+    false,
+    colorPatches,
+    FLAGS_isp_passthrough_path,
+    FLAGS_save_debug_images,
+    FLAGS_output_data_dir,
+    stepDebugImages,
+    "rgb_ccm");
 
   LOG(INFO) << "Applying gamma correction...";
 
-  string ispConfigPathOut = FLAGS_output_data_dir + "/isp_out.json";
-  Point3f gamma {0.4545, 0.4545, 0.4545};
-  Mat rgbGamma = raw2rgb(
-    FLAGS_isp_passthrough_path,
-    raw,
-    blackLevel,
-    channelRatios,
-    ccm.t(),
-    gamma,
-    ispConfigPathOut);
+  static const Point3f kGamma = Point3f(0.4545, 0.4545, 0.4545);
+  Mat rgbGamma = colorCorrect(
+    FLAGS_isp_passthrough_path, raw, rgbWB.clone(), ccm.t(), kGamma);
 
   if (FLAGS_save_debug_images) {
     Mat bgrGamma;
     cvtColor(rgbGamma, bgrGamma, CV_RGB2BGR);
-    const string rgbGammaImageFilename = FLAGS_output_data_dir +
-          "/" + to_string(++stepDebugImages) + "_gamma_corrected.png";
+    const string rgbGammaImageFilename =
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) +
+      "_gamma_corrected.png";
     imwriteExceptionOnFail(rgbGammaImageFilename, 255.0f * bgrGamma);
   }
+
+  LOG(INFO) << "Computing errors...";
+
+  pair<Vec4f, Vec4f> errors =
+    computeColorPatchErrors(rgbCCM, rgbCCM.clone(), colorPatches);
+
+  LOG(INFO) << "RGB, R, G, B errors (before): " << errors.first;
+  LOG(INFO) << "RGB, R, G, B errors (after): " << errors.second;
+
+  LOG(INFO) << "Generating ISP config file...";
+
+  string ispConfigPathOut = FLAGS_output_data_dir + "/isp_out.json";
+  writeIspConfigFile(
+    FLAGS_isp_passthrough_path,
+    ispConfigPathOut,
+    raw16,
+    blackLevel,
+    wbGains,
+    rgbClampMin,
+    rgbClampMax,
+    ccm.t(),
+    kGamma);
 
   return EXIT_SUCCESS;
 }

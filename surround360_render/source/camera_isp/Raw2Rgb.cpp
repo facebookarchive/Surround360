@@ -121,15 +121,7 @@ int main(int argc, char* argv[]) {
     Mat inputImage16(inputImage.rows, inputImage.cols, CV_16U);
 
     if (depth == CV_8U) {
-      for (int i = 0; i < inputImage.rows; ++i) {
-        for (int j = 0; j < inputImage.cols; ++j) {
-          // Use the repeating high order bits in low order bits to
-          // correctly fill 15 bits.
-          inputImage16.at<uint16_t>(i, j) =
-            (uint16_t(inputImage.at<uint8_t>(i, j)) << 8) |
-            (uint16_t(inputImage.at<uint8_t>(i, j)) & 0xff);
-        }
-      }
+      inputImage16 = convert8bitTo16bit(inputImage);
     } else if (depth == CV_16U) {
       inputImage16 = inputImage;
     } else {

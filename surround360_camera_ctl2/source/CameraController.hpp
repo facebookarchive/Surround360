@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE_camera_ctl file in the root directory of this subproject.
+ */
 #pragma once
 
 #include "CameraView.hpp"
@@ -14,7 +21,9 @@
 namespace surround360 {
 struct FramePacket{
   int frameNumber;
+  int frameSize;
   int cameraNumber;
+  int cameraSerial;
   void* imageBytes;
 };
 
@@ -34,6 +43,7 @@ public:
     const float framerate,
     const float gain,
     const int bitsPerPixel);
+
   bool updateCameraParams(
     const float shutter,
     const float fps,
@@ -58,19 +68,23 @@ private:
     const unsigned int nconsumers = 2);
   void cameraProducer(const unsigned int id);
   void cameraConsumer(const unsigned int id);
-  size_t frameSize() const;
+  inline size_t frameSize() const {
+    return (m_width * m_height * m_bitsPerPixel) / 8;
+  }
   void ispThread();
+  void writeCameraNames(const string& path);
 
 private:
   std::vector<PointGreyCameraPtr> m_camera;
   std::vector<std::thread>       m_prodThread;
   std::vector<std::thread>       m_consThread;
-  ConsumerBuffer*                m_consumerBuf;
+  std::vector<ConsumerBuffer>    m_consumerBuf;
 
-  std::tuple<int, int> m_masterCamera;
+  int m_masterCameraSerial;
+  int m_masterCameraIndex;
 
-  std::size_t producerCount;
-  std::size_t consumerCount;
+  std::size_t m_producerCount;
+  std::size_t m_consumerCount;
   float  m_shutter;
   float  m_framerate;
   float  m_gain;
@@ -99,9 +113,6 @@ private:
   CameraView& m_cameraView;
 
   std::atomic<size_t> m_previewIndex;
-
-  void* m_rawFrame;
-  void* m_ispFrame;
 
   unsigned int m_width;
   unsigned int m_height;

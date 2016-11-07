@@ -85,6 +85,7 @@ ADD_EXECUTABLE(
   source/RecordButton.cpp
   source/ShutterComboBox.cpp
   source/StillButton.cpp
+  source/Shaders.cpp
   source/main.cpp
 )
 
@@ -107,6 +108,7 @@ TARGET_LINK_LIBRARIES(
   "-lopencv_imgproc"
   "-lHalide"
   "-lusb-1.0"
+  "-lGLEW"
   CameraIspGen8
   CameraIspGenFast8
   CameraIspGen16

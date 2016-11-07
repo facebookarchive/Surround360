@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE_camera_ctl file in the root directory of this subproject.
+ */
 #include "PreviewButton.hpp"
 #include "CameraController.hpp"
 #include "Config.hpp"
@@ -25,7 +32,6 @@ void PreviewButton::on_clicked() {
     controller.startConsumers(2);
     controller.startSlaveCapture();
     controller.startMasterCapture();
-
     m_previewing = true;
   }
 }

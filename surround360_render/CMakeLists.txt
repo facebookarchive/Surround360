@@ -51,7 +51,7 @@ IF (DEFINED HALIDE_DIR)
 
   FUNCTION(halide_gen_app name folder)
      ADD_EXECUTABLE("${name}" ${ARGN})
-     TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide gflags)
+     TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide gflags dl z tinfo)
      SET_TARGET_PROPERTIES("${name}" PROPERTIES FOLDER "${folder}")
      IF (MSVC)
         SET_TARGET_PROPERTIES("${name}" PROPERTIES LINK_FLAGS "/STACK:8388608,1048576")
@@ -120,6 +120,8 @@ IF (DEFINED HALIDE_DIR)
      ${OpenCV_LIBS}
      Halide
      dl
+     z
+     tinfo
   )
 ELSE()
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp)
@@ -129,6 +131,9 @@ ELSE()
      LibJSON
      glog
      gflags
+     dl
+     z
+     tinfo
      ${OpenCV_LIBS}
   )
 ENDIF()

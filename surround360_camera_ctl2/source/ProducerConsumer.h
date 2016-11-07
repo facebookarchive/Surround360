@@ -58,17 +58,13 @@ namespace surround360 {
       : head(0), tail(0), count(0), fini(false)
     {
       memset(items, 0, LENGTH * sizeof(T));
-    }
 
-    #if 0
-    void setBuffers(void *ptr, size_t size)
-    {
-      uint64_t vaddr = reinterpret_cast<uint64_t>(ptr);
-      for (int k = 0; k < LENGTH; k++) {
-        items[k].imageBytes = reinterpret_cast<uint8_t *>(vaddr + k * size);
+      for (auto k = 0; k < LENGTH; ++k) {
+        const unsigned int kAlignment = 4096;
+        const unsigned int kMaxRes = 4096;
+        items[k].imageBytes = memalign(kAlignment, kMaxRes * kMaxRes);
       }
     }
-    #endif
 
     /// Signal the consuemr that producer is done producing.
     ///

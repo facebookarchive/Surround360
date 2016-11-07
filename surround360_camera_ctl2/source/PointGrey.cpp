@@ -39,7 +39,7 @@ BusManager& PointGreyCamera::getBusManager() {
 void PointGreyCamera::printError(int error, bool doExit) {
   if (error != PGRERROR_OK) {
     if (doExit) {
-      assert(!"zomg");
+      throw "Error" + to_string(error);
     }
   }
 }
@@ -166,12 +166,6 @@ int PointGreyCamera::detach() {
 int PointGreyCamera::attach() {
   fc::Error error = m_camera->Connect(&m_guid);
   return error.GetType();
-}
-
-int PointGreyCamera::getSerialNumber() const {
-  CameraInfo camInfo;
-  m_camera->GetCameraInfo(&camInfo);
-  return camInfo.serialNumber;
 }
 
 int PointGreyCamera::getInterfaceSpeed() const {
@@ -339,11 +333,11 @@ int PointGreyCamera::init(
 
   // Set camera properties
   setCameraProps(make_pair(exposure, true),
-		 make_pair(brightness, true),
-		 make_pair(gamma, true),
-		 make_pair(fps, true),
-		 make_pair(shutter, true),
-		 make_pair(gain, true));  
+                 make_pair(brightness, true),
+                 make_pair(gamma, true),
+                 make_pair(fps, true),
+                 make_pair(shutter, true),
+                 make_pair(gain, true));
 
   // Auto shutter
   if (shutter == 0.0f) {
@@ -484,7 +478,7 @@ bool PointGreyCamera::setCameraPropAbs(
     prop.onOff = false;
   } else {
     if (propType == fc::WHITE_BALANCE) {
-      prop.onOff = false;
+      prop.onOff = true;
     } else {
       prop.absValue = stof(val);
     }
@@ -536,7 +530,7 @@ bool PointGreyCamera::setCameraProps(
 
   const struct {
     const fc::PropertyType type;
-    const bool active;    
+    const bool active;
     const string value;
     const string name;
   } params[] = {
@@ -563,13 +557,17 @@ bool PointGreyCamera::setCameraProps(
     { .type = fc::GAIN,
       .active = gain.second,
       .value = to_string(gain.first),
-      .name = "GAIN" }
+      .name = "GAIN" },
+    { .type = fc::WHITE_BALANCE,
+      .active = true,
+      .value = "615 821",
+      .name = "WHITE_BALANCE" }
   };
 
   for (int k = 0; k < sizeof(params)/sizeof(params[0]); ++k) {
     if (params[k].active) {
       if (!setCameraPropAbs(params[k].type, params[k].value.c_str())) {
-	return false;
+        return false;
       }
     }
   }
@@ -689,4 +687,11 @@ unsigned int PointGreyCamera::frameWidth() {
 
 unsigned int PointGreyCamera::frameHeight() {
   return m_height;
+}
+
+int PointGreyCamera::getSerialNumber() const {
+  CameraInfo camInfo;
+  m_camera->GetCameraInfo(&camInfo);
+  auto serial = camInfo.serialNumber;
+  return serial;
 }

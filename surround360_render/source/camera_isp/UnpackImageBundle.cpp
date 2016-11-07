@@ -37,6 +37,7 @@ DEFINE_int32(start_frame,     0,      "start frame (per camera)");
 DEFINE_int32(frame_count,     0,      "number of frames to unpack (per camera)");
 DEFINE_string(dest_path,      "",     "path to folder to unpack images");
 DEFINE_int32(nbits,           8,      "number of bits footage was captured in");
+DEFINE_bool(tagged,           false,  "unpack tagged frames");
 
 int main(int argc, char** argv) {
   initSurround360(argc, argv);
@@ -177,10 +178,17 @@ int main(int argc, char** argv) {
         percentDonePrev = percentDoneCurr;
       }
 
+      string file_tag;
+      if (FLAGS_tagged) {
+        auto tag = reinterpret_cast<uint32_t*>(&imgbuf[0]);
+        file_tag = to_string(tag[1]);
+      } else {
+        file_tag = cameraNames[cameraNumber];
+      }
       string outFilename =
         FLAGS_dest_path + "/img_" +
         to_string(frameNumber) + "_cam_" +
-        cameraNames[cameraNumber] + "_raw" + to_string(FLAGS_nbits) + ".tiff";
+        file_tag + "_raw" + to_string(FLAGS_nbits) + ".tiff";
       imwriteExceptionOnFail(outFilename, outImage);
     }
 

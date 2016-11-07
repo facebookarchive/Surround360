@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2016-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE_camera_ctl file in the root directory of this subproject.
+ */
 #include "CameraController.hpp"
 #include <algorithm>
 #include <limits>
@@ -21,8 +28,6 @@
 #include <unistd.h>
 
 #include "Config.hpp"
-#include "IMX.hpp"
-#include "CMOSIS.hpp"
 
 using namespace surround360;
 using namespace std;
@@ -53,37 +58,15 @@ CameraController::CameraController(
     m_running(false),
     m_oneshot(false),
     m_oneshotCount(nconsumers, -1),
-    producerCount(nproducers),
-    consumerCount(nconsumers),
+    m_producerCount(nproducers),
+    m_consumerCount(nconsumers),
+    m_consumerBuf(nconsumers),
     update(4) {
-
-  m_masterCamera = make_tuple(-1, -1);
 
   m_width = PointGreyCamera::getCamera(0)->frameWidth();
   m_height = PointGreyCamera::getCamera(0)->frameHeight();
-  m_rawFrame = new uint8_t[m_width * m_height];
 
-  m_oneshotIdx = make_unique<std::vector<int>[]>(consumerCount);
-
-#if 0
-  if (m_width == sizeof(IMX[0])/sizeof(IMX[0][0])) {
-    for (size_t y = 0; y < m_height; ++y) {
-      for (size_t x = 0; x < m_width; ++x) {
-	if (IMX[y][x] == 1) {
-	  m_sample.push_back(y * m_width + x);
-	}
-      }
-    }
-  } else {
-    for (size_t y = 0; y < m_height; ++y) {
-      for (size_t x = 0; x < m_width; ++x) {
-	if (CMOSIS[y][x] == 1) {
-	  m_sample.push_back(y * m_width + x);
-	}
-      }
-    }
-  }
-#endif
+  m_oneshotIdx = make_unique<std::vector<int>[]>(m_consumerCount);
 }
 
 CameraController& CameraController::get(
@@ -92,8 +75,7 @@ CameraController& CameraController::get(
   const unsigned int nconsumers) {
 
   if (globalController == nullptr) {
-    globalController =
-      shared_ptr<CameraController>(new CameraController(camview, nproducers, nconsumers));
+    globalController = shared_ptr<CameraController>(new CameraController(camview, nproducers, nconsumers));
   }
 
   return *globalController;
@@ -122,41 +104,38 @@ bool CameraController::configureCameras(
   m_bitsPerPixel = bitsPerPixel;
 
   const unsigned int nCams = PointGreyCamera::findCameras();
-  m_masterCamera = std::make_tuple(numeric_limits<int>::max(), -1);
+  m_masterCameraSerial = INT_MAX;
+  m_masterCameraIndex = -1;
 
   for (int k = 0; k < nCams; ++k) {
     PointGreyCameraPtr camera = PointGreyCamera::getCamera(k);
-    auto key = std::get<0>(m_masterCamera);
-    auto serial = camera->getSerialNumber();
 
-    if (serial < key) {
-      m_masterCamera = make_tuple(serial, k);
+    if (camera->getSerialNumber() < m_masterCameraSerial) {
+      m_masterCameraSerial = camera->getSerialNumber();
+      m_masterCameraIndex = k;
     }
-
     m_camera.push_back(camera);
   }
 
-  int k = 0;
-  for (auto& camera : m_camera) {
+  for (int k = 0; k < m_camera.size(); ++k) {
     try {
-      bool master = (k == std::get<1>(m_masterCamera)) ? true : false;
-      ++k;
+      bool master = k == m_masterCameraIndex;
 
-      camera->powerCamera(true);
-      if (-1 == camera->init(
-	master,
-	m_exposure,
-	m_brightness,
-	m_gamma,
-	m_framerate,
-	m_shutter,
-	m_gain,
-	m_bitsPerPixel)) {
-	throw "error initializing camera " + to_string(k);
+      m_camera[k]->powerCamera(true);
+      if (-1 == m_camera[k]->init(
+        master,
+        m_exposure,
+        m_brightness,
+        m_gamma,
+        m_framerate,
+        m_shutter,
+        m_gain,
+        m_bitsPerPixel)) {
+        throw "error initializing camera " + to_string(k);
       }
     } catch (string& s) {
       cerr << "Exception: " << s << endl;
-      camera->toggleStrobeOut(m_pinStrobe, false);
+      m_camera[k]->toggleStrobeOut(m_pinStrobe, false);
       throw "Error powering on and initializing one of the cameras.";
     }
   }
@@ -203,19 +182,13 @@ void CameraController::startProducer(const unsigned int count) {
 }
 
 void CameraController::startConsumers(const unsigned int count) {
-  m_consumerBuf = new ConsumerBuffer[count];
-
   for (int cid = 0; cid < count; ++cid) {
-    const unsigned int kAlignment = 4096;
-    const unsigned long nents = 1000u;
-    const unsigned long long sz = frameSize() * nents;
-
     m_consThread.emplace_back(&CameraController::cameraConsumer, this, cid);
   }
 }
 
 void CameraController::cameraProducer(const unsigned int id) {
-  const size_t camerasPerProducer = m_camera.size() / m_mutex.size();
+  const size_t camerasPerProducer = m_camera.size() / m_producerCount;
   const size_t cameraOffset = id * camerasPerProducer;
   const int lastCamera = std::min(cameraOffset + camerasPerProducer, m_camera.size());
   unsigned int frameCount = 0;
@@ -237,136 +210,139 @@ void CameraController::cameraProducer(const unsigned int id) {
 
   while (m_keepRunning) {
     if (m_paramUpdatePending) {
-      auto k = std::get<1>(m_masterCamera);
-      auto m = 0;
-
       if (update[paramBits]) {
-	m_camera[k]->stopCapture();
+        // if switching pixel formats, stop master camera first so it doesn't trigger slaves
+        m_camera[m_masterCameraIndex]->stopCapture();
       }
 
-      for (auto& cam : m_camera) {
-	bool master = k == m;
+      // update all cameras except the master camera
+      for (int k = 0; k < m_camera.size(); ++k) {
+        if (k == m_masterCameraIndex) {
+          continue;
+        }
 
-	++m;
-	if (master) {
-	  continue;
-	}
+        m_camera[k]->setCameraProps(
+          make_pair(m_exposure, false),
+          make_pair(m_brightness, false),
+          make_pair(m_gamma, false),
+          make_pair(m_framerate, update[paramFramerate]),
+          make_pair(m_shutter, update[paramShutter]),
+          make_pair(m_gain, false));
 
-	cam->setCameraProps(
-	  make_pair(m_exposure, false),
-	  make_pair(m_brightness, false),
-	  make_pair(m_gamma, false),
-	  make_pair(m_framerate, update[paramFramerate]),
-	  make_pair(m_shutter, update[paramShutter]),
-	  make_pair(m_gain, false));
-
-	if (update[paramBits]) {
-	  cam->stopCapture();
-	  cam->updatePixelFormat(m_bitsPerPixel);
-	  cam->startCapture();
-	}
+        if (update[paramBits]) {
+          m_camera[k]->stopCapture();
+          m_camera[k]->updatePixelFormat(m_bitsPerPixel);
+          m_camera[k]->startCapture();
+        }
       }
 
-      m_camera[k]->setCameraProps(
-	make_pair(m_exposure, false),
-	make_pair(m_brightness, false),
-	make_pair(m_gamma, false),
-	make_pair(m_framerate, update[paramFramerate]),
-	make_pair(m_shutter, update[paramShutter]),
-	make_pair(m_gain, false));
+      // update master camera last
+      m_camera[m_masterCameraIndex]->setCameraProps(
+        make_pair(m_exposure, false),
+        make_pair(m_brightness, false),
+        make_pair(m_gamma, false),
+        make_pair(m_framerate, update[paramFramerate]),
+        make_pair(m_shutter, update[paramShutter]),
+        make_pair(m_gain, false));
 
       if (update[paramBits]) {
-	m_camera[k]->updatePixelFormat(m_bitsPerPixel);
-	m_camera[k]->startCapture();
-	update[paramBits] = false;
+        // if we're updating pixel formats, resume triggering of the master cam after switch
+        m_camera[m_masterCameraIndex]->updatePixelFormat(m_bitsPerPixel);
+        m_camera[m_masterCameraIndex]->startCapture();
+        update[paramBits] = false;
       }
       m_paramUpdatePending = false;
     }
 
-    vector<size_t> histogram(256);
-
+    // single shot frame grab
     if (m_oneshot) {
-      ofstream cameraNamesFile(m_dirname + "/cameranames.txt");
-      for (auto& cam : m_camera) {
-	cameraNamesFile << to_string(cam->getSerialNumber()) << "\n";
-      }
-      cameraNamesFile.close();
+      writeCameraNames(m_dirname + "/cameranames.txt");
 
+      // in one shot mode, we publish 1 frame from each camera and stop recording
       for (auto i = cameraOffset; i < lastCamera; ++i) {
-	void* bytes = m_camera[i]->getFrame();
-	m_oneshotIdx[i % consumerCount].push_back(i);
+        void* bytes = m_camera[i]->getFrame();
 
-	auto nextFrame = m_consumerBuf[i % consumerCount].getHead();
-	nextFrame->frameNumber = frameNumber;
-	nextFrame->cameraNumber = i;
-	nextFrame->imageBytes = bytes;
-	m_consumerBuf[i % consumerCount].advanceHead();
+        // populate indices of cameras that the single frame is coming from
+        // in camera iteration order (this will be the disk order)
+        m_oneshotIdx[i % m_consumerCount].emplace_back(i);
+
+        auto nextFrame = m_consumerBuf[i % m_consumerCount].getHead();
+        assert(nextFrame != nullptr);
+        nextFrame->frameNumber = frameNumber;
+        nextFrame->frameSize = frameSize();
+        nextFrame->cameraNumber = i;
+        nextFrame->cameraSerial = m_camera[i]->getSerialNumber();
+        memcpy(nextFrame->imageBytes, bytes, frameSize());
+        m_consumerBuf[i % m_consumerCount].advanceHead();
       }
 
-      for (auto k = 0; k < consumerCount; ++k) {
-	m_oneshotCount[k] = m_oneshotIdx[k].size();
+      for (auto k = 0; k < m_consumerCount; ++k) {
+        // load oneshot control counter
+        m_oneshotCount[k] = m_oneshotIdx[k].size();
       }
 
+      // unset producer one-shot flag so we don't re-enter on next iteration of grab loop
       m_oneshot = false;
     }
 
-    for (auto i = cameraOffset; i < lastCamera; ++i) {
-      const size_t sz = frameSize();
-      const int cid = i % consumerCount; // ping-pong between output threads
-      ++frameCount;
+    // main grab loop
+    const size_t sz = frameSize();
+
+    for (auto i = cameraOffset; i < lastCamera; ++i, ++frameCount) {
+      const int cid = i % m_consumerCount; // ping-pong between output threads
 
       if (i == 0 && m_startRecording) {
-	m_startRecording = false;
-	m_recording = true;
-
-	ofstream cameraNamesFile(m_dirname + "/cameranames.txt");
-	for (auto& cam : m_camera) {
-	  cameraNamesFile << to_string(cam->getSerialNumber()) << "\n";
-	}
-	cameraNamesFile.close();
+        m_startRecording = false;
+        m_recording = true;
+        writeCameraNames(m_dirname + "/cameranames.txt");
       }
 
       if (i == 0 && m_stopRecording) {
-	m_stopRecording = false;
-	m_recording = false;
-	m_consumerBuf[0].done();
-	m_consumerBuf[1].done();
+        m_stopRecording = false;
+        m_recording = false;
+        for (auto& cbuf : m_consumerBuf) {
+          cbuf.done();
+        }
       }
 
       // Retrieve an image from buffer
       FramePacket* nextFrame = nullptr;
 
       try {
-	void* bytes = m_camera[i]->getFrame();
-	// loop invariant; if this fails, it means the program is not written correctly
-	assert(bytes != nullptr);
+        void* bytes = m_camera[i]->getFrame();
+        // loop invariant; if this fails, it means the program is not written correctly
+        assert(bytes != nullptr);
 
-	if (m_recording) {
-	  nextFrame = m_consumerBuf[cid].getHead();
-	  nextFrame->frameNumber = frameNumber;
-	  nextFrame->cameraNumber = i;
-	  nextFrame->imageBytes = bytes;
-	  m_consumerBuf[cid].advanceHead();
-	  ++frameNumber;
-	}
+        if (m_recording) {
+          // if recording, copy the frame to the buffer
+          nextFrame = m_consumerBuf[cid].getHead();
+          assert(nextFrame != nullptr);
+          nextFrame->frameNumber = frameNumber;
+          nextFrame->frameSize = frameSize();
+          nextFrame->cameraSerial = m_camera[i]->getSerialNumber();
+          nextFrame->cameraNumber = i;
+          memcpy(nextFrame->imageBytes, bytes, frameSize());
+          m_consumerBuf[cid].advanceHead();
+          ++frameNumber;
+        }
 
-	for (auto idx : m_sample) {
-	  auto p = (uint8_t*)bytes;
-	  ++histogram[p[idx]];
-	}
-
-	if (i == m_previewIndex) {
-	  m_cameraView.updatePreviewFrame(bytes);
-	}	
+        if (i == m_previewIndex) {
+          if (!m_recording) {
+            m_cameraView.updatePreviewFrame(bytes);
+          } else {
+            m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
+          }
+          m_cameraView.update();
+        }
       } catch (...) {
-	cerr << "Error when grabbing a frame from the camera " << i << endl;
+        cerr << "Error when grabbing a frame from the camera " << i << endl;
 
-	for (auto& cam : m_camera) {
-	  cam->stopCapture();
-	  cam->toggleStrobeOut(m_pinStrobe, false);
-	  cam->detach();
-	}
-	throw "Error grabbing a frame from one of the cameras.";
+        for (auto& cam : m_camera) {
+          cam->stopCapture();
+          cam->toggleStrobeOut(m_pinStrobe, false);
+          cam->detach();
+        }
+        throw "Error grabbing a frame from one of the cameras.";
       }
     }
   }
@@ -375,7 +351,7 @@ void CameraController::cameraProducer(const unsigned int id) {
 void CameraController::cameraConsumer(const unsigned int id) {
   cpu_set_t threadCpuAffinity;
   CPU_ZERO(&threadCpuAffinity);
-  CPU_SET(id, &threadCpuAffinity);
+  CPU_SET(m_producerCount + id, &threadCpuAffinity);
 
   sched_setaffinity(0, sizeof(threadCpuAffinity), &threadCpuAffinity);
 
@@ -388,21 +364,27 @@ void CameraController::cameraConsumer(const unsigned int id) {
   m_slaveCond[id].wait(lock);
 
   while (m_keepRunning) {
+    // for one shot count only, we read pre-specified number of frames,
+    // based on indices from m_oneshotIdx vector and save them to disk
     if (m_oneshotCount[id] == m_oneshotIdx[id].size()) {
       string fname = m_dirname + "/" + to_string(id) + ".bin";
-      fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT, 0644);
+      fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT | O_DIRECT, 0644);
       if (fd < 0) {
-	assert(!"Can't create the destination file");
+        assert(!"Can't create the destination file");
       }
 
       for (auto& idx : m_oneshotIdx[id]) {
-	auto next = m_consumerBuf[id].getTail();
-	ssize_t count = write(fd, next->imageBytes, frameSize());
-	if (count < 0) {
-          throw "error writing data to disk in consumer " + to_string(id);
-	}
+        auto next = m_consumerBuf[id].getTail();
+        uint32_t* ptr = reinterpret_cast<uint32_t*>(next->imageBytes);
+        ptr[0] = next->frameSize;
+        ptr[1] = next->cameraSerial;
 
-	m_consumerBuf[id].advanceTail();
+        ssize_t count = write(fd, next->imageBytes, next->frameSize);
+        if (count < 0) {
+          throw "error writing data to disk in consumer " + to_string(id);
+        }
+
+        m_consumerBuf[id].advanceTail();
       }
 
       m_oneshotCount[id] = -1;
@@ -411,11 +393,11 @@ void CameraController::cameraConsumer(const unsigned int id) {
 
     if (!rec && m_recording) {
       string fname = m_dirname + "/" + to_string(id) + ".bin";
-      fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT, 0644);
+      fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT | O_DIRECT, 0644);
       if (fd < 0) {
-	assert(!"Can't create the destination file");
+        assert(!"Can't create the destination file");
       } else {
-	rec = true;
+        rec = true;
       }
     }
 
@@ -428,32 +410,34 @@ void CameraController::cameraConsumer(const unsigned int id) {
     if (rec) {
       FramePacket* next;
       while ((next = m_consumerBuf[id].getTail()) != nullptr) {
-	ssize_t count = write(fd, next->imageBytes, frameSize());
-	if (count < 0) {
-	  assert(!"error writing data to disk");
-	}
+        auto ptr = reinterpret_cast<uint32_t*>(next->imageBytes);
+        ptr[0] = next->frameSize;
+        ptr[1] = next->cameraSerial;
 
-	total += count;
-	++nimg;
-	m_consumerBuf[id].advanceTail();
+        ssize_t count = write(fd, next->imageBytes, next->frameSize);
+        if (count < 0) {
+          close(fd);
+          throw "error writing data to disk in consumer " + to_string(id);
+        }
+
+        total += count;
+        ++nimg;
+        m_consumerBuf[id].advanceTail();
       }
     }
   }
 }
 
 void CameraController::startSlaveCapture() {
-  auto k = 0;
-  for (auto& cam : m_camera) {
-    auto master = (k == std::get<1>(m_masterCamera));
+  for (auto k = 0; k < m_camera.size(); ++k) {
+    m_camera[k]->toggleStrobeOut(1, false);
 
-    cam->toggleStrobeOut(1, false);
-
-    if (!master) {
-      cam->toggleStrobeOut(3, false);
-      cam->startCapture();
+    if (k == m_masterCameraIndex) {
+      continue;
     }
 
-    ++k;
+    m_camera[k]->toggleStrobeOut(3, false);
+    m_camera[k]->startCapture();
   }
 
   for (auto& cond : m_slaveCond) {
@@ -462,18 +446,12 @@ void CameraController::startSlaveCapture() {
 }
 
 void CameraController::startMasterCapture() {
-  auto idx = std::get<1>(m_masterCamera);
-
-  m_camera[idx]->toggleStrobeOut(m_pinStrobe, true);
-  m_camera[idx]->startCapture();
+  m_camera[m_masterCameraIndex]->toggleStrobeOut(m_pinStrobe, true);
+  m_camera[m_masterCameraIndex]->startCapture();
 
   for (auto& cond : m_cond) {
     cond.notify_one();
   }
-}
-
-size_t CameraController::frameSize() const {
-  return (m_width * m_height * m_bitsPerPixel) / 8;
 }
 
 void CameraController::setPreviewCamera(unsigned int k) {
@@ -516,4 +494,12 @@ CameraController::~CameraController() {
     cam->stopCapture();
     cam->detach();
   }
+}
+
+void CameraController::writeCameraNames(const string& path) {
+  ofstream cameraNamesFile(path);
+  for (auto& cam : m_camera) {
+    cameraNamesFile << to_string(cam->getSerialNumber()) << "\n";
+  }
+  cameraNamesFile.close();
 }

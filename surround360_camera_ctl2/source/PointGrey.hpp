@@ -101,7 +101,7 @@ namespace surround360 {
 
     unsigned int m_width {2448};
     unsigned int m_height {2048};
-    
+
   private:
     static fc::BusManager& getBusManager();
 

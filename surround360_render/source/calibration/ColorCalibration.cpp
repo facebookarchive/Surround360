@@ -270,82 +270,95 @@ void writeIspConfigFile(
   cameraIsp.dumpConfigFile(ispConfigFileOut);
 }
 
-Vec3f findBlackPoint(
+Vec3f findBlackLevel(
     const Mat& raw,
     const string& ispConfigFile,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
 
-  // Ignore 0-valued pixels (could be dead pixels)
-  Mat maskNonZero;
-  threshold(raw, maskNonZero, 0, 255, THRESH_BINARY);
-
-  // Ignore borders of image (e.g. embedded info)
-  static const float kFracCrop = 0.7f;
-  Mat maskCenter = createMaskFromCenter(raw, kFracCrop);
-
-  const string maskBlackLevelImageFilename =
-    outputDir + "/" + to_string(++stepDebugImages) + "_black_point_mask.png";
-  imwriteExceptionOnFail(maskBlackLevelImageFilename, maskNonZero & maskCenter);
-
-  double blackLevel;
-  Point minLoc;
-  minMaxLoc(
-    raw, &blackLevel, nullptr, &minLoc, nullptr, maskNonZero & maskCenter);
-
-  if (saveDebugImages) {
-    Mat rawRGB(raw.size(), CV_8UC3);
-    cvtColor(raw, rawRGB, CV_GRAY2RGB);
-    static const int kRadius = 5;
-    circle(rawRGB, minLoc, kRadius, Scalar(0, 255, 0), 2);
-
-    const string rawBlurImageFilename =
-      outputDir + "/" + to_string(++stepDebugImages) + "_black_point.png";
-    imwriteExceptionOnFail(rawBlurImageFilename, rawRGB);
+  // Divide raw into R, G and B channels
+  const int bitsPerPixel = getBitsPerPixel(raw);
+  const int maxPixelValue = (1 << bitsPerPixel) - 1;
+  static const int kNumChannels = 3;
+  vector<Mat> RGBs;
+  for (int i = 0; i < kNumChannels; ++i) {
+    // Initialize channel to max value. Unused pixels will be at the high end of
+    // the histogram, which will not be reached
+    RGBs.push_back(Mat(raw.size(), CV_32F, Scalar(maxPixelValue)));
   }
 
-  // Get closest R, G and B values from Bayer pattern
-  return getClosestRGB(raw, minLoc, ispConfigFile);
-}
+  CameraIsp cameraIsp(getJson(ispConfigFile), bitsPerPixel);
+  for (int i = 0; i < raw.rows; ++i) {
+    for (int j = 0; j < raw.cols; j++) {
+      const int channelIdx =
+        cameraIsp.redPixel(i, j) ? 0 : (cameraIsp.greenPixel(i, j) ? 1 : 2);
+      RGBs[channelIdx].at<float>(i, j) = raw.at<uint16_t>(i, j);
+    }
+  }
 
-Mat createMaskFromCenter(const Mat& image, const float percentage) {
-  const int topRow = (1.0f - percentage) * image.rows / 2.0f;
-  const int topCol = (1.0f - percentage) * image.cols / 2.0f;
-  Mat mask(image.size(), CV_8UC1, Scalar::all(0));
-  Rect roi(topCol, topRow, percentage * image.cols, percentage * image.rows);
-  mask(roi).setTo(Scalar::all(255));
-  return mask;
-}
+  // Calculate per channel histograms
+  Vec3f blackLevel = Vec3f(0.0f, 0.0f, 0.0f);
+  for (int i = 0; i < kNumChannels; ++i) {
+    Mat hist = computeHistogram(RGBs[i]);
 
-Vec3f getClosestRGB(
-    const Mat& image,
-    const Point center,
-    const string& ispConfigFile) {
-
-  // Load camera ISP configuration
-  static const int kNBits = 8;
-  CameraIsp cameraIsp(getJson(ispConfigFile), kNBits);
-
-  // Search in a 3x3 window surrounding pixel location
-  Vec3f rgb;
-  for (int rowOffset = -1; rowOffset < 2; ++rowOffset) {
-    for (int colOffset = -1; colOffset < 2; ++colOffset) {
-      const int row = center.y + rowOffset;
-      const int col = center.x + colOffset;
-      const int val = image.at<uchar>(row, col);
-
-      if (cameraIsp.redPixel(row, col)) {
-        rgb[0] = val / 255.0f;
-      } else if (cameraIsp.greenPixel(row, col)) {
-        rgb[1] = val / 255.0f;
-      } else {
-        rgb[2] = val / 255.0f;
+    // Black level is the lowest non-zero value with enough pixel count (to
+    // avoid noise and dead pixels)
+    for (int h = 0; h < maxPixelValue; h++) {
+      static const int kNumPixelsMin = 50;
+      if (hist.at<float>(h) > kNumPixelsMin) {
+        blackLevel[i] = h;
+        break;
       }
     }
   }
 
-  return rgb;
+  if (saveDebugImages) {
+    Mat blackLevelMask = Mat::zeros(raw.size(), CV_8UC1);
+    for (int i = 0; i < kNumChannels; ++i) {
+      Mat mask;
+      inRange(RGBs[i], blackLevel[i], blackLevel[i], mask);
+      bitwise_or(blackLevelMask, mask, blackLevelMask);
+    }
+
+    Mat rawRGB(raw.size(), CV_8UC3);
+    cvtColor(raw, rawRGB, CV_GRAY2RGB);
+    rawRGB.setTo(Scalar(0, maxPixelValue, 0), blackLevelMask);
+    const string rawBlurImageFilename =
+      outputDir + "/" + to_string(++stepDebugImages) + "_black_level.png";
+    imwriteExceptionOnFail(rawBlurImageFilename, rawRGB);
+  }
+
+  LOG(INFO) << "Black level (" << bitsPerPixel << "-bit): " << blackLevel;
+
+  for (int i = 0; i < kNumChannels; ++i) {
+    blackLevel[i] /= maxPixelValue;
+  }
+
+  return blackLevel;
+}
+
+Mat computeHistogram(const Mat& image) {
+  static const int kNumImages = 1;
+  static const int* kChannelsAuto = 0;
+  static const Mat kHistMask = Mat();
+  static const int kNumDims = 1;
+  const int bitsPerPixel = getBitsPerPixel(image);
+  const float maxPixelValue = float((1 << bitsPerPixel) - 1);
+  const int histSize = maxPixelValue + 1;
+  float range[] = {0, maxPixelValue};
+  const float *ranges[] = {range};
+  Mat hist;
+  calcHist(
+    &image,
+    kNumImages,
+    kChannelsAuto,
+    kHistMask,
+    hist,
+    kNumDims,
+    &histSize,
+    ranges);
+  return hist;
 }
 
 vector<ColorPatch> detectColorChart(

@@ -140,19 +140,16 @@ void writeIspConfigFile(
   const Mat& ccm = Mat::eye(3, 3, CV_32F),
   const Vec3f& gamma = Vec3f(1.0f, 1.0f, 1.0f));
 
-Vec3f findBlackPoint(
+// Finds black level. Assumes there's a black hole in the input image
+Vec3f findBlackLevel(
   const Mat& raw,
   const string& ispConfigFile,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);
 
-Mat createMaskFromCenter(const Mat& image, const float percentage);
-
-Vec3f getClosestRGB(
-  const Mat& image,
-  const Point center,
-  const string& ispConfigFile);
+// Computes one dimensional histogram of input image
+Mat computeHistogram(const Mat& image);
 
 // Detects color chart patches on the input image. Returns a list of color
 // patches containing location, shape and color information

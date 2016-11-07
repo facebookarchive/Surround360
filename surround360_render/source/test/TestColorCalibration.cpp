@@ -120,8 +120,8 @@ int main(int argc, char** argv) {
     blackLevel = Vec3f(blVec[0] / 255.0f, blVec[1] / 255.0f, blVec[2] / 255.0f);
   } else if (FLAGS_black_level_darkest) {
     // Find black level on original raw
-    blackLevel = findBlackPoint(
-      raw,
+    blackLevel = findBlackLevel(
+      raw16,
       FLAGS_isp_passthrough_path,
       FLAGS_save_debug_images,
       FLAGS_output_data_dir,

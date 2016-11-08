@@ -51,7 +51,11 @@ IF (DEFINED HALIDE_DIR)
 
   FUNCTION(halide_gen_app name folder)
      ADD_EXECUTABLE("${name}" ${ARGN})
-     TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide gflags dl z tinfo)
+     IF(NOT APPLE AND NOT MSVC)
+       TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide gflags dl z tinfo)
+     ELSE()
+       TARGET_LINK_LIBRARIES("${name}" PRIVATE Halide gflags dl z)
+     ENDIF()
      SET_TARGET_PROPERTIES("${name}" PROPERTIES FOLDER "${folder}")
      IF (MSVC)
         SET_TARGET_PROPERTIES("${name}" PROPERTIES LINK_FLAGS "/STACK:8388608,1048576")
@@ -107,22 +111,37 @@ IF (DEFINED HALIDE_DIR)
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h")
   ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
 
-  TARGET_LINK_LIBRARIES(
-     Raw2Rgb
-     "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-     "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-     "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-     "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-     LibVrCamera
-     LibJSON
-     glog
-     gflags
-     ${OpenCV_LIBS}
-     Halide
-     dl
-     z
-     tinfo
-  )
+  IF(NOT APPLE AND NOT MSVC)
+    TARGET_LINK_LIBRARIES(
+       Raw2Rgb
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       LibVrCamera
+       LibJSON
+       glog
+       gflags
+       ${OpenCV_LIBS}
+       Halide
+       dl
+       tinfo
+       z)
+  ELSE()
+      TARGET_LINK_LIBRARIES(
+       Raw2Rgb
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+       LibVrCamera
+       LibJSON
+       glog
+       gflags
+       ${OpenCV_LIBS}
+       Halide
+       dl)
+  ENDIF()
 ELSE()
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp)
   TARGET_LINK_LIBRARIES(
@@ -133,7 +152,6 @@ ELSE()
      gflags
      dl
      z
-     tinfo
      ${OpenCV_LIBS}
   )
 ENDIF()

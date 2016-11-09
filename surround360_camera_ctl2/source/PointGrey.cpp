@@ -478,7 +478,7 @@ bool PointGreyCamera::setCameraPropAbs(
     prop.onOff = false;
   } else {
     if (propType == fc::WHITE_BALANCE) {
-      prop.onOff = true;
+      prop.onOff = false;
     } else {
       prop.absValue = stof(val);
     }
@@ -560,7 +560,7 @@ bool PointGreyCamera::setCameraProps(
       .name = "GAIN" },
     { .type = fc::WHITE_BALANCE,
       .active = true,
-      .value = "615 821",
+      .value = "0 0",
       .name = "WHITE_BALANCE" }
   };
 

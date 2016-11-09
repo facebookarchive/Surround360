@@ -2,7 +2,7 @@
     "CameraIsp" : {
         "serial" : 0,
         "name" : "PointGrey Grasshopper",
-        "bitsPerPixel" : 8,
+        "bitsPerPixel" : 16,
         "compandingLut" :  [[0.0,  0.0, 0.0],
                             [0.6,  0.6, 0.0],
                             [0.7,  0.7, 0.0],

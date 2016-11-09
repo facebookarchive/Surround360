@@ -93,7 +93,7 @@ if __name__ == "__main__":
   file_runtimes = open(out_dir + "/runtimes.txt", 'w', 0)
   start_time = timer()
 
-  isp_passthrough_json = surround360_render_dir + "/res/config/isp/cmosis_sunex_passthrough.json"
+  isp_passthrough_json = surround360_render_dir + "/res/config/isp/passthrough.json"
   raw_charts = list_tiff(data_dir + "/charts")
 
   ### First find all the X-intercepts ###

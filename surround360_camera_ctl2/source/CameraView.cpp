@@ -22,39 +22,40 @@ using namespace surround360;
 using namespace std;
 
 static const string defaultIsp =
-"{"
-"   \"CameraIsp\" : {"
-"        \"serial\" : 0,"
-"        \"name\" : \"PointGrey Grasshopper\","
-"        \"bitsPerPixel\" : 16,"
-"        \"compandingLut\" :  [[0.000, 0.000, 0.000],"
-"                            [0.600, 0.600, 0.000],"
-"                            [0.700, 0.700, 0.000],"
-"                            [1.000, 1.000, 0.000]],"
-"        \"blackLevel\" : [6939.000, 6939.000, 6939.000],"
-"        \"clampMin\" : [0.000, 0.000, 0.000],"
-"        \"clampMax\" : [0.962, 0.967, 0.967],"
-"        \"vignetteRollOff\" : [[1.000, 1.000, 1.000],"
-"                             [1.000, 1.000, 1.000],"
-"                             [1.000, 1.000, 1.000],"
-"                             [1.000, 1.000, 1.000],"
-"                             [1.100, 1.100, 1.100]],"
-"        \"whiteBalanceGain\" : [1.0, 1.0, 1.0],"
-"        \"stuckPixelThreshold\" : 0,"
-"        \"stuckPixelDarknessThreshold\" : 0.000,"
-"        \"stuckPixelRadius\" : 0,"
-"        \"denoise\" : 0.000,"
-"        \"denoiseRadius\" : 0,"
-"        \"ccm\" : [[1.18936, -0.39975, -0.03933],"
-"                 [0.03914, 1.54172, -0.53255],"
-"                 [-0.32338, -0.18724, 1.52166]],"
-"        \"sharpenning\" : [0.000, 0.000, 0.000],"
-"        \"saturation\" : 1.000,"
-"        \"contrast\" : 1.000,"
-"        \"gamma\" : [0.454, 0.454, 0.454],"
-"        \"bayerPattern\" : \"GBRG\""
-"    }"
-"}";
+R"(
+{
+  "CameraIsp" : {
+    "serial" : 0,
+    "name" : "PointGrey Grasshopper",
+    "bitsPerPixel" : 16,
+    "compandingLut" :  [[0.000, 0.000, 0.000],
+                        [0.600, 0.600, 0.000],
+                        [0.700, 0.700, 0.000],
+                        [1.000, 1.000, 0.000]],
+    "blackLevel" : [6939.000, 6939.000, 6939.000],
+    "clampMin" : [0.000, 0.000, 0.000],
+    "clampMax" : [0.962, 0.967, 0.967],
+    "vignetteRollOff" : [[1.000, 1.000, 1.000],
+                         [1.000, 1.000, 1.000],
+                         [1.000, 1.000, 1.000],
+                         [1.000, 1.000, 1.000],
+                         [1.100, 1.100, 1.100]],
+    "whiteBalanceGain" : [1.0, 1.0, 1.0],
+    "stuckPixelThreshold" : 0,
+    "stuckPixelDarknessThreshold" : 0.000,
+    "stuckPixelRadius" : 0,
+    "denoise" : 0.000,
+    "denoiseRadius" : 0,
+    "ccm" : [[1.18936, -0.39975, -0.03933],
+             [0.03914, 1.54172, -0.53255],
+             [-0.32338, -0.18724, 1.52166]],
+    "sharpenning" : [0.000, 0.000, 0.000],
+    "saturation" : 1.000,
+    "contrast" : 1.000,
+    "gamma" : [0.454, 0.454, 0.454],
+    "bayerPattern" : "GBRG"
+  }
+})";
 
 CameraView::CameraView(Gtk::GLArea& glarea)
   : m_glAreaRef(glarea),

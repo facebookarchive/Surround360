@@ -10,6 +10,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <iterator>
 
 #include "CameraIsp.h"
 #include "ColorCalibration.h"

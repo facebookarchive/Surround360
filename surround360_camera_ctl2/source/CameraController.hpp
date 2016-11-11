@@ -92,7 +92,6 @@ private:
   float  m_exposure;
   float  m_brightness;
   float  m_gamma;
-  std::string m_whiteBalance;
 
   std::atomic<bool>   m_keepRunning;
   std::atomic<bool>   m_recording;

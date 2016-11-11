@@ -41,7 +41,6 @@ CameraController::CameraController(
   : m_brightness(10.449f),
     m_exposure(0.850f),
     m_gamma(1.250f),
-    m_whiteBalance("450 796"),
     m_keepRunning(true),
     m_recording(false),
     m_startRecording(false),
@@ -227,7 +226,7 @@ void CameraController::cameraProducer(const unsigned int id) {
           make_pair(m_gamma, false),
           make_pair(m_framerate, update[paramFramerate]),
           make_pair(m_shutter, update[paramShutter]),
-          make_pair(m_gain, false));
+          make_pair(m_gain, true));
 
         if (update[paramBits]) {
           m_camera[k]->stopCapture();
@@ -243,7 +242,7 @@ void CameraController::cameraProducer(const unsigned int id) {
         make_pair(m_gamma, false),
         make_pair(m_framerate, update[paramFramerate]),
         make_pair(m_shutter, update[paramShutter]),
-        make_pair(m_gain, false));
+        make_pair(m_gain, true));
 
       if (update[paramBits]) {
         // if we're updating pixel formats, resume triggering of the master cam after switch

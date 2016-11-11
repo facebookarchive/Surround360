@@ -42,8 +42,6 @@ UNPACK_COMMAND_TEMPLATE = """
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --file_count {DISK_COUNT}
---nbits 12
---image_width 2448
 """
 
 ARRANGE_COMMAND_TEMPLATE = """

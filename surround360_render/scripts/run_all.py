@@ -42,6 +42,9 @@ UNPACK_COMMAND_TEMPLATE = """
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --file_count {DISK_COUNT}
+--image_width {IMAGE_WIDTH}
+--image_height {IMAGE_HEIGHT}
+--nbits {NBITS}
 """
 
 ARRANGE_COMMAND_TEMPLATE = """
@@ -132,6 +135,9 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
+  parser.add_argument('--image_width',                metavar='Image Width', help='image width', required=False, default='2048')
+  parser.add_argument('--image_height',               metavar='Image Height', help='image height', required=False, default='2048')
+  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth', required=False, choices=['8', '12'], default='8')
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
@@ -220,6 +226,9 @@ if __name__ == "__main__":
   args = parse_args()
   data_dir                  = args["data_dir"]
   dest_dir                  = args["dest_dir"]
+  image_width               = args["image_width"]
+  image_height              = args["image_height"]
+  nbits                     = args["nbits"]
   quality                   = args["quality"]
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
@@ -302,6 +311,9 @@ if __name__ == "__main__":
     "START_FRAME": start_frame,
     "FRAME_COUNT": frame_count,
     "DISK_COUNT": disk_count,
+    "IMAGE_WIDTH": image_width,
+    "IMAGE_HEIGHT": image_height,
+    "NBITS": nbits,
   }
   unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
 

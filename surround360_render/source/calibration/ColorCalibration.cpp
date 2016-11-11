@@ -64,11 +64,11 @@ Mat getRaw(const string& ispConfigFile, const Mat& image) {
   return cameraIsp.getRawImage();
 }
 
-Mat findClampedPixels(const Mat& image) {
-  Mat clamped(image.size(), CV_8UC1, Scalar::all(128));
-  for (int y = 0; y < image.rows; ++y) {
-    for (int x = 0; x < image.cols; ++x) {
-      const int pixelVal = image.at<uchar>(y, x);
+Mat findClampedPixels(const Mat& image8) {
+  Mat clamped(image8.size(), image8.type(), Scalar::all(128));
+  for (int y = 0; y < image8.rows; ++y) {
+    for (int x = 0; x < image8.cols; ++x) {
+      const int pixelVal = image8.at<uchar>(y, x);
       if (pixelVal == 0 || pixelVal == 255) {
         clamped.at<uchar>(y, x) = pixelVal;
       }
@@ -133,6 +133,18 @@ ColorResponse computeRGBResponse(
   }
 
   return colorResponse;
+}
+
+void saveBlackLevel(const Vec3f& blackLevel, const string& outputDir) {
+  const string blackLevelFilename = outputDir + "/black_level.txt";
+  ofstream blackLevelStream(blackLevelFilename, ios::out);
+
+  if (!blackLevelStream) {
+    throw VrCamException("file open failed: " + blackLevelFilename);
+  }
+
+  blackLevelStream << blackLevel;
+  blackLevelStream.close();
 }
 
 void saveXIntercepts(
@@ -271,77 +283,147 @@ void writeIspConfigFile(
 }
 
 Vec3f findBlackLevel(
-    const Mat& raw,
+    const Mat& raw16,
     const string& ispConfigFile,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
 
   // Divide raw into R, G and B channels
-  const int bitsPerPixel = getBitsPerPixel(raw);
+  const int bitsPerPixel = getBitsPerPixel(raw16);
   const int maxPixelValue = (1 << bitsPerPixel) - 1;
   static const int kNumChannels = 3;
   vector<Mat> RGBs;
   for (int i = 0; i < kNumChannels; ++i) {
     // Initialize channel to max value. Unused pixels will be at the high end of
     // the histogram, which will not be reached
-    RGBs.push_back(Mat(raw.size(), CV_32F, Scalar(maxPixelValue)));
+    RGBs.push_back(Mat(raw16.size(), CV_32F, Scalar(maxPixelValue)));
   }
 
   CameraIsp cameraIsp(getJson(ispConfigFile), bitsPerPixel);
-  for (int i = 0; i < raw.rows; ++i) {
-    for (int j = 0; j < raw.cols; j++) {
+  for (int i = 0; i < raw16.rows; ++i) {
+    for (int j = 0; j < raw16.cols; j++) {
       const int channelIdx =
         cameraIsp.redPixel(i, j) ? 0 : (cameraIsp.greenPixel(i, j) ? 1 : 2);
-      RGBs[channelIdx].at<float>(i, j) = raw.at<uint16_t>(i, j);
+      RGBs[channelIdx].at<float>(i, j) = raw16.at<uint16_t>(i, j);
     }
   }
 
   // Calculate per channel histograms
-  Vec3f blackLevel = Vec3f(0.0f, 0.0f, 0.0f);
+  Mat blackHoleMask = Mat::zeros(raw16.size(), CV_8UC1);
+  static const int kNumPixelsMin = 50;
+  double blackLevelThreshold = 0.0;
   for (int i = 0; i < kNumChannels; ++i) {
-    Mat hist = computeHistogram(RGBs[i]);
-
-    // Black level is the lowest non-zero value with enough pixel count (to
-    // avoid noise and dead pixels)
+    // Black level threshold is the lowest non-zero value with enough pixel
+    // count (to avoid noise and dead pixels)
+    Mat hist = computeHistogram(RGBs[i], Mat());
     for (int h = 0; h < maxPixelValue; h++) {
-      static const int kNumPixelsMin = 50;
       if (hist.at<float>(h) > kNumPixelsMin) {
-        blackLevel[i] = h;
+        blackLevelThreshold = h;
         break;
       }
     }
+
+    // Create mask with all pixels below threshold
+    Mat mask;
+    inRange(RGBs[i], 0.0f, blackLevelThreshold, mask);
+    blackHoleMask = (blackHoleMask | mask);
+  }
+
+  // Black hole mask can contain outliers and pixels outside black hole. We need
+  // to filter it
+  vector<vector<Point>> contours;
+  static const float kStraightenFactor = 0.01f;
+  contours = findContours(
+      blackHoleMask, false, outputDir, stepDebugImages, kStraightenFactor);
+
+  // Filter contours
+  vector<vector<Point>> contoursFiltered;
+  vector<Point2f> circleCenters;
+  vector<float> circleRadii;
+  for (int i = 0; i < contours.size(); ++i) {
+    vector<Point2i> cont = contours[i];
+    const int contArea = contourArea(cont);
+
+    Point2f circleCenter;
+    float circleRadius;
+    minEnclosingCircle(cont, circleCenter, circleRadius);
+    const float circleArea = M_PI * circleRadius * circleRadius;
+
+    // Discard contours that are too small and non-circular
+    static const int kMinNumVertices = 10;
+    static const float kMaxRatioAreas = 0.5f;
+    if (contArea < kNumPixelsMin ||
+        cont.size() < kMinNumVertices ||
+        contArea / circleArea < kMaxRatioAreas) {
+      continue;
+    }
+
+    circleCenters.push_back(circleCenter);
+    circleRadii.push_back(circleRadius);
+    contoursFiltered.push_back(contours[i]);
   }
 
   if (saveDebugImages) {
-    Mat blackLevelMask = Mat::zeros(raw.size(), CV_8UC1);
-    for (int i = 0; i < kNumChannels; ++i) {
-      Mat mask;
-      inRange(RGBs[i], blackLevel[i], blackLevel[i], mask);
-      bitwise_or(blackLevelMask, mask, blackLevelMask);
+    Mat contoursPlot = Mat::zeros(blackHoleMask.size(), CV_8UC3);
+    RNG rng(12345);
+    for(int i = 0; i < contoursFiltered.size(); ++i) {
+      Scalar color =
+        Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+      drawContours(contoursPlot, contoursFiltered, i, color);
+      circle(contoursPlot, circleCenters[i], (int)circleRadii[i], color);
     }
-
-    Mat rawRGB(raw.size(), CV_8UC3);
-    cvtColor(raw, rawRGB, CV_GRAY2RGB);
-    rawRGB.setTo(Scalar(0, maxPixelValue, 0), blackLevelMask);
-    const string rawBlurImageFilename =
-      outputDir + "/" + to_string(++stepDebugImages) + "_black_level.png";
-    imwriteExceptionOnFail(rawBlurImageFilename, rawRGB);
+    const string contoursImageFilename =
+      outputDir + "/" + to_string(++stepDebugImages) + "_contours_filtered.png";
+    imwriteExceptionOnFail(contoursImageFilename, contoursPlot);
   }
 
-  LOG(INFO) << "Black level (" << bitsPerPixel << "-bit): " << blackLevel;
+  // Get RGB median of each filtered contour
+  vector<Mat> blackHoleMasks(contoursFiltered.size());
+  vector<Vec3f> blackLevels(contoursFiltered.size());
+  double minNorm = DBL_MAX;
+  int minNormIdx = 0;
+  for(int i = 0; i < contoursFiltered.size(); ++i) {
+    // Create contour mask
+    blackHoleMasks[i] = Mat::zeros(blackHoleMask.size(), CV_8UC1);
+    drawContours(blackHoleMasks[i], contoursFiltered, i, Scalar(255), CV_FILLED);
 
-  for (int i = 0; i < kNumChannels; ++i) {
-    blackLevel[i] /= maxPixelValue;
+    Mat rawNormalized = getRaw(ispConfigFile, raw16);
+    static const bool kIsRaw = true;
+    blackLevels[i] =
+      getRgbMedianMask(rawNormalized, blackHoleMasks[i], ispConfigFile, kIsRaw);
+
+    // Find distance to [0, 0, 0]
+    double blackLevelNorm = norm(blackLevels[i]);
+    if (blackLevelNorm < minNorm) {
+      minNorm = blackLevelNorm;
+      minNormIdx = i;
+    }
   }
+
+  // Black level is the one closest to origin
+  Vec3f blackLevel = blackLevels[minNormIdx];
+
+  if (saveDebugImages) {
+    Mat rawRGB(raw16.size(), CV_8UC3);
+    cvtColor(raw16, rawRGB, CV_GRAY2RGB);
+    blackHoleMask = blackHoleMasks[minNormIdx];
+    rawRGB.setTo(Scalar(0, maxPixelValue, 0), blackHoleMask);
+
+    const string blackHoleMaskImageFilename =
+      outputDir + "/" + to_string(++stepDebugImages) + "_black_hole_mask.png";
+    imwriteExceptionOnFail(blackHoleMaskImageFilename, rawRGB);
+  }
+
+  const Vec3f blackLevelScaled = blackLevel * maxPixelValue;
+  LOG(INFO) << "Black level (" << bitsPerPixel << "-bit): " << blackLevelScaled;
 
   return blackLevel;
 }
 
-Mat computeHistogram(const Mat& image) {
+Mat computeHistogram(const Mat& image, const Mat& mask) {
   static const int kNumImages = 1;
   static const int* kChannelsAuto = 0;
-  static const Mat kHistMask = Mat();
   static const int kNumDims = 1;
   const int bitsPerPixel = getBitsPerPixel(image);
   const float maxPixelValue = float((1 << bitsPerPixel) - 1);
@@ -353,7 +435,7 @@ Mat computeHistogram(const Mat& image) {
     &image,
     kNumImages,
     kChannelsAuto,
-    kHistMask,
+    mask,
     hist,
     kNumDims,
     &histSize,
@@ -446,8 +528,11 @@ vector<ColorPatch> detectColorChart(
     const int height  = stats.at<int>(label, CC_STAT_HEIGHT);
 
     // Assuming chart is centered
-    if (left > center.x || top > center.y ||
-        left + width < center.x || top + height < center.y) {
+    static const float kFracErrorX = 0.10f;
+    if (left > (1.0f + kFracErrorX) * center.x ||
+        top > center.y ||
+        left + width < (1.0f - kFracErrorX) * center.x ||
+        top + height < center.y) {
       continue;
     }
 
@@ -460,7 +545,7 @@ vector<ColorPatch> detectColorChart(
     bwLabel.setTo(Scalar::all(0));
     inRange(labels, label, label, bwLabel);
     contours = findContours(
-      bwLabel, false, outputDir, stepDebugImages, kStraightenFactor);
+      bwLabel, saveDebugImages, outputDir, stepDebugImages, kStraightenFactor);
 
     // Check if we have at least as many contours as number of patches
     if (contours.size() >= numSquaresW * numSquaresH) {
@@ -861,51 +946,57 @@ void computeRGBMedians(
     const bool isRaw,
     const string& ispConfigFile) {
 
-  Vec3f rgbMedian = Vec3f(-1.0f, -1.0f, -1.0f);
-  static const int kNumChannels = 3;
-
-  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(image));
-
   for (int i = 0; i < colorPatches.size(); ++i) {
-    // Only consider pixels inside patch mask
-    Mat locs;
-    findNonZero(colorPatches[i].mask, locs);
-
-    // Allocate space for patch values on each channel
-    vector<vector<float>> RGBs;
-    for (int ch = 0; ch < kNumChannels; ++ch) {
-      vector<float> channel;
-      RGBs.push_back(channel);
-    }
-
-    // Populate color channels
-    for (int ip = 0; ip < locs.rows; ++ip) {
-      Point p = locs.at<Point>(ip);
-
-      if (isRaw) {
-        const float patchValRaw = image.at<float>(p);
-        const int channelRaw = cameraIsp.redPixel(p.y, p.x)
-          ? 0 : (cameraIsp.greenPixel(p.y, p.x) ? 1 : 2);
-        RGBs[channelRaw].push_back(patchValRaw);
-      } else {
-        const Vec3f& patchVal = image.at<Vec3f>(p);
-        for (int ch = 0; ch < kNumChannels; ++ch) {
-          RGBs[ch].push_back(patchVal[ch]);
-        }
-      }
-    }
-
-    // Use partial sort to get median
-    for (int ch = 0; ch < kNumChannels; ++ch) {
-      vector<float>::iterator itMedian = RGBs[ch].begin() + RGBs[ch].size() / 2;
-      std::nth_element(RGBs[ch].begin(), itMedian, RGBs[ch].end());
-      rgbMedian[ch] = RGBs[ch][RGBs[ch].size() / 2];
-    }
-
-    colorPatches[i].rgbMedian = rgbMedian;
-
+    colorPatches[i].rgbMedian =
+      getRgbMedianMask(image, colorPatches[i].mask, ispConfigFile, isRaw);
     LOG(INFO) << "Patch " << i << " RGB median: " << colorPatches[i].rgbMedian;
   }
+}
+
+Vec3f getRgbMedianMask(
+    const Mat& image,
+    const Mat& mask,
+    const string& ispConfigFile,
+    const bool isRaw) {
+
+  // Allocate space for mask values on each channel
+  static const int kNumChannels = 3;
+  vector<vector<float>> RGBs;
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    vector<float> channel;
+    RGBs.push_back(channel);
+  }
+
+  // Populate color channels
+  Mat locs;
+  findNonZero(mask, locs);
+  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(image));
+  for (int ip = 0; ip < locs.rows; ++ip) {
+    Point p = locs.at<Point>(ip);
+
+    if (isRaw) {
+      const float valRaw = image.at<float>(p);
+      const int channelRaw = cameraIsp.redPixel(p.y, p.x)
+        ? 0 : (cameraIsp.greenPixel(p.y, p.x) ? 1 : 2);
+      RGBs[channelRaw].push_back(valRaw);
+    } else {
+      const Vec3f& val = image.at<Vec3f>(p);
+      for (int ch = 0; ch < kNumChannels; ++ch) {
+        RGBs[ch].push_back(val[ch]);
+      }
+    }
+  }
+
+  // Use partial sort to get median
+  Vec3f rgbMedian = Vec3f(-1.0f, -1.0f, -1.0f);
+  for (int ch = 0; ch < kNumChannels; ++ch) {
+    vector<float>::iterator itMedian = RGBs[ch].begin() + RGBs[ch].size() / 2;
+    std::nth_element(RGBs[ch].begin(), itMedian, RGBs[ch].end());
+    rgbMedian[ch] = RGBs[ch][RGBs[ch].size() / 2];
+  }
+
+  return rgbMedian;
+
 }
 
 Vec3f plotGrayPatchResponse(

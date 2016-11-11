@@ -37,6 +37,7 @@ def parse_args():
   parser.add_argument('--data_dir',             help='directory containing raw calibration images', required=True)
   parser.add_argument('--output_dir',           help='output directory', required=False)
   parser.add_argument('--black_level_darkest',  help='if true, assume black level is darkest point', action='store_true')
+  parser.add_argument('--black_level_adjust',   help='if true, sets each channel black level to median of all cameras', action='store_true')
   parser.add_argument('--black_level',          help='manual black level', required=False, default='NONE')
   return vars(parser.parse_args())
 
@@ -71,10 +72,15 @@ def run_threads(thread_list):
   for thread in thread_list:
     thread.join()
 
+def median(list):
+  q, r = divmod(len(list), 2)
+  return sorted(list)[q] if r else sum(sorted(list)[q - 1:q + 1]) / 2.0
+
 if __name__ == "__main__":
   args = parse_args()
   data_dir = args["data_dir"]
   black_level_darkest = args["black_level_darkest"]
+  black_level_adjust = args["black_level_adjust"]
   black_level = args["black_level"]
 
   print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
@@ -146,6 +152,29 @@ if __name__ == "__main__":
   text_intercepts = ("Intercept Xmin max: " + str(intercept_x_max) + ", " +
                      "Intercept Xmax min: " + str(intercept_x_min) + "\n")
   print_and_save(file_runtimes, text_intercepts)
+
+  ### Adapt all cameras to same per-channel black level (median) ###
+
+  if black_level_adjust:
+    print "Adjusting black levels...\n"
+
+    black_levels = {}
+    num_channels = 3
+    for j in range(num_channels):
+      black_levels[j] = [];
+
+    for i in range(len(out_dirs)):
+      black_level = json.loads(open(out_dirs[i] + "_" + step + "/black_level.txt").read())
+      print_and_save(file_runtimes, camera_names[i] + ": " + str(black_level) + "\n")
+      for j in range(num_channels):
+        black_levels[j].append(black_level[j]);
+
+    black_level_median = []
+    for j in range(num_channels):
+      black_level_median.append(median(black_levels[j]));
+
+    print "Black level median: " + str(black_level_median)
+    flags_extra += " --black_level \"" + " ".join(map(str, black_level_median)) + "\""
 
   step = "second_pass"
   print "\n" + step + "\n"

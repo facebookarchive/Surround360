@@ -35,7 +35,7 @@ DEFINE_string(output_data_dir,      ".",    "path to write data for debugging");
 DEFINE_double(clamp_min,            0.0,    "min clamping threshold");
 DEFINE_double(clamp_max,            1.0,    "max clamping threshold");
 DEFINE_bool(just_intercepts,        false,  "just compute RGB X-intercepts");
-DEFINE_string(black_level,          "",     "space-separated manual black level (8-bit)");
+DEFINE_string(black_level,          "",     "space-separated manual black level (values in range [0, 1])");
 DEFINE_bool(black_level_darkest,    false,  "if true, assume black level is darkest point");
 DEFINE_bool(save_debug_images,      false,  "save intermediate images");
 
@@ -55,10 +55,21 @@ int main(int argc, char** argv) {
 
   int stepDebugImages = 0;
 
-  Mat raw = imreadExceptionOnFail(FLAGS_image_path, CV_LOAD_IMAGE_GRAYSCALE);
+  Mat raw = imreadExceptionOnFail(
+    FLAGS_image_path, CV_LOAD_IMAGE_GRAYSCALE | CV_LOAD_IMAGE_ANYDEPTH);
 
-  // Working with 16-bit images
-  Mat raw16 = convert8bitTo16bit(raw);
+  Mat raw8;
+  Mat raw16;
+  const uint8_t rawDepth = raw.type() & CV_MAT_DEPTH_MASK;
+  if (rawDepth == CV_8U) {
+    raw8 = raw;
+    raw16 = convert8bitTo16bit(raw.clone());
+  } else if (rawDepth == CV_16U) {
+    raw8 = imreadExceptionOnFail(FLAGS_image_path, CV_LOAD_IMAGE_GRAYSCALE);
+    raw16 = raw;
+  } else {
+    throw VrCamException("Input image is not 8-bit or 16-bit");
+  }
 
   if (FLAGS_save_debug_images) {
     const string rawImageFilename =
@@ -68,7 +79,7 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << "Detecting clamped pixels...";
 
-  Mat rawClamped = findClampedPixels(raw);
+  Mat rawClamped = findClampedPixels(raw8);
 
   if (FLAGS_save_debug_images) {
     const string rawClampedImageFilename =
@@ -79,7 +90,7 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Detecting color chart...";
 
   vector<ColorPatch> colorPatches = detectColorChart(
-    raw,
+    raw8,
     FLAGS_num_squares_w,
     FLAGS_num_squares_h,
     FLAGS_save_debug_images,
@@ -94,10 +105,10 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  Mat raw16isp = getRaw(FLAGS_isp_passthrough_path, raw16);
+  Mat rawNormalized = getRaw(FLAGS_isp_passthrough_path, raw16);
 
   ColorResponse colorResponse = computeRGBResponse(
-    raw16isp.clone(),
+    rawNormalized.clone(),
     true,
     colorPatches,
     FLAGS_isp_passthrough_path,
@@ -109,16 +120,12 @@ int main(int argc, char** argv) {
   // Save X-intercepts
   saveXIntercepts(colorResponse, FLAGS_output_data_dir);
 
-  if (FLAGS_just_intercepts) {
-    return EXIT_SUCCESS;
-  }
-
   Vec3f blackLevel = Vec3f(0.0f, 0.0f, 0.0f);
   if (FLAGS_black_level != "") {
     std::istringstream blIs(FLAGS_black_level);
     vector<float> blVec;
-    blVec.assign(std::istream_iterator<int>(blIs), std::istream_iterator<int>());
-    blackLevel = Vec3f(blVec[0] / 255.0f, blVec[1] / 255.0f, blVec[2] / 255.0f);
+    blVec.assign(std::istream_iterator<float>(blIs), std::istream_iterator<float>());
+    blackLevel = Vec3f(blVec[0], blVec[1], blVec[2]);
   } else if (FLAGS_black_level_darkest) {
     // Find black level on original raw
     blackLevel = findBlackLevel(
@@ -131,12 +138,19 @@ int main(int argc, char** argv) {
     blackLevel = colorResponse.rgbInterceptY;
   }
 
+  // Save black level
+  saveBlackLevel(blackLevel, FLAGS_output_data_dir);
+
+  if (FLAGS_just_intercepts) {
+    return EXIT_SUCCESS;
+  }
+
   LOG(INFO) << "Adjusting black level: " << blackLevel;
 
   Mat rawBlackAdjusted = adjustBlackLevel(
     FLAGS_isp_passthrough_path,
     raw16,
-    raw16isp.clone(),
+    rawNormalized.clone(),
     blackLevel);
 
   if (FLAGS_save_debug_images) {
@@ -220,7 +234,7 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << "Demosaicing...";
 
-  Mat rgbWB = demosaic(FLAGS_isp_passthrough_path, raw, rawWBClamped.clone());
+  Mat rgbWB = demosaic(FLAGS_isp_passthrough_path, raw16, rawWBClamped.clone());
 
   if (FLAGS_save_debug_images) {
     Mat bgrWB;
@@ -251,7 +265,7 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << "Applying color correction...";
 
-  Mat rgbCCM = colorCorrect(FLAGS_isp_passthrough_path, raw, rgbWB.clone(), ccm.t());
+  Mat rgbCCM = colorCorrect(FLAGS_isp_passthrough_path, raw16, rgbWB.clone(), ccm.t());
 
   if (FLAGS_save_debug_images) {
     Mat bgrCCM;
@@ -275,7 +289,7 @@ int main(int argc, char** argv) {
 
   static const Point3f kGamma = Point3f(0.4545, 0.4545, 0.4545);
   Mat rgbGamma = colorCorrect(
-    FLAGS_isp_passthrough_path, raw, rgbWB.clone(), ccm.t(), kGamma);
+    FLAGS_isp_passthrough_path, raw16, rgbWB.clone(), ccm.t(), kGamma);
 
   if (FLAGS_save_debug_images) {
     Mat bgrGamma;

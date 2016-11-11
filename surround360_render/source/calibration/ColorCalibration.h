@@ -74,8 +74,8 @@ vector<int> getMacBethGrays();
 Mat getRaw(const string& ispConfigFile, const Mat& image);
 
 // Created a grayscale map where crushed pixels are set to 0 and saturated
-// pixels are set to 1
-Mat findClampedPixels(const Mat& image);
+// pixels are set to 1. Assuming 8-bit input (it's just for visualization)
+Mat findClampedPixels(const Mat& image8);
 
 // Computes color channel responses from the grayscale patches on the
 // colorchecker
@@ -88,6 +88,9 @@ ColorResponse computeRGBResponse(
   const string& outputDir,
   int& stepDebugImages,
   const string& titleExtra);
+
+// Saves black level of each channel to text file
+void saveBlackLevel(const Vec3f& blackLevel, const string& outputDir);
 
 // Saves X-intercepts of each channel for the given RGB response. Saves values
 // to text file
@@ -142,14 +145,14 @@ void writeIspConfigFile(
 
 // Finds black level. Assumes there's a black hole in the input image
 Vec3f findBlackLevel(
-  const Mat& raw,
+  const Mat& raw16,
   const string& ispConfigFile,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);
 
 // Computes one dimensional histogram of input image
-Mat computeHistogram(const Mat& image);
+Mat computeHistogram(const Mat& image, const Mat& mask);
 
 // Detects color chart patches on the input image. Returns a list of color
 // patches containing location, shape and color information
@@ -217,12 +220,19 @@ float pointToLineDistance(
 // Draws color patches on top of given image
 Mat drawPatches(const Mat& image, vector<ColorPatch>& colorPatches);
 
-// Compute RGB medians of each given color patch
+// Computes RGB medians of each given color patch
 void computeRGBMedians(
   vector<ColorPatch>& colorPatches,
   const Mat& bgr,
   const bool isRaw,
   const string& ispConfigFile);
+
+// Computes RGB medians on given mask
+Vec3f getRgbMedianMask(
+  const Mat& image,
+  const Mat& mask,
+  const string& ispConfigFile,
+  const bool isRaw);
 
 Vec3f plotGrayPatchResponse(
   vector<ColorPatch>& colorPatches,

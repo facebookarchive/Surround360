@@ -113,6 +113,8 @@ if __name__ == "__main__":
   elif black_level != 'NONE':
     flags_extra += " --black_level \"" + black_level + "\""
 
+  flags_extra += " --save_debug_images"
+
   out_dirs = {}
   camera_names = {}
   thread_list = []
@@ -173,12 +175,11 @@ if __name__ == "__main__":
     for j in range(num_channels):
       black_level_median.append(median(black_levels[j]));
 
-    print "Black level median: " + str(black_level_median)
+    print_and_save(file_runtimes, "Black level median: " + str(black_level_median) + "\n")
     flags_extra += " --black_level \"" + " ".join(map(str, black_level_median)) + "\""
 
   step = "second_pass"
   print "\n" + step + "\n"
-  flags_extra += " --save_debug_images"
 
   thread_list = []
   for i in range(len(raw_charts)):

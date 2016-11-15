@@ -37,8 +37,9 @@ namespace surround360 {
 
     GLuint m_vao;
     GLuint m_verts;
-    GLuint m_program[2];
+    GLuint m_program[3];
     GLuint m_texture[2];
+    GLuint m_fboID;
 
     using aligned_alloc = aligned_allocator<uint8_t>;
     using aligned_vec_t = std::vector<uint8_t, aligned_alloc>;
@@ -51,22 +52,21 @@ namespace surround360 {
     GLuint m_uv;
     GLuint m_pbo[2];
     int m_pboIdx;
-    GLuint histogramID;
-    GLuint fboID;
+    GLuint m_histogramGeometry;
     void* rawBytes;
     CameraIspPipe m_isp;
     std::unique_ptr<std::vector<float>> cameraRotations;
-
+    std::vector<std::uint32_t> m_histogram;
+    std::vector<float>         m_normalized;
   private:
     GLuint loadShaders(
       const std::string& vertexshader,
       const std::string& pixelshader);
 
-    void reshape(const unsigned int width, const unsigned int height);
+    void reshape(GLuint progid);
     void initTextures();
-    void initHistogram();    
     void init();
-    void convertPreviewFrame();
+    void convertPreviewFrame(const unsigned int bpp);
 
   public:
     CameraView(Gtk::GLArea& glarea);

@@ -14,5 +14,7 @@ namespace shaders {
 extern const std::string colorshader;
 extern const std::string rawshader;
 extern const std::string vshader;
+extern const std::string histogramPixelShader;
+extern const std::string histogramVertexShader;
 }
 }

@@ -327,7 +327,10 @@ void CameraController::cameraProducer(const unsigned int id) {
 
         if (i == m_previewIndex) {
           if (!m_recording) {
-            m_cameraView.updatePreviewFrame(bytes);
+            auto start = reinterpret_cast<uint8_t*>(bytes);
+            auto end = start + frameSize();
+            auto ptr = make_unique<vector<uint8_t>>(start, end);
+            m_cameraView.updatePreviewFrame(&(*ptr)[0]);
           } else {
             m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
           }

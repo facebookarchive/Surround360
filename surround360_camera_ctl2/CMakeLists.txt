@@ -107,7 +107,6 @@ TARGET_LINK_LIBRARIES(
   "-lopencv_core"
   "-lopencv_imgproc"
   "-lHalide"
-  "-lusb-1.0"
   "-lGLEW"
   CameraIspGen8
   CameraIspGenFast8

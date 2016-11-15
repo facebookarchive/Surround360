@@ -21,6 +21,8 @@
 using namespace surround360;
 using namespace std;
 
+enum { colorProgram = 0, rawProgram = 1, histogramProgram = 2 };
+
 static const string defaultIsp =
 R"(
 {
@@ -63,6 +65,8 @@ CameraView::CameraView(Gtk::GLArea& glarea)
     m_rawBuf(nullptr),
     rawBytes(nullptr),
     m_isp(defaultIsp, true, 8) {
+  m_normalized.resize(256);
+  m_histogram.resize(256);
 }
 
 static const GLfloat vertex_data[] = {
@@ -102,21 +106,23 @@ void CameraView::init() {
   glBindBuffer(GL_ARRAY_BUFFER, m_verts);
   glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 
+  glGenBuffers(1, &m_histogramGeometry);
+
   glGenBuffers(1, &m_uv);
   glBindBuffer(GL_ARRAY_BUFFER, m_uv);
   glBufferData(GL_ARRAY_BUFFER, sizeof(uv_data), uv_data, GL_STATIC_DRAW);
 
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  m_program[0] = loadShaders(shaders::vshader, shaders::colorshader);
-  m_program[1] = loadShaders(shaders::vshader, shaders::rawshader);
+  m_program[colorProgram]     = loadShaders(shaders::vshader, shaders::colorshader);
+  m_program[rawProgram]       = loadShaders(shaders::vshader, shaders::rawshader);
+  m_program[histogramProgram] = loadShaders(shaders::histogramVertexShader,
+                                            shaders::histogramPixelShader);
 
   m_isp.loadImage(&(*m_rawBuf)[0], m_width, m_height);
   m_isp.getImage(&(*m_textureBuf)[0], false);
 
   initTextures();
-
-  initHistogram();
 }
 
 void CameraView::onRealize() {
@@ -217,10 +223,10 @@ GLuint CameraView::loadShaders(
   return progId;
 }
 
-void CameraView::reshape(const unsigned int width, const unsigned int height) {
+void CameraView::reshape(GLuint progid) {
   glMatrixMode(GL_PROJECTION);
   bool raw = CameraConfig::get().raw;
-  auto location = glGetUniformLocation(m_program[raw ? 1 : 0], "transform");
+  auto location = glGetUniformLocation(progid, "transform");
 
   GLfloat scalex = 1.0f;
   GLfloat scaley = 1.0f;
@@ -234,27 +240,6 @@ void CameraView::reshape(const unsigned int width, const unsigned int height) {
 
   glUniformMatrix4fv(location, 1, GL_FALSE, transform);
   glMatrixMode(GL_MODELVIEW);
-}
-
-void CameraView::initHistogram() {
-  GLuint fboID = 0;
-
-  glGenFramebuffers(1, &fboID);
-  glBindFramebuffer(GL_FRAMEBUFFER, fboID);
-  glGenTextures(1, &histogramID);
-  glBindTexture(GL_TEXTURE_1D, histogramID);
-  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexImage1D(GL_TEXTURE_1D, 0,GL_LUMINANCE32F_ARB, 256, 0, GL_LUMINANCE, GL_FLOAT, NULL);
-  glFramebufferTexture1D(GL_FRAMEBUFFER_EXT,
-                         GL_COLOR_ATTACHMENT0_EXT,
-                         GL_TEXTURE_1D,
-                         histogramID,
-                         0);
-  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-
 }
 
 void CameraView::initTextures() {
@@ -303,13 +288,15 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
     return true;
   }
 
-  convertPreviewFrame();
+  const unsigned int bpp = CameraConfig::get().bits;
+  convertPreviewFrame(bpp);
 
+  glDisable(GL_BLEND);
   glClear(GL_COLOR_BUFFER_BIT);
-  bool raw = CameraConfig::get().raw;
+  const bool raw = CameraConfig::get().raw;
 
-  glUseProgram(m_program[raw ? 1 : 0]);
-  reshape(600, 600);
+  glUseProgram(m_program[raw ? rawProgram : colorProgram]);
+  reshape(m_program[raw ? rawProgram : colorProgram]);
 
   /* Bind vertices */
   glBindBuffer(GL_ARRAY_BUFFER, m_verts);
@@ -361,8 +348,58 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
   if (rotating) {
     glPopMatrix();
   }
-  glFlush();
 
+  // compute histogram geometry
+  const float barWidth = 0.0039f;
+  vector<float> histogramGeometry;
+
+  for (auto k = 0; k < m_normalized.size(); ++k) {
+    // for each bar, we use 2 triangles
+    // first triangle
+    histogramGeometry.push_back(-1.f + k * barWidth);
+    histogramGeometry.push_back(-.8f);
+    histogramGeometry.push_back(0.0f);
+
+    histogramGeometry.push_back(-1.f + k * barWidth);
+    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(0.0f);
+
+    histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
+    histogramGeometry.push_back(-.8f);
+    histogramGeometry.push_back(0.0f);
+
+    // second triangle
+    histogramGeometry.push_back(-1.f + k * barWidth);
+    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(0.0f);
+
+    histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
+    histogramGeometry.push_back(-.8f);
+    histogramGeometry.push_back(0.0f);
+
+    histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
+    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(0.0f);
+  }
+
+  // switch to histogram drawing
+  glUseProgram(m_program[histogramProgram]);
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  reshape(m_program[histogramProgram]);
+
+  // disable blending
+  glDisable(GL_BLEND);
+
+  glBindBuffer(GL_ARRAY_BUFFER, m_histogramGeometry);
+  glBufferData(GL_ARRAY_BUFFER,
+               histogramGeometry.size() * sizeof(float),
+               &histogramGeometry[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+  glDisableVertexAttribArray(1);
+
+  glDrawArrays(GL_TRIANGLES, 0, histogramGeometry.size());
   glDisableVertexAttribArray(0);
   glDisableVertexAttribArray(1);
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -376,7 +413,7 @@ void CameraView::updatePreviewFrame(void* bytes) {
   rawBytes = bytes;
 }
 
-void CameraView::convertPreviewFrame() {
+void CameraView::convertPreviewFrame(const unsigned int bpp) {
   auto& bufPtr = *getRawBuffer();
   auto buf = &bufPtr[0];
   auto raw = (uint8_t*)rawBytes;
@@ -384,7 +421,7 @@ void CameraView::convertPreviewFrame() {
   uint64_t vaddrBuf = (uint64_t)buf;
   uint32_t x, y, p;
 
-  const unsigned int bpp = CameraConfig::get().bits;
+  fill(m_histogram.begin(), m_histogram.end(), 0);
 
   p = 0;
   for (y = 0; y < m_height; ++y) {
@@ -410,15 +447,27 @@ void CameraView::convertPreviewFrame() {
         }
 
         rep = unswizzled << 4 | unswizzled >> 8;
+
+        ++m_histogram[(unswizzled >> 4) & 0xFF];
         buf[2 * (y * m_width + x)] = rep & 0xFF;
         buf[2 * (y * m_width + x) + 1] = (rep >> 8) & 0xFF;
       } else {
+        ++m_histogram[raw[p] & 0xFF];
         buf[p * 2]     = raw[p];
         buf[p * 2 + 1] = raw[p];
         ++p;
         ++vaddrRaw;
       }
     }
+  }
+
+  uint32_t sum = 0;
+  for (auto& el : m_histogram) {
+    sum += el;
+  }
+
+  for (auto k = 0; k < m_normalized.size(); ++k) {
+    m_normalized[k] = float(m_histogram[k]) / float(sum);
   }
 
 #ifdef __AVX2__

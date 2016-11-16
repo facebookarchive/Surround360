@@ -350,6 +350,26 @@ void CameraController::cameraProducer(const unsigned int id) {
   }
 }
 
+void CameraController::writeHeader(const int fd, const uint32_t id)
+{
+  vector<uint32_t, aligned_allocator<uint32_t, 4096>> vec(1024);
+
+  vec[0] = 0xfaceb00c;
+  vec[1] = (uint32_t)time(nullptr);
+  vec[2] = id;
+  vec[3] = m_consumerCount;
+  vec[4] = m_width;
+  vec[5] = m_height;
+  vec[6] = uint32_t(m_bitsPerPixel);
+  vec[7] = (m_camera.size() / m_consumerCount) + ((id < m_camera.size() % m_consumerCount) ? 1 : 0);
+
+  int err = write(fd, &vec[0], vec.size() * sizeof(uint32_t));
+  if (err == -1) {
+    cerr << strerror(errno) << endl;
+    throw string("Error writing header: ") + strerror(errno);
+  }
+}
+
 void CameraController::cameraConsumer(const unsigned int id) {
   cpu_set_t threadCpuAffinity;
   CPU_ZERO(&threadCpuAffinity);
@@ -374,6 +394,8 @@ void CameraController::cameraConsumer(const unsigned int id) {
       if (fd < 0) {
         assert(!"Can't create the destination file");
       }
+
+      writeHeader(fd, id);
 
       for (auto& idx : m_oneshotIdx[id]) {
         auto next = m_consumerBuf[id].getTail();
@@ -401,6 +423,8 @@ void CameraController::cameraConsumer(const unsigned int id) {
       } else {
         rec = true;
       }
+
+      writeHeader(fd, id);
     }
 
     if (rec && !m_recording) {

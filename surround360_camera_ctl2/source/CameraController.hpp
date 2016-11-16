@@ -73,6 +73,7 @@ private:
   }
   void ispThread();
   void writeCameraNames(const string& path);
+  void writeHeader(const int fd, const uint32_t id);
 
 private:
   std::vector<PointGreyCameraPtr> m_camera;

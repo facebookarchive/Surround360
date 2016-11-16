@@ -84,6 +84,8 @@ int main(int argc, char** argv) {
 
   LOG(INFO) << "Reading binary files...";
 
+  const auto kHeaderSize = 4096u;
+
   for (int i = 0; i < FLAGS_file_count; ++i) {
     string fileName(FLAGS_binary_prefix + to_string(i) + ".bin");
     fd[i] = open(fileName.c_str(), O_RDONLY);
@@ -92,6 +94,8 @@ int main(int argc, char** argv) {
         "error opening binary file. err: " + string(strerror(errno)) +
         " filename: " + fileName);
     }
+
+    lseek(fd[i], kHeaderSize, SEEK_SET);
 
     if (FLAGS_frame_count == 0) {
       struct stat st;
@@ -110,7 +114,7 @@ int main(int argc, char** argv) {
 #endif
 
     // Move pointer to start frame
-    pos[i] = imageSize * FLAGS_start_frame * ((cameraCount / FLAGS_file_count) + ((i < cameraCount % FLAGS_file_count) ? 1 : 0));
+    pos[i] = kHeaderSize + imageSize * FLAGS_start_frame * ((cameraCount / FLAGS_file_count) + ((i < cameraCount % FLAGS_file_count) ? 1 : 0));
 
     if (FLAGS_frame_count == 0) {
       totalFrameCount += frameCount[i];

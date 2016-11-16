@@ -41,7 +41,7 @@ namespace surround360 {
     GLuint m_texture[2];
     GLuint m_fboID;
 
-    using aligned_alloc = aligned_allocator<uint8_t>;
+    using aligned_alloc = aligned_allocator<uint8_t, 64>;
     using aligned_vec_t = std::vector<uint8_t, aligned_alloc>;
 
     std::shared_ptr<aligned_vec_t> m_textureBuf;

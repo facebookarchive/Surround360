@@ -197,7 +197,8 @@ class CameraIspGen
 
     // Homogenity calulation over a diameter size region
     const int w = 2;
-    const int diameter = 2*w + 1;
+    const int diameter = 2 * w + 1;
+    const int diameterSquared = diameter * diameter;
     RDom d(0, diameter, 0, diameter);
     Expr xp = x + d.x - w;
     Expr yp = y + d.y - w;
@@ -214,9 +215,13 @@ class CameraIspGen
     // The local green estimate is a blend of the horizontal and vertical
     // green channel estimate based on how horizontal or vertical the
     // region is.
-    Expr alpha = cast<float>(hCount(x, y)) / float(diameter * diameter);
     Func g;
+#ifdef LERP_GRAD
+    Expr alpha = cast<float>(hCount(x, y)) / float(diameterSquared);
     g(x, y) = lerp(gV(x, y), gH(x, y), alpha);
+#else
+    g(x, y) = select(hCount(x,y) < diameterSquared/2, gV(x, y), gH(x, y));
+#endif
 
     // We take the log of green channel which helps to supress chroma
     // ringing and noise.

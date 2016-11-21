@@ -72,7 +72,6 @@ private:
     return (m_width * m_height * m_bitsPerPixel) / 8;
   }
   void ispThread();
-  void writeCameraNames(const string& path);
   void writeHeader(const int fd, const uint32_t id);
 
 private:

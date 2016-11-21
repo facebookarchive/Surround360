@@ -42,9 +42,7 @@ UNPACK_COMMAND_TEMPLATE = """
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --file_count {DISK_COUNT}
---image_width {IMAGE_WIDTH}
---image_height {IMAGE_HEIGHT}
---nbits {NBITS}
+{FLAGS_UNPACK_EXTRA}
 """
 
 ARRANGE_COMMAND_TEMPLATE = """
@@ -135,9 +133,9 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
-  parser.add_argument('--image_width',                metavar='Image Width', help='image width', required=False, default='2048')
-  parser.add_argument('--image_height',               metavar='Image Height', help='image height', required=False, default='2048')
-  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth', required=False, choices=['8', '12'], default='8')
+  parser.add_argument('--image_width',                metavar='Image Width', help='image width (ignore if no cameranames.txt)', required=False, default='2048')
+  parser.add_argument('--image_height',               metavar='Image Height', help='image height (ignore if no cameranames.txt)', required=False, default='2048')
+  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth (ignore if no cameranames.txt)', required=False, choices=['8', '12'], default='8')
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
@@ -301,6 +299,15 @@ if __name__ == "__main__":
   ### unpack step ###
 
   if steps_unpack:
+    # If there is no cameranames we assume binaries are tagged with metadata
+    unpack_extra_params = ""
+    if not os.path.isfile(binary_prefix + "/cameranames.txt"):
+      unpack_extra_params += " --tagged"
+    else:
+      unpack_extra_params += " --image_width " + image_width
+      unpack_extra_params += " --image_height " + image_height
+      unpack_extra_params += " --nbits " + nbits
+
     unpack_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "BINARY_PREFIX": binary_prefix,
@@ -309,9 +316,7 @@ if __name__ == "__main__":
       "START_FRAME": start_frame,
       "FRAME_COUNT": frame_count,
       "DISK_COUNT": disk_count,
-      "IMAGE_WIDTH": image_width,
-      "IMAGE_HEIGHT": image_height,
-      "NBITS": nbits,
+      "FLAGS_UNPACK_EXTRA": unpack_extra_params,
     }
     unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
     run_step("unpack", unpack_command, verbose, dryrun, file_runtimes, num_steps)

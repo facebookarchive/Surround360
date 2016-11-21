@@ -23,7 +23,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 
 * The build system for the Surround 360 code is CMake.
 
-* This software has been tested on Ubuntu 14.04 LTS (CMake 3.2.2) and OS X 10.11.5 (using CMake 3.5.1).
+* This software has been tested on Ubuntu 14.04/16.04 LTS (CMake 3.2.2) and OS X 10.11.5 (using CMake 3.5.1).
 
 * If you are building on OS X, it may be more convenient to use brew to install some dependencies.
 
@@ -31,132 +31,179 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   see https://cmake.org
 
 * Install CMake (method 2 - Linux only)
-<pre>
+```
   sudo apt-get install software-properties-common
   sudo add-apt-repository ppa:george-edison55/cmake-3.x
   sudo apt-get update
   sudo apt-get install cmake && sudo apt-get upgrade cmake
-</pre>
+```
 
 * Install homebrew (on OS X):
   http://brew.sh/, or just run this directly:
-<pre>
+```
   ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-</pre>
+```
 
 * Git is used to download and install packages from source (e.g. OpenCV below). Git may come preinstalled (check using git --version). It is not required if using brew in OS X.
 
 * Install Git (method 1 - Linux only):
-<pre>
+```
   sudo apt-get install git
-</pre>
+```
+
+* Install Subversion (method 1 - Linux only):
+```
+  sudo apt install subversion
+```
+
+* Install Subversion (method 1 - OS X only):
+```
+  brew install subversion
+```
 
 * Install Git (method 2 - OS X only):
-<pre>
+```
   brew install git
-</pre>
+```
 
 * Install Python (method 1 - Linux only):
-<pre>
+```
   sudo apt-get install python
-</pre>
+```
 
 * Install Python (method 2 - OS X only):
-<pre>
+```
   brew install python
-</pre>
+```
 
 * Install gflags (method 1 - Linux only):
-<pre>
-  sudo apt-get install libgflags2 libgflags-dev
-</pre>
+```
+  sudo apt-get install libgflags2v5 libgflags-dev
+```
 
 * Install gflags (method 2 - OS X only):
-<pre>
+```
   brew install gflags
-</pre>
+```
 
 * Install glog (method 1 - Linux only):
-<pre>
+```
   sudo apt-get install libgoogle-glog-dev
-</pre>
+```
 
 * Install glog (method 2 - OS X only):
-<pre>
+```
   brew install glog
-</pre>
+```
 
 * Install OpenCV:
-<pre>
+```
+  cd ~
   git clone https://github.com/Itseez/opencv.git
   cd opencv
   git checkout tags/3.1.0
   cmake -DWITH_IPP=OFF
   make
   sudo make install
-</pre>
+```
 
 * Install ffmpeg (method 1):
   see https://trac.ffmpeg.org/wiki/CompilationGuide
 
 * Install ffmpeg (method 2 - OS X only):
-<pre>
+```
   brew install ffmpeg
-</pre>
+```
 
 * Install Gooey (method 1):
   see https://github.com/chriskiehl/Gooey
 
 * Install Gooey (method 2 - Linux only):
-<pre>
+```
   sudo apt-get install python-pip
   sudo pip install --upgrade pip
   sudo pip install Gooey
   sudo apt-get install python-wxgtk2.8
-</pre>
+```
+
+If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
+```
+  echo "deb http://archive.ubuntu.com/ubuntu wily main universe" | sudo tee /etc/apt/sources.list.d/wily-copies.list
+  sudo apt update
+  sudo apt install python-wxgtk2.8
+  sudo rm /etc/apt/sources.list.d/wily-copies.list
+  sudo apt update
+```
+
 
 * Install Gooey (method 3 - OS X only):
-<pre>
+```
   pip install --upgrade pip
   sudo pip install Gooey
   brew install wxpython
   brew install wxmac
   brew link wxmac
-</pre>
+```
+
+* (if using accelerated ISP) Install LLVM
+```
+  cd ~
+  svn co https://llvm.org/svn/llvm-project/llvm/branches/release_37 llvm3.7
+  svn co https://llvm.org/svn/llvm-project/cfe/branches/release_37 llvm3.7/tools/clang
+  cd llvm3.7
+  mkdir build
+  cd build
+  cmake -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_TARGETS_TO_BUILD="X86;ARM;NVPTX;AArch64;Mips;PowerPC" -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release ..
+  make
+  export LLVM_CONFIG=$HOME/llvm3.7/build/bin/llvm-config
+  export CLANG=$HOME/llvm3.7/build/bin/clang
+```
+
+* (to use accelerated ISP) Install Halide
+```
+  cd ~
+  git clone https://github.com/halide/Halide.git
+  cd Halide
+  mkdir cmake_build
+  cd cmake_build
+  export LLVM_ROOT=$HOME/llvm3.7/build
+  cmake -DLLVM_BIN=${LLVM_ROOT}/bin -DLLVM_INCLUDE="${LLVM_ROOT}/../include;${LLVM_ROOT}/include" -DLLVM_LIB=${LLVM_ROOT}/lib -DLLVM_VERSION=37 ..
+  make
+```
 
 ## Compiling the Surround 360 Rendering Software
 
 * After installing all of the dependencies as described above, run:
-<pre>
-  cd <install path>/surround360/surround360_render
+```
+  cd <install_path>/surround360/surround360_render
   cmake -DCMAKE_BUILD_TYPE=Release
   make
-</pre>
+```
+
+  (to use accelerated ISP):
+```
+  cd <install_path>/surround360/surround360_render
+  cmake -DCMAKE_BUILD_TYPE=Release -DHALIDE_DIR=$HOME/Halide/cmake_build
+  make
+```
 
 * To test that compilation is successful, run:
-<pre>
+```
   ./bin/TestRenderStereoPanorama --help
-</pre>
+```
 
 * We recommend configuring CMake to compile in Release mode because the code will execute faster. However, you can also set it up for debug mode with:
-<pre>
+```
   cmake -DCMAKE_BUILD_TYPE=Debug
-</pre>
+```
 
 * Sometimes it is useful to compile with XCode instead of CMake (e.g., to use its profiling and debugging tools). To do so:
-<pre>
-  cd <install path>/surround360/surround360_render
+```
+  cd <install_path>/surround360/surround360_render
   mkdir XCodeDebug
   cd XCodeDebug
   cmake -DCMAKE_BUILD_TYPE=Debug -G Xcode ..
-</pre>
-
-* The ISP has been accelerated using Halide (see http://halide-lang.org).  To use Halide follow the Halide installation instruction which inturn on depends on LLVM. Once Halide is built, make some of their test applications or "lessons" to insure that you have correctly built Halide. Then purge your CMakefiles CMakeCache and renvoke cmake:
-<pre>
-  cmake -DCMAKE_BUILD_TYPE=Release  -DHALIDE_DIR=<path to halide dir>
-</pre>
-
-Use the "--accelerate" flag on the Raw2Rgb command line to use the Halide implementation.  The "--fast" flag in conjunction with the "--accelerate" flag to get real-time (< 30ms per frame) performance.  This super fast version disables certain features like sharpenning and anti-vignetting which is useful for fast preview.
+```
 
 ## How the Surround 360 Rendering Software Works
 

@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-PROJECT(Surround360CameraCtl2 CXX)
+PROJECT(Surround360CameraCtlUI CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -13,7 +13,6 @@ pkg_check_modules(GLIB glib-2.0)
 pkg_check_modules(GL gl)
 pkg_check_modules(GLEW glew)
 pkg_check_modules(GLU glu)
-pkg_check_modules(USB libusb-1.0)
 
 INCLUDE_DIRECTORIES(/usr/include/flycapture)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
@@ -28,6 +27,8 @@ INCLUDE_DIRECTORIES(../surround360_render/source/camera_isp)
 INCLUDE_DIRECTORIES(../surround360_render/source/util)
 INCLUDE_DIRECTORIES(../surround360_render/source)
 INCLUDE_DIRECTORIES(../surround360_render)
+INCLUDE_DIRECTORIES(${HALIDE_DIR}/include)
+INCLUDE_DIRECTORIES(${HALIDE_DIR}/src)
 
 LINK_DIRECTORIES(${GTKMM_LIBRARY_DIRS})
 LINK_DIRECTORIES(${GLIBMM_LIBRARY_DIRS})
@@ -38,6 +39,7 @@ LINK_DIRECTORIES(${GLU_LIBRARY_DIRS})
 LINK_DIRECTORIES(${USB_LIBRARY_DIRS})
 LINK_DIRECTORIES(../surround360_render)
 LINK_DIRECTORIES(../surround360_render/lib)
+LINK_DIRECTORIES(${HALIDE_DIR}/lib)
 
 ADD_LIBRARY(CameraIspGen8 STATIC IMPORTED)
 ADD_LIBRARY(CameraIspGenFast8 STATIC IMPORTED)
@@ -71,7 +73,7 @@ ADD_CUSTOM_TARGET(_source SOURCES ${SRC})
 ### CameraControl ###
 
 ADD_EXECUTABLE(
-  CameraControl2
+  CameraControlUI
   source/CameraController.cpp
   source/CameraDiscoverButton.cpp
   source/CameraListView.cpp
@@ -89,9 +91,9 @@ ADD_EXECUTABLE(
   source/main.cpp
 )
 
-TARGET_COMPILE_FEATURES(CameraControl2 PRIVATE cxx_range_for)
+TARGET_COMPILE_FEATURES(CameraControlUI PRIVATE cxx_range_for)
 TARGET_LINK_LIBRARIES(
-  CameraControl2
+  CameraControlUI
   "-lflycapture${D}"
   "-lpthread"
   "-lgtkmm-3.0"

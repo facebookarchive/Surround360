@@ -239,12 +239,8 @@ class CameraIsp {
             hCount += (dH.at<float>(il, jk) <= dV.at<float>(il, jk));
           }
         }
-#ifdef LERP_GRAD
         const float alpha = float(hCount) / diameterSquared;
         green.at<float>(i, j) = lerp(gV.at<float>(i, j), gH.at<float>(i, j), alpha);
-#else
-        green.at<float>(i, j) = hCount < diameterSquared / 2 ? gV.at<float>(i, j) : gH.at<float>(i, j);
-#endif
       }
     }
 

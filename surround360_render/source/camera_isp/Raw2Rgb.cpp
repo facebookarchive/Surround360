@@ -123,8 +123,10 @@ int main(int argc, char* argv[]) {
     Mat inputImage16(inputImage.rows, inputImage.cols, CV_16U);
 
     if (depth == CV_8U) {
+      LOG(INFO) << "8 bit raw" << endl;
       inputImage16 = convert8bitTo16bit(inputImage);
     } else if (depth == CV_16U) {
+      LOG(INFO) << "16 bit raw" << endl;
       inputImage16 = inputImage;
     } else {
       throw VrCamException("input is larger that 16 bits per pixel");

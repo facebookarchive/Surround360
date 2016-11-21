@@ -216,12 +216,8 @@ class CameraIspGen
     // green channel estimate based on how horizontal or vertical the
     // region is.
     Func g;
-#ifdef LERP_GRAD
     Expr alpha = cast<float>(hCount(x, y)) / float(diameterSquared);
     g(x, y) = lerp(gV(x, y), gH(x, y), alpha);
-#else
-    g(x, y) = select(hCount(x,y) < diameterSquared/2, gV(x, y), gH(x, y));
-#endif
 
     // We take the log of green channel which helps to supress chroma
     // ringing and noise.

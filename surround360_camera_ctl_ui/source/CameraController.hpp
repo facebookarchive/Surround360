@@ -27,7 +27,7 @@ struct FramePacket{
   void* imageBytes;
 };
 
-typedef ProducerConsumer<FramePacket, 1000ULL> ConsumerBuffer;
+typedef ProducerConsumer<FramePacket, 100ULL> ConsumerBuffer;
 
 class CameraController {
 public:
@@ -55,7 +55,7 @@ public:
   void startSlaveCapture();
   void startMasterCapture();
   void setPreviewCamera(unsigned int i);
-  void setPath(const string& path);
+  void setPaths(const string path[2]);
   void startRecording(const bool oneshot = false);
   void stopRecording();
 
@@ -72,6 +72,7 @@ private:
     return (m_width * m_height * m_bitsPerPixel) / 8;
   }
   void ispThread();
+  void writeCameraNames(const string& path);
   void writeHeader(const int fd, const uint32_t id);
 
 private:
@@ -123,6 +124,6 @@ private:
 
   enum param { paramShutter = 0, paramFramerate, paramGain, paramBits };
   std::vector<bool> update;
-  string m_dirname;
+  string m_dirname[2];
 };
 }

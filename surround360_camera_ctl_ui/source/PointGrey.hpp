@@ -97,6 +97,8 @@ namespace surround360 {
     bool m_updateGain {false};
     bool m_updateShutter {false};
 
+    mutable bool serialCached_ {false};
+    mutable unsigned int serial_;
     bool m_master{false};
 
     unsigned int m_width {2448};

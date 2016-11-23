@@ -63,6 +63,8 @@ namespace surround360 {
         const unsigned int kAlignment = 4096;
         const unsigned int kMaxRes = 4096;
         items[k].imageBytes = memalign(kAlignment, kMaxRes * kMaxRes);
+        memset(items[k].imageBytes, 0, kMaxRes * kMaxRes);
+        mlock(items[k].imageBytes, kMaxRes * kMaxRes);
       }
     }
 

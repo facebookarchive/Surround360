@@ -691,7 +691,11 @@ unsigned int PointGreyCamera::frameHeight() {
 
 int PointGreyCamera::getSerialNumber() const {
   CameraInfo camInfo;
-  m_camera->GetCameraInfo(&camInfo);
-  auto serial = camInfo.serialNumber;
-  return serial;
+
+  if (!serialCached_) {
+    m_camera->GetCameraInfo(&camInfo);
+    serial_ = camInfo.serialNumber;
+    serialCached_ = true;
+  }
+  return serial_;
 }

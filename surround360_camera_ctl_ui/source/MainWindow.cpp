@@ -163,36 +163,43 @@ void MainWindow::updatePreviewParams() {
 
 void MainWindow::takeNameDialog() {
   if (m_recordBtn.get_active()) {
-    Gtk::FileChooserDialog dlg(
-      "Select a destination folder",
-      Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER);
+    string dirnames[2];
+    for (auto k = 0; k < 2; ++k) {
+      string title = "Select a destination folder " + to_string(k + 1);
+      Gtk::FileChooserDialog dlg(title, Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER);
 
-    dlg.set_transient_for(*this);
-    dlg.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
-    dlg.add_button("_Select", Gtk::RESPONSE_OK);
+      dlg.set_transient_for(*this);
+      dlg.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+      dlg.add_button("_Select", Gtk::RESPONSE_OK);
 
-    int result = dlg.run();
-    string dirname;
+      int result = dlg.run();
+      string dirname;
 
-    switch (result) {
-    case Gtk::RESPONSE_OK:
-      dirname = dlg.get_filename();
-      if (dirname.size() > 0) {
-        auto& ctl = CameraController::get();
-        ctl.setPath(dirname);
-        ctl.startRecording();
-        m_8bit.set_sensitive(false);
-        m_12bit.set_sensitive(false);
-        m_fpsSelectionBox.set_sensitive(false);
-        m_shutterSelectionBox.set_sensitive(false);
-        m_recordBtn.set_active();
-        cout << "Started recording" << endl;
+      switch (result) {
+      case Gtk::RESPONSE_OK:
+        dirname = dlg.get_filename();
+        if (dirname.size() > 0) {
+          dirnames[k] = dirname;
+        }
+        break;
+
+      default:
+        break;
       }
-      break;
+    }
 
-    default:
-      break;
-      // do nothing
+    if (dirnames[0].size() > 0 && dirnames[1].size() > 0) {
+      auto& ctl = CameraController::get();
+      ctl.setPaths(dirnames);
+      ctl.startRecording();
+      m_8bit.set_sensitive(false);
+      m_12bit.set_sensitive(false);
+      m_fpsSelectionBox.set_sensitive(false);
+      m_shutterSelectionBox.set_sensitive(false);
+      m_recordBtn.set_active();
+      cout << "Started recording" << endl;
+    } else {
+      m_recordBtn.set_active(false);
     }
   } else {
     auto& ctl = CameraController::get();
@@ -222,7 +229,8 @@ void MainWindow::singleTakeDialog() {
     dirname = dlg.get_filename();
     if (dirname.size() > 0) {
       auto& ctl = CameraController::get();
-      ctl.setPath(dirname);
+      string paths[2] = { dirname, dirname };
+      ctl.setPaths(paths);
       ctl.startRecording(true);
     }
     break;
@@ -243,11 +251,7 @@ void MainWindow::bitSelectorClicked() {
   auto newbits = m_8bit.get_active() ? 8 : 12;
   if (cfg.bits != newbits) {
     cfg.bits = newbits;
-    if (cfg.bits == 8) {
-      cfg.triggerMode = 0;
-    } else {
-      cfg.triggerMode = 14;
-    }
+    cfg.triggerMode = 0;
 
     auto& ctl = CameraController::get();
     ctl.updateCameraParams(cfg.shutter, cfg.fps, cfg.gain, cfg.bits);

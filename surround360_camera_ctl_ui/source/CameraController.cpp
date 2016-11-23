@@ -255,6 +255,7 @@ void CameraController::cameraProducer(const unsigned int id) {
 
     // single shot frame grab
     if (m_oneshot) {
+      writeCameraNames(m_dirname[id] + "/cameranames.txt");
 
       // in one shot mode, we publish 1 frame from each camera and stop recording
       for (auto i = cameraOffset; i < lastCamera; ++i) {
@@ -292,6 +293,7 @@ void CameraController::cameraProducer(const unsigned int id) {
       if (i == 0 && m_startRecording) {
         m_startRecording = false;
         m_recording = true;
+        writeCameraNames(m_dirname[id] + "/cameranames.txt");
       }
 
       if (i == 0 && m_stopRecording) {
@@ -329,10 +331,10 @@ void CameraController::cameraProducer(const unsigned int id) {
             auto end = start + frameSize();
             auto ptr = make_unique<vector<uint8_t>>(start, end);
             m_cameraView.updatePreviewFrame(&(*ptr)[0]);
+            m_cameraView.update();
           } else {
             m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
           }
-          m_cameraView.update();
         }
       } catch (...) {
         cerr << "Error when grabbing a frame from the camera " << i << endl;
@@ -387,7 +389,7 @@ void CameraController::cameraConsumer(const unsigned int id) {
     // for one shot count only, we read pre-specified number of frames,
     // based on indices from m_oneshotIdx vector and save them to disk
     if (m_oneshotCount[id] == m_oneshotIdx[id].size()) {
-      string fname = m_dirname + "/" + to_string(id) + ".bin";
+      string fname = m_dirname[id] + "/" + to_string(id) + ".bin";
       fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT | O_DIRECT, 0644);
       if (fd < 0) {
         assert(!"Can't create the destination file");
@@ -414,7 +416,7 @@ void CameraController::cameraConsumer(const unsigned int id) {
     }
 
     if (!rec && m_recording) {
-      string fname = m_dirname + "/" + to_string(id) + ".bin";
+      string fname = m_dirname[id] + "/" + to_string(id) + ".bin";
       fd = open(fname.c_str(), O_WRONLY | O_NONBLOCK | O_CREAT | O_DIRECT, 0644);
       if (fd < 0) {
         assert(!"Can't create the destination file");
@@ -499,8 +501,9 @@ void CameraController::stopRecording() {
   m_stopRecording = true;
 }
 
-void CameraController::setPath(const string& path) {
-  m_dirname = path;
+void CameraController::setPaths(const string path[2]) {
+  m_dirname[0] = path[0];
+  m_dirname[1] = path[1];
 }
 
 CameraController::~CameraController() {
@@ -518,4 +521,12 @@ CameraController::~CameraController() {
     cam->stopCapture();
     cam->detach();
   }
+}
+
+void CameraController::writeCameraNames(const string& path) {
+  ofstream cameraNamesFile(path);
+  for (auto& cam : m_camera) {
+    cameraNamesFile << to_string(cam->getSerialNumber()) << "\n";
+  }
+  cameraNamesFile.close();
 }

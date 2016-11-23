@@ -331,10 +331,10 @@ void CameraController::cameraProducer(const unsigned int id) {
             auto end = start + frameSize();
             auto ptr = make_unique<vector<uint8_t>>(start, end);
             m_cameraView.updatePreviewFrame(&(*ptr)[0]);
-            m_cameraView.update();
           } else {
             m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
           }
+          m_cameraView.update();
         }
       } catch (...) {
         cerr << "Error when grabbing a frame from the camera " << i << endl;

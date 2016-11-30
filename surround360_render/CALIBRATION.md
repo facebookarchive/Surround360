@@ -172,7 +172,7 @@ The steps below describe the process for a single camera. This must be done for 
 ./bin/TestColorCalibration \
 --logbuflevel -1 --stderrthreshold 0 --v 0 \
 --image_path ~/Desktop/color_calibration/cam1.png  \
---isp_passthrough_path ./res/config/isp/cmosis_sunex_passthrough.json \
+--isp_passthrough_path ./res/config/isp/passthrough.json \
 --save_debug_images \
 --output_data_dir ~/Desktop/color_calibration/cam1
 </pre>
@@ -183,22 +183,22 @@ After doing this for all the side and top/bottom cameras, we will have N ISP con
 
 <pre>
 {
-    "cam0": "~/Desktop/color_calibration/isp/isp0.json", 
-    "cam1": "~/Desktop/color_calibration/isp/isp1.json", 
-    "cam10": "~/Desktop/color_calibration/isp/isp10.json", 
-    "cam11": "~/Desktop/color_calibration/isp/isp11.json", 
-    "cam12": "~/Desktop/color_calibration/isp/isp12.json", 
-    "cam13": "~/Desktop/color_calibration/isp/isp13.json", 
-    "cam14": "~/Desktop/color_calibration/isp/isp14.json", 
-    "cam15": "~/Desktop/color_calibration/isp/isp15.json", 
-    "cam16": "~/Desktop/color_calibration/isp/isp16.json", 
-    "cam2": "~/Desktop/color_calibration/isp/isp2.json", 
-    "cam3": "~/Desktop/color_calibration/isp/isp3.json", 
-    "cam4": "~/Desktop/color_calibration/isp/isp4.json", 
-    "cam5": "~/Desktop/color_calibration/isp/isp5.json", 
-    "cam6": "~/Desktop/color_calibration/isp/isp6.json", 
-    "cam7": "~/Desktop/color_calibration/isp/isp7.json", 
-    "cam8": "~/Desktop/color_calibration/isp/isp8.json", 
+    "cam0": "~/Desktop/color_calibration/isp/isp0.json",
+    "cam1": "~/Desktop/color_calibration/isp/isp1.json",
+    "cam10": "~/Desktop/color_calibration/isp/isp10.json",
+    "cam11": "~/Desktop/color_calibration/isp/isp11.json",
+    "cam12": "~/Desktop/color_calibration/isp/isp12.json",
+    "cam13": "~/Desktop/color_calibration/isp/isp13.json",
+    "cam14": "~/Desktop/color_calibration/isp/isp14.json",
+    "cam15": "~/Desktop/color_calibration/isp/isp15.json",
+    "cam16": "~/Desktop/color_calibration/isp/isp16.json",
+    "cam2": "~/Desktop/color_calibration/isp/isp2.json",
+    "cam3": "~/Desktop/color_calibration/isp/isp3.json",
+    "cam4": "~/Desktop/color_calibration/isp/isp4.json",
+    "cam5": "~/Desktop/color_calibration/isp/isp5.json",
+    "cam6": "~/Desktop/color_calibration/isp/isp6.json",
+    "cam7": "~/Desktop/color_calibration/isp/isp7.json",
+    "cam8": "~/Desktop/color_calibration/isp/isp8.json",
     "cam9": "~/Desktop/color_calibration/isp/isp9.json"
 }
 </pre>

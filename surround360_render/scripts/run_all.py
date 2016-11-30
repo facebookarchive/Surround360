@@ -41,7 +41,8 @@ UNPACK_COMMAND_TEMPLATE = """
 --dest_path {ROOT_DIR}/raw
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
---disk_count {DISK_COUNT}
+--file_count {DISK_COUNT}
+{FLAGS_UNPACK_EXTRA}
 """
 
 ARRANGE_COMMAND_TEMPLATE = """
@@ -132,20 +133,28 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
+  parser.add_argument('--image_width',                metavar='Image Width', help='image width (ignore if no cameranames.txt)', required=False, default='2048')
+  parser.add_argument('--image_height',               metavar='Image Height', help='image height (ignore if no cameranames.txt)', required=False, default='2048')
+  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth (ignore if no cameranames.txt)', required=False, choices=['8', '12'], default='8')
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
   parser.add_argument('--cubemap_format',             metavar='Cubemap Format', help='photo or video', required=False, choices=['photo', 'video'], default='video')
   parser.add_argument('--cubemap_width',              metavar='Cubemap Face Width', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--cubemap_height',             metavar='Cubemap Face Height', help='0 = no cubemaps', required=False, default='0')
+  parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
+  parser.add_argument('--steps_unpack',               help='Step 1: convert data in .bin files to RAW .tiff files', action='store_true', required=False)
+  parser.add_argument('--steps_arrange',              help='Step 2: arrange .tiff files for further processing', action='store_true', required=False)
+  parser.add_argument('--steps_isp',                  help='Step 3: convert RAW frames to RGB', action='store_true', required=False)
+  parser.add_argument('--steps_rectify',              help='Step 4: use/create rectification file', action='store_true', required=False)
+  parser.add_argument('--steps_render',               help='Step 5: render PNG stereo panoramas', action='store_true', required=False)
+  parser.add_argument('--steps_ffmpeg',               help='Step 6: create MP4 output', action='store_true', required=False)
   parser.add_argument('--enable_top',                 help='enable top camera', action='store_true')
   parser.add_argument('--enable_bottom',              help='enable bottom camera', action='store_true')
   parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
-  parser.add_argument('--enable_render_coloradjust',  help='modify color/brightness in the renderer to improve blending. increases runtime', action='store_true')
-  parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
+  parser.add_argument('--enable_render_coloradjust',  help='modify color/brightness in the renderer to improve blending (increases runtime)', action='store_true')
   parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
-  parser.add_argument('--steps',                      metavar='Steps', help='[unpack,arrange,isp,rectify,render,ffmpeg,all]', required=False, default='all')
-  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_med',  'pixflow_ultra'], default='pixflow_low')
+  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_search_20'], default='pixflow_low')
   parser.add_argument('--cam_to_isp_config_file',     metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
   parser.add_argument('--pole_masks_dir',             metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
   parser.add_argument('--src_intrinsic_param_file',   metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)
@@ -177,13 +186,10 @@ def save_step_runtime(file_out, step, runtime_sec):
   sys.stdout.flush()
 
 # step_count will let us know how many times we've called this function
-def run_step(step, step_list, cmd, verbose, dryrun, file_runtimes, step_count=[0]):
-  if not step in step_list:
-    return
-
+def run_step(step, cmd, verbose, dryrun, file_runtimes, num_steps, step_count=[0]):
   step_count[0] += 1
 
-  print "** %s ** [Step %d of %d]\n" % (step.upper(), step_count[0], len(step_list))
+  print "** %s ** [Step %d of %d]\n" % (step.upper(), step_count[0], num_steps)
 
   if verbose:
     print cmd + "\n"
@@ -220,6 +226,9 @@ if __name__ == "__main__":
   args = parse_args()
   data_dir                  = args["data_dir"]
   dest_dir                  = args["dest_dir"]
+  image_width               = args["image_width"]
+  image_height              = args["image_height"]
+  nbits                     = args["nbits"]
   quality                   = args["quality"]
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
@@ -232,7 +241,12 @@ if __name__ == "__main__":
   enable_render_coloradjust = args["enable_render_coloradjust"]
   save_debug_images         = args["save_debug_images"]
   dryrun                    = args["dryrun"];
-  steps                     = args["steps"]
+  steps_unpack              = args["steps_unpack"]
+  steps_arrange             = args["steps_arrange"]
+  steps_isp                 = args["steps_isp"]
+  steps_rectify             = args["steps_rectify"]
+  steps_render              = args["steps_render"]
+  steps_ffmpeg              = args["steps_ffmpeg"]
   flow_alg                  = args["flow_alg"]
   cam_to_isp_config_file    = args["cam_to_isp_config_file"]
   pole_masks_dir            = args["pole_masks_dir"]
@@ -253,12 +267,6 @@ if __name__ == "__main__":
   binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
   disk_count = len(binary_files)
 
-  step_list_all = ["unpack", "arrange", "isp", "rectify", "render", "ffmpeg"]
-  if steps == "all":
-    step_list = step_list_all
-  else:
-    step_list = steps.split(',')
-
   # We want to be able to map a file path to its flag/variable name, so we keep
   # a dictionary of mappings between them
   paths_map = dict((eval(name), name) for name in ['cam_to_isp_config_file', 'src_intrinsic_param_file', 'rectify_file', 'rig_json_file'])
@@ -268,11 +276,6 @@ if __name__ == "__main__":
       if (path != rectify_file or path != "NONE") and "rectify" not in step_list:
         sys.stderr.write("Given --" + name + " (" + path + ") does not exist\n")
         exit(1)
-
-  for step in step_list:
-    if step not in step_list_all:
-      sys.stderr.write("Unrecognized step: " + step)
-      exit(1)
 
   if quality not in ["3k", "4k", "6k", "8k"]:
     sys.stderr.write("Unrecognized quality setting: " + quality)
@@ -291,44 +294,54 @@ if __name__ == "__main__":
 
   os.chdir(surround360_render_dir)
 
+  num_steps = sum([steps_unpack, steps_arrange, steps_isp, steps_rectify, steps_render, steps_ffmpeg])
+
   ### unpack step ###
 
-  step = "unpack"
-  unpack_params = {
-    "SURROUND360_RENDER_DIR": surround360_render_dir,
-    "BINARY_PREFIX": binary_prefix,
-    "ROOT_DIR": dest_dir,
-    "VERBOSE_LEVEL": 1 if verbose else 0,
-    "START_FRAME": start_frame,
-    "FRAME_COUNT": frame_count,
-    "DISK_COUNT": disk_count,
-  }
-  unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
+  if steps_unpack:
+    # If there is no cameranames we assume binaries are tagged with metadata
+    unpack_extra_params = ""
+    if not os.path.isfile(binary_prefix + "/cameranames.txt"):
+      unpack_extra_params += " --tagged"
+    else:
+      unpack_extra_params += " --image_width " + image_width
+      unpack_extra_params += " --image_height " + image_height
+      unpack_extra_params += " --nbits " + nbits
 
-  run_step(step, step_list, unpack_command, verbose, dryrun, file_runtimes)
+    unpack_params = {
+      "SURROUND360_RENDER_DIR": surround360_render_dir,
+      "BINARY_PREFIX": binary_prefix,
+      "ROOT_DIR": dest_dir,
+      "VERBOSE_LEVEL": 1 if verbose else 0,
+      "START_FRAME": start_frame,
+      "FRAME_COUNT": frame_count,
+      "DISK_COUNT": disk_count,
+      "FLAGS_UNPACK_EXTRA": unpack_extra_params,
+    }
+    unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
+    run_step("unpack", unpack_command, verbose, dryrun, file_runtimes, num_steps)
 
   if int(frame_count) == 0 and os.path.isdir(dest_dir + "/vid"):
     frame_count = len(os.listdir(dest_dir + "/vid"))
 
   ### arrange step ###
 
-  step = "arrange"
-  arrange_extra_params = ""
+  if steps_arrange:
+    arrange_extra_params = ""
 
-  if enable_pole_removal:
-    arrange_extra_params += " --pole_masks_dir " + pole_masks_dir
+    if enable_pole_removal:
+      arrange_extra_params += " --pole_masks_dir " + pole_masks_dir
 
-  if verbose:
-    arrange_extra_params += " --verbose"
+    if verbose:
+      arrange_extra_params += " --verbose"
 
-  arrange_params = {
-    "SURROUND360_RENDER_DIR": surround360_render_dir,
-    "ROOT_DIR": dest_dir,
-    "FLAGS_ARRANGE_EXTRA": arrange_extra_params,
-  }
-  arrange_command = ARRANGE_COMMAND_TEMPLATE.replace("\n", " ").format(**arrange_params)
-
-  run_step(step, step_list, arrange_command, verbose, dryrun, file_runtimes)
+    arrange_params = {
+      "SURROUND360_RENDER_DIR": surround360_render_dir,
+      "ROOT_DIR": dest_dir,
+      "FLAGS_ARRANGE_EXTRA": arrange_extra_params,
+    }
+    arrange_command = ARRANGE_COMMAND_TEMPLATE.replace("\n", " ").format(**arrange_params)
+    run_step("arrange", arrange_command, verbose, dryrun, file_runtimes, num_steps)
 
   # If unpack not in list of steps, we get frame count from vid directory
   if int(frame_count) == 0:
@@ -341,27 +354,26 @@ if __name__ == "__main__":
 
   ### isp step ###
 
-  step = "isp"
-  isp_extra_params = ""
+  if steps_isp:
+    isp_extra_params = ""
 
-  if verbose:
-    isp_extra_params += " --verbose"
+    if verbose:
+      isp_extra_params += " --verbose"
 
-  isp_params = {
-    "SURROUND360_RENDER_DIR": surround360_render_dir,
-    "ROOT_DIR": dest_dir,
-    "START_FRAME": start_frame,
-    "END_FRAME": end_frame,
-    "CAM_TO_ISP_CONFIG_FILE": cam_to_isp_config_file,
-    "FLAGS_ISP_EXTRA": isp_extra_params,
-  }
-  isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
-
-  run_step(step, step_list, isp_command, verbose, dryrun, file_runtimes)
+    isp_params = {
+      "SURROUND360_RENDER_DIR": surround360_render_dir,
+      "ROOT_DIR": dest_dir,
+      "START_FRAME": start_frame,
+      "END_FRAME": end_frame,
+      "CAM_TO_ISP_CONFIG_FILE": cam_to_isp_config_file,
+      "FLAGS_ISP_EXTRA": isp_extra_params,
+    }
+    isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
+    run_step("isp", isp_command, verbose, dryrun, file_runtimes, num_steps)
 
   ### rectify step ###
 
-  if "rectify" in step_list and rectify_file == "NONE":
+  if steps_rectify and rectify_file == "NONE":
     print """
     The 'rectify' step is enabled. The 'rectification file' parameter must not
     be NONE. Please supply a destination path to write the rectification file.
@@ -377,81 +389,79 @@ if __name__ == "__main__":
     print "The 'rectification file' parameter must end with .yml"
     exit(1)
 
-  step = "rectify"
-  rectify_params = {
-    "SURROUND360_RENDER_DIR": surround360_render_dir,
-    "ROOT_DIR": dest_dir,
-    "RIG_JSON_FILE": rig_json_file,
-    "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
-    "RECTIFY_FILE": rectify_file,
-    "FRAME_LIST": str(start_frame).zfill(FRAME_NUM_DIGITS),
-  }
-  rectify_command = RECTIFY_COMMAND_TEMPLATE.replace("\n", " ").format(**rectify_params)
-  run_step(step, step_list, rectify_command, verbose, dryrun, file_runtimes)
+  if steps_rectify:
+    rectify_params = {
+      "SURROUND360_RENDER_DIR": surround360_render_dir,
+      "ROOT_DIR": dest_dir,
+      "RIG_JSON_FILE": rig_json_file,
+      "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
+      "RECTIFY_FILE": rectify_file,
+      "FRAME_LIST": str(start_frame).zfill(FRAME_NUM_DIGITS),
+    }
+    rectify_command = RECTIFY_COMMAND_TEMPLATE.replace("\n", " ").format(**rectify_params)
+    run_step("rectify", rectify_command, verbose, dryrun, file_runtimes, num_steps)
 
   ### render step ###
 
-  step = "render"
-  render_extra_params = ""
+  if steps_render:
+    render_extra_params = ""
 
-  if enable_top:
-    render_extra_params += " --enable_top"
+    if enable_top:
+      render_extra_params += " --enable_top"
 
-  if enable_bottom:
-    render_extra_params += " --enable_bottom"
+    if enable_bottom:
+      render_extra_params += " --enable_bottom"
 
-    if enable_pole_removal:
-      render_extra_params += " --enable_pole_removal"
+      if enable_pole_removal:
+        render_extra_params += " --enable_pole_removal"
 
-  if enable_render_coloradjust:
-    render_extra_params += " --enable_render_coloradjust"
+    if enable_render_coloradjust:
+      render_extra_params += " --enable_render_coloradjust"
 
-  if save_debug_images:
-    render_extra_params += " --save_debug_images"
+    if save_debug_images:
+      render_extra_params += " --save_debug_images"
 
-  if verbose:
-    render_extra_params += " --verbose"
+    if verbose:
+      render_extra_params += " --verbose"
 
-  render_params = {
-    "SURROUND360_RENDER_DIR": surround360_render_dir,
-    "FLOW_ALG": flow_alg,
-    "ROOT_DIR": dest_dir,
-    "QUALITY": quality,
-    "START_FRAME": start_frame,
-    "END_FRAME": end_frame,
-    "CUBEMAP_WIDTH": cubemap_width,
-    "CUBEMAP_HEIGHT": cubemap_height,
-    "CUBEMAP_FORMAT": cubemap_format,
-    "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
-    "RECTIFY_FILE": rectify_file,
-    "RIG_JSON_FILE": rig_json_file,
-    "FLAGS_RENDER_EXTRA": render_extra_params,
-  }
-  render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
-
-  run_step(step, step_list, render_command, verbose, dryrun, file_runtimes)
+    render_params = {
+      "SURROUND360_RENDER_DIR": surround360_render_dir,
+      "FLOW_ALG": flow_alg,
+      "ROOT_DIR": dest_dir,
+      "QUALITY": quality,
+      "START_FRAME": start_frame,
+      "END_FRAME": end_frame,
+      "CUBEMAP_WIDTH": cubemap_width,
+      "CUBEMAP_HEIGHT": cubemap_height,
+      "CUBEMAP_FORMAT": cubemap_format,
+      "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
+      "RECTIFY_FILE": rectify_file,
+      "RIG_JSON_FILE": rig_json_file,
+      "FLAGS_RENDER_EXTRA": render_extra_params,
+    }
+    render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
+    run_step("render", render_command, verbose, dryrun, file_runtimes, num_steps)
 
   ### ffmpeg step ###
 
-  step = "ffmpeg"
-  ffmpeg_extra_params = ""
+  if steps_ffmpeg:
+    ffmpeg_extra_params = ""
 
-  if not verbose:
-    ffmpeg_extra_params += " -loglevel error -stats"
+    if not verbose:
+      ffmpeg_extra_params += " -loglevel error -stats"
 
-  # Sequence name is the directory containing raw data
-  sequence_name = binary_prefix.rsplit('/', 2)[-2]
-  mp4_path = dest_dir + "/" + sequence_name + "_" + str(int(timer())) + "_" + quality + "_TB.mp4"
+    # Sequence name is the directory containing raw data
+    sequence_name = binary_prefix.rsplit('/', 2)[-2]
+    mp4_path = dest_dir + "/" + sequence_name + "_" + str(int(timer())) + "_" + quality + "_TB.mp4"
 
-  ffmpeg_params = {
-    "START_NUMBER": str(start_frame).zfill(FRAME_NUM_DIGITS),
-    "ROOT_DIR": dest_dir,
-    "MP4_PATH": mp4_path,
-    "FLAGS_FFMPEG_EXTRA": ffmpeg_extra_params,
-  }
-  ffmpeg_command = FFMPEG_COMMAND_TEMPLATE.replace("\n", " ").format(**ffmpeg_params)
-
-  run_step(step, step_list, ffmpeg_command, verbose, dryrun, file_runtimes)
+    ffmpeg_params = {
+      "START_NUMBER": str(start_frame).zfill(FRAME_NUM_DIGITS),
+      "ROOT_DIR": dest_dir,
+      "MP4_PATH": mp4_path,
+      "FLAGS_FFMPEG_EXTRA": ffmpeg_extra_params,
+    }
+    ffmpeg_command = FFMPEG_COMMAND_TEMPLATE.replace("\n", " ").format(**ffmpeg_params)
+    run_step("ffmpeg", ffmpeg_command, verbose, dryrun, file_runtimes, num_steps)
 
   save_step_runtime(file_runtimes, "TOTAL", timer() - start_time)
   file_runtimes.close()

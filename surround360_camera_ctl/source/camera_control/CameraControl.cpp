@@ -1098,6 +1098,7 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  umask(ACCESSPERMS^kPermissions);
   ret = stat(kFramesDisk.c_str(), &dirStat);
   try {
     if (ret == -1 && errno == ENOENT) {

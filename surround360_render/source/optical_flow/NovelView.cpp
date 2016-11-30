@@ -302,9 +302,21 @@ void NovelViewGeneratorAsymmetricFlow::prepare(
 
   OpticalFlowInterface* flowAlg = makeOpticalFlowByName(flowAlgName);
   flowAlg->computeOpticalFlow(
-    imageL, imageR, prevFlowLtoR, prevColorImageL, prevColorImageR, flowLtoR);
+    imageL,
+    imageR,
+    prevFlowLtoR,
+    prevColorImageL,
+    prevColorImageR,
+    flowLtoR,
+    OpticalFlowInterface::DirectionHint::LEFT);
   flowAlg->computeOpticalFlow(
-    imageR, imageL, prevFlowRtoL, prevColorImageR, prevColorImageL, flowRtoL);
+    imageR,
+    imageL,
+    prevFlowRtoL,
+    prevColorImageR,
+    prevColorImageL,
+    flowRtoL,
+    OpticalFlowInterface::DirectionHint::RIGHT);
   delete flowAlg;
 }
 

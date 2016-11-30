@@ -31,6 +31,7 @@ void combineBottomImagesWithPoleRemoval(
   const bool saveFlowDataForNextFrame,
   const string& flowAlgName,
   const int alphaFeatherSize,
+  const bool enableAutoColorAdjust,
   const vector<CameraMetadata>& camModelArrayWithTop,
   CameraMetadata& bottomCamModel,
   Mat& bottomImage);

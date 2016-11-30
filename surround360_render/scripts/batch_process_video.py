@@ -77,7 +77,7 @@ if __name__ == "__main__":
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
   parser.add_argument('--rectify_file', help='path to rectification param file', required=False, default="NONE")
   parser.add_argument('--src_intrinsic_param_file', help='path to camera instrinsic param file', required=True)
-  parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_med, pixflow_ultra', required=True)
+  parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
   parser.set_defaults(save_debug_images=False)
   parser.set_defaults(enable_top=False)

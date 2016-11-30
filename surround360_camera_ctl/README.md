@@ -36,37 +36,37 @@ This part of the Surround 360 software controls the hardware (cameras) and captu
 
 * Install FlyCapture SDK (method 2):
   * Install FlyCapture SDK dependencies:
-<pre>
+```
     sudo apt-get install libraw1394-11 libgtkmm-2.4-1c2a libglademm-2.4-1c2a libgtkglextmm-x11-1.2-dev libgtkglextmm-x11-1.2 libusb-1.0-0 libglademm-2.4-dev
-</pre>
+```
 
   * Open /etc/modules and append
-<pre>
+```
     raw1394
-</pre>
+```
 
   * Install FlyCapture2 deb files using the script provided:
-<pre>
+```
     chmod +x install_flycapture.sh
     sudo sh install_flycapture.sh
-</pre>
+```
 
   * By default, Linux limits image capture to 2 MB. To capture images over 2 MB,
     extend the USBFS limit on how many buffers can be locked into the driver.
     This is done by updating the boot params in grub
 
     Open /etc/default/grub, and find and replace:
-<pre>
+```
     GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
-</pre>
-    with
-<pre>
+```
+with
+```
     GRUB_CMDLINE_LINUX_DEFAULT="quiet splash usbcore.usbfs_memory_mb=2000"
-</pre>
-    Then update grub:
-<pre>
+```
+Then update grub:
+```
     sudo update-grub
-</pre>
+```
 
 * Install Grasshopper 3 USB 3.0 (GS3-U3-41C6C-C) Firmware (optional):
   Cameras should come with latest firmware installed, but you can follow these
@@ -79,17 +79,17 @@ This part of the Surround 360 software controls the hardware (cameras) and captu
   * A power cycle of the cameras should not be required, as they are automatically rebooted after firmware update
 
 * Install CMake (method 2 - Linux only)
-<pre>
+```
   sudo apt-get install software-properties-common
   sudo add-apt-repository ppa:george-edison55/cmake-3.x
   sudo apt-get update
   sudo apt-get install cmake && sudo apt-get upgrade cmake
-</pre>
+```
 
 * Install gflags:
-<pre>
+```
   sudo apt-get install libgflags2 libgflags-dev
-</pre>
+```
 
 * Install ffmpeg:
   see https://trac.ffmpeg.org/wiki/CompilationGuide
@@ -97,22 +97,22 @@ This part of the Surround 360 software controls the hardware (cameras) and captu
 ## Compiling the Surround 360 Camera Control Software
 
 After installing all of the dependencies as described above, run:
-<pre>
-  cd <install path>/surround360/surround360_camera_ctl
+```
+  cd <install_path>/surround360/surround360_camera_ctl
   cmake -DCMAKE_BUILD_TYPE=Release
   make
-</pre>
+```
 
 To test that compilation is successful, run:
 
-<pre>
+```
   sudo ./bin/CameraControl -numcams 17 -raw -nbits 8 -shutter 20 -gain 0 -debug
-</pre>
+```
 
 We recommend configuring CMake to compile in Release mode because the code will execute faster. However, you can also set it up for debug mode with:
-<pre>
+```
   cmake -DCMAKE_BUILD_TYPE=Debug
-</pre>
+```
 
 ## Join the Surround 360 community
 

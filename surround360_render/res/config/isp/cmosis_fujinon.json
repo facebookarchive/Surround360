@@ -2,11 +2,11 @@
     "CameraIsp" : {
         "serial" : 0,
         "name" : "PointGrey Grasshopper",
-        "bitsPerPixel" : 8,
+        "bitsPerPixel" : 16,
         "compandingLut" :  [[0.0,  0.0,  0.0],
                             [0.6,  0.6,  0.0],
                             [1.0,  1.0, 0.0]],
-        "blackLevel" : [6.0, 6.0, 6.0],
+        "blackLevel" : [1542.0, 1542.0, 1542.0],
         "vignetteRollOff" : [[1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0],
                              [1.0, 1.0, 1.0],

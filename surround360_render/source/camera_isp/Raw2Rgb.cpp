@@ -14,6 +14,9 @@
 #include <string>
 
 #include "CameraIsp.h"
+#ifdef USE_HALIDE
+#include "CameraIspPipe.h"
+#endif
 #include "CvUtil.h"
 #include "SystemUtil.h"
 
@@ -31,7 +34,12 @@ DEFINE_string(output_image_path,    "",                     "output image path")
 DEFINE_string(isp_config_path,      "",                     "ISP configuration file path");
 DEFINE_int32(black_level_offset,    0,                      "amount to add to the blacklevel in the config file");
 DEFINE_int32(demosaic_filter,       EDGE_AWARE_DM_FILTER,   "Demosaic filter type: 0=Bilinear(fast), 1=Frequency, 2=Edge aware");
-DEFINE_int32(resize,                1,                      "Amount to \"bin-down\" the input. Legal values are 1, 2, 4, and 8.");
+DEFINE_int32(resize,                1,                      "Amount to \"bin-down\" the input. Legal values are 1, 2, 4, and 8");
+DEFINE_int32(output_bpp,            8,                      "output image bits per pixel, either 8 or 16");
+#ifdef USE_HALIDE
+DEFINE_bool(accelerate,             false,                  "Use halide accelerated version");
+DEFINE_bool(fast,                   false,                  "Use fastest halide for realtime apps or previews");
+#endif
 
 Mat readRaw(
     const string& filename,
@@ -63,6 +71,22 @@ Mat readRaw(
   return rawImage;
 }
 
+void runPipeline(
+  CameraIsp* cameraIsp,
+  Mat& inputImage,
+  Mat& outputImage,
+  string outputImagePath) {
+  cameraIsp->addBlackLevelOffset(FLAGS_black_level_offset);
+  cameraIsp->loadImage(inputImage);
+
+  double startTime = getCurrTimeSec();
+  cameraIsp->getImage(outputImage);
+  double endTime = getCurrTimeSec();
+  LOG(INFO) << "Runtime = " << (endTime - startTime) * 1000.0 << "ms" << endl;
+
+  imwriteExceptionOnFail(outputImagePath, outputImage);
+}
+
 int main(int argc, char* argv[]) {
   initSurround360(argc, argv);
   requireArg(FLAGS_input_image_path, "input_image_path");
@@ -74,7 +98,6 @@ int main(int argc, char* argv[]) {
   if (!ifs) {
     throw VrCamException("file read failed: " + FLAGS_isp_config_path);
   }
-
   std::string json(
     (std::istreambuf_iterator<char>(ifs)),
     std::istreambuf_iterator<char>());
@@ -89,23 +112,41 @@ int main(int argc, char* argv[]) {
       getInteger(config, "CameraIsp", "width"),
       getInteger(config, "CameraIsp", "height"),
       getInteger(config, "CameraIsp", "bitsPerPixel"))
-    : imreadExceptionOnFail(FLAGS_input_image_path, CV_LOAD_IMAGE_GRAYSCALE);
+    : imreadExceptionOnFail(
+      FLAGS_input_image_path,
+      CV_LOAD_IMAGE_GRAYSCALE | CV_LOAD_IMAGE_ANYDEPTH);
 
   if (inputImage.cols > 2 && inputImage.rows > 2) {
-    CameraIsp cameraIsp(json);
+    const uint8_t depth = inputImage.type() & CV_MAT_DEPTH_MASK;
 
-    // Imaging pipeline -
-    // Note that the pipeline holds a floating point copy of the image so it can
-    // retain precision
-    cameraIsp.addBlackLevelOffset(FLAGS_black_level_offset);
-    cameraIsp.setDemosaicFilter(FLAGS_demosaic_filter);
-    cameraIsp.setResize(FLAGS_resize);
-    cameraIsp.loadImage(inputImage);
+    // Make all the input data S16
+    Mat inputImage16(inputImage.rows, inputImage.cols, CV_16U);
 
-    Mat outputImage = cameraIsp.getImage();
+    if (depth == CV_8U) {
+      LOG(INFO) << "8 bit raw" << endl;
+      inputImage16 = convert8bitTo16bit(inputImage);
+    } else if (depth == CV_16U) {
+      LOG(INFO) << "16 bit raw" << endl;
+      inputImage16 = inputImage;
+    } else {
+      throw VrCamException("input is larger that 16 bits per pixel");
+    }
 
-    // Save the final image
-    imwriteExceptionOnFail(FLAGS_output_image_path, outputImage);
+    Mat outputImage(inputImage.rows, inputImage.cols, FLAGS_output_bpp == 8 ? CV_8UC3 : CV_16UC3);
+
+#ifdef USE_HALIDE
+    if (FLAGS_accelerate) {
+      CameraIspPipe cameraIsp(json, FLAGS_fast, FLAGS_output_bpp);
+      runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
+    } else {
+#else
+    {
+#endif
+      CameraIsp cameraIsp(json, FLAGS_output_bpp);
+      cameraIsp.setDemosaicFilter(FLAGS_demosaic_filter);
+      cameraIsp.setResize(FLAGS_resize);
+      runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
+    }
   } else {
     throw VrCamException("Unable to open " + FLAGS_input_image_path);
   }

@@ -35,6 +35,9 @@ void imwriteExceptionOnFail(
   const Mat& image,
   const vector<int>& params = vector<int>());
 
+// Converts input 8-bit image to 16-bit
+Mat convert8bitTo16bit(const Mat& inputImage);
+
 // given a vector of images, stack them horizontally or vertically to form a larger image
 Mat stackHorizontal(const std::vector<Mat>& images);
 Mat stackVertical(const std::vector<Mat>& images);

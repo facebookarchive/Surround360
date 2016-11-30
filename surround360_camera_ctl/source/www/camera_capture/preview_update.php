@@ -1,31 +1,39 @@
 <?php
-        $shutter = $_GET['shutter'];
-        $gain = $_GET['gain'];
-        $cameras = $_GET['cameras'];
-        $key = ftok("/usr/local/bin/CameraControl", 'S');
-        $queue = msg_get_queue($key, 0666);
-        $shutter_cmd_msg = "shutter " . $shutter . "\0";
-        $gain_cmd_msg = "gain " . $gain . "\0";
+/**
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the license found in the
+* LICENSE_camera_ctl file in the root directory of this subproject.
+*/
 
-        $ret1 = msg_send($queue, 1, $shutter_cmd_msg, false, true, $msg_err);
-        $ret2 = msg_send($queue, 1, $gain_cmd_msg, false, true, $msg_err);
+  $shutter = $_GET['shutter'];
+  $gain = $_GET['gain'];
+  $cameras = $_GET['cameras'];
+  $key = ftok("/usr/local/bin/CameraControl", 'S');
+  $queue = msg_get_queue($key, 0666);
+  $shutter_cmd_msg = "shutter " . $shutter . "\0";
+  $gain_cmd_msg = "gain " . $gain . "\0";
 
-        $tokens = explode(",", $cameras);
+  $ret1 = msg_send($queue, 1, $shutter_cmd_msg, false, true, $msg_err);
+  $ret2 = msg_send($queue, 1, $gain_cmd_msg, false, true, $msg_err);
 
-        $i = 0;
-        foreach ($tokens as $token) {
-            $cmd = "cam " . $i . " " . $token . "\0";
-            $ret3 = msg_send($queue, 1, $cmd, false, true, $msg_err);
-            if (!$ret3) {
-               echo "ERROR";
-               return;
-            }
-            $i = $i + 1;
-        }
+  $tokens = explode(",", $cameras);
 
-        if (!($ret1 && $ret2 && $ret3)) {
-            echo "ERROR";
-        } else {
-            echo "OK";
-        }
+  $i = 0;
+  foreach ($tokens as $token) {
+    $cmd = "cam " . $i . " " . $token . "\0";
+    $ret3 = msg_send($queue, 1, $cmd, false, true, $msg_err);
+    if (!$ret3) {
+       echo "ERROR";
+       return;
+    }
+    $i = $i + 1;
+  }
+
+  if (!($ret1 && $ret2 && $ret3)) {
+    echo "ERROR";
+  } else {
+    echo "OK";
+  }
 ?>

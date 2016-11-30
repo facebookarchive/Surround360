@@ -1,68 +1,76 @@
 <?php
-        $camera_props_file = './camProps_raw';
+/**
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the license found in the
+* LICENSE_camera_ctl file in the root directory of this subproject.
+*/
 
-        if (file_exists($camera_props_file)) {
-                $output = file($camera_props_file, FILE_IGNORE_NEW_LINES);
-        } else {
-                $command = '/usr/local/bin/CameraControl --props --raw --debug';
-                $pid = exec($command, $output, $return_var);
+  $camera_props_file = './camProps_raw';
 
-                if ($return_var !== 0) { // failure
-                        echo 'Something went wrong!';
-                        return;
-                }
-        }
+  if (file_exists($camera_props_file)) {
+    $output = file($camera_props_file, FILE_IGNORE_NEW_LINES);
+  } else {
+    $command = '/usr/local/bin/CameraControl --props --raw --debug';
+    $pid = exec($command, $output, $return_var);
 
-        $prefix = '*PROP*';
+    if ($return_var !== 0) { // failure
+            echo 'Something went wrong!';
+            return;
+    }
+  }
 
-        $properties = array();
-        foreach ($output as $property) {
-                if (strpos($property, $prefix) !== 0) {
-                        continue;
-                }
+  $prefix = '*PROP*';
 
-                $props = explode(';', $property);
-                array_shift($props);
+  $properties = array();
+  foreach ($output as $property) {
+    if (strpos($property, $prefix) !== 0) {
+      continue;
+    }
 
-                if ($props[0] === 'whitebalance') {
-                        // Split in two
-                        $props[] = 1;
-                        $prop_red = $prop_blue = $props;
-                        $prop_red[0] = 'W.B. (red)';
-                        $prop_blue[0] = 'W.B. (blue)';
-                        $prop_red[5] .= '1';
-                        $prop_blue[5] .= '2';
+    $props = explode(';', $property);
+    array_shift($props);
 
-                        $vals = explode(' ', $props[4]);
-                        $prop_red[4] = $vals[0];
-                        $prop_blue[4] = $vals[1];
+    if ($props[0] === 'whitebalance') {
+      // Split in two
+      $props[] = 1;
+      $prop_red = $prop_blue = $props;
+      $prop_red[0] = 'W.B. (red)';
+      $prop_blue[0] = 'W.B. (blue)';
+      $prop_red[5] .= '1';
+      $prop_blue[5] .= '2';
 
-                        $properties[] = $prop_red;
-                        $properties[] = $prop_blue;
-                        continue;
-                }
+      $vals = explode(' ', $props[4]);
+      $prop_red[4] = $vals[0];
+      $prop_blue[4] = $vals[1];
 
-                $props[] = 0.001;
-                $properties[] = $props;
-        }
+      $properties[] = $prop_red;
+      $properties[] = $prop_blue;
+      continue;
+    }
 
-        echo '<table border="0"  id="cssTable">';
+    $props[] = 0.001;
+    $properties[] = $props;
+  }
 
-        foreach ($properties as $props) {
-                $name_id = $props[5];
-                $input_params = 'min="'.$props[1].'" max="'.$props[2].'" value="'.$props[4].'" step="'.end($props).'"';
-                echo '<tr>';
-                echo '<td>'.ucfirst($props[0]).'</td>';
-                echo '<td><input type="range" name="'.$name_id.'" id="'.$name_id.'_range" '.$input_params.' oninput="showValue(\''.$name_id.'_number\', this.value)" /></td>';
-                echo '<td><input type="number" id="'.$name_id.'_number" style="width: 6em;" '.$input_params.' oninput="showValue(\''.$name_id.'_range\', this.value)" /></td>';
-                echo '<td>'.$props[3].'</td>';
-                echo '<script type="text/javascript">';
-                echo 'function showValue(id, value)';
-                echo '{';
-                echo '  document.getElementById(id).value=value;';
-                echo '}';
-                echo '</script>';
-                echo '</tr>';
-        }
-        echo '</table>';
+  echo '<table border="0"  id="cssTable">';
+
+  foreach ($properties as $props) {
+    $name_id = $props[5];
+    $input_params = 'min="'.$props[1].'" max="'.$props[2].'" value="'.$props[4].'" step="'.end($props).'"';
+    echo '<tr>';
+    echo '<td>'.ucfirst($props[0]).'</td>';
+    echo '<td><input type="range" name="'.$name_id.'" id="'.$name_id.'_range" '.$input_params.' oninput="showValue(\''.$name_id.'_number\', this.value)" /></td>';
+    echo '<td><input type="number" id="'.$name_id.'_number" style="width: 6em;" '.$input_params.' oninput="showValue(\''.$name_id.'_range\', this.value)" /></td>';
+    echo '<td>'.$props[3].'</td>';
+    echo '<script type="text/javascript">';
+    echo 'function showValue(id, value)';
+    echo '{';
+    echo '  document.getElementById(id).value=value;';
+    echo '}';
+    echo '</script>';
+    echo '</tr>';
+  }
+  echo '</table>';
 ?>

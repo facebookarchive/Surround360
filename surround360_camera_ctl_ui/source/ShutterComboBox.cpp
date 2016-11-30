@@ -1,10 +1,11 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE_camera_ctl file in the root directory of this subproject.
- */
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the license found in the
+* LICENSE_camera_ctl_ui file in the root directory of this subproject.
+*/
+
 #include "ShutterComboBox.hpp"
 #include <string>
 #include <iostream>
@@ -27,10 +28,10 @@ static const struct {
   { .speed = 1/50.0f,   .name = "1/50" },
   { .speed = 1/60.0f,   .name = "1/60" },
   { .speed = 1/100.0f,  .name = "1/100" },
-  { .speed = 1/125.0f,  .name = "1/125" },  
+  { .speed = 1/125.0f,  .name = "1/125" },
   { .speed = 1/150.0f,  .name = "1/150" },
   { .speed = 1/200.0f,  .name = "1/200" },  // 5ms
-  { .speed = 1/250.0f,  .name = "1/250" },  
+  { .speed = 1/250.0f,  .name = "1/250" },
   { .speed = 1/500.0f,  .name = "1/500" },
   { .speed = 1/600.0f,  .name = "1/600" },
   { .speed = 1/700.0f,  .name = "1/700" },

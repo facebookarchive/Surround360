@@ -92,19 +92,27 @@ class CameraIspPipe : public CameraIsp {
 
   void runPipe(const bool swizzle) {
     // Call apropos the Halide generated ISP pipeline
+    int pattern = 0;
+    if (bayerPattern.find("GBRG") != std::string::npos) {
+        pattern = 0;
+    } else if (bayerPattern.find("RGGB") != std::string::npos) {
+        pattern = 1;
+    } else {
+    }
+
     if (outputBpp == 8) {
       if (fast) {
         CameraIspGenFast8(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, pattern, &outputBufferBp);
       } else {
         CameraIspGen8(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, pattern, &outputBufferBp);
       }
     } else {
       if (fast) {
@@ -112,13 +120,13 @@ class CameraIspPipe : public CameraIsp {
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, pattern, &outputBufferBp);
       } else {
         CameraIspGen16(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, pattern, &outputBufferBp);
       }
     }
   }

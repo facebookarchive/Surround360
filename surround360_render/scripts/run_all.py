@@ -280,7 +280,7 @@ if __name__ == "__main__":
   for path, name in paths_map.iteritems():
     if not os.path.isfile(path):
       # rectify_file can be set to NONE
-      if (path != rectify_file or path != "NONE") and "rectify" not in step_list:
+      if (path != rectify_file or path != "NONE") and not steps_rectify:
         sys.stderr.write("Given --" + name + " (" + path + ") does not exist\n")
         exit(1)
 

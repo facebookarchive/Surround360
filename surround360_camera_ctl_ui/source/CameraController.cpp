@@ -174,7 +174,6 @@ bool CameraController::updateCameraParams(
   }
 }
 
-
 void CameraController::startProducer(const unsigned int count) {
   for (int pid = 0; pid < count; ++pid) {
     m_prodThread.emplace_back(&CameraController::cameraProducer, this, pid);
@@ -193,6 +192,9 @@ void CameraController::cameraProducer(const unsigned int id) {
   const int lastCamera = std::min(cameraOffset + camerasPerProducer, m_camera.size());
   unsigned int frameCount = 0;
   unsigned int frameNumber = 0;
+
+  const size_t maxRes = 4096;
+  vector<uint8_t, aligned_allocator<uint8_t, 64>> tmpFrameBuf(maxRes * maxRes);
 
   cpu_set_t threadCpuAffinity;
   CPU_ZERO(&threadCpuAffinity);
@@ -328,10 +330,8 @@ void CameraController::cameraProducer(const unsigned int id) {
 
         if (i == m_previewIndex) {
           if (!m_recording) {
-            auto start = reinterpret_cast<uint8_t*>(bytes);
-            auto end = start + frameSize();
-            auto ptr = make_unique<vector<uint8_t>>(start, end);
-            m_cameraView.updatePreviewFrame(&(*ptr)[0]);
+            memcpy(tmpFrameBuf.data(), bytes, frameSize());
+            m_cameraView.updatePreviewFrame(tmpFrameBuf.data());
           } else {
             m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
           }

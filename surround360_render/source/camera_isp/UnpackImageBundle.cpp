@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
       pos[idx] += readCount[idx];
 
       if (frameIndex % 10 == 0 || frameIndex == lastFrame) {
-        int percentDoneCurr = frameIndex * 100 / lastFrame;
+        int percentDoneCurr = (frameIndex + 1) * 100 / (lastFrame + 1);
         LOG_IF(INFO, percentDoneCurr != percentDonePrev) << "Percent done " << percentDoneCurr << "%";
         percentDonePrev = percentDoneCurr;
       }

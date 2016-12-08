@@ -335,7 +335,7 @@ Vec3f findBlackLevel(
   vector<vector<Point>> contours;
   static const float kStraightenFactor = 0.01f;
   contours = findContours(
-      blackHoleMask, false, outputDir, stepDebugImages, kStraightenFactor);
+    blackHoleMask, false, outputDir, stepDebugImages, kStraightenFactor);
 
   // Filter contours
   vector<vector<Point>> contoursFiltered;
@@ -352,7 +352,7 @@ Vec3f findBlackLevel(
 
     // Discard contours that are too small and non-circular
     static const int kMinNumVertices = 10;
-    static const float kMaxRatioAreas = 0.5f;
+    static const float kMaxRatioAreas = 0.3f;
     if (contArea < kNumPixelsMin ||
         cont.size() < kMinNumVertices ||
         contArea / circleArea < kMaxRatioAreas) {
@@ -362,6 +362,10 @@ Vec3f findBlackLevel(
     circleCenters.push_back(circleCenter);
     circleRadii.push_back(circleRadius);
     contoursFiltered.push_back(contours[i]);
+  }
+
+  if (contoursFiltered.size() == 0) {
+    throw VrCamException("Cannot find black hole!");
   }
 
   if (saveDebugImages) {
@@ -447,6 +451,8 @@ vector<ColorPatch> detectColorChart(
     const Mat& image,
     const int numSquaresW,
     const int numSquaresH,
+    const float minAreaChart,
+    const float maxAreaChart,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
@@ -497,14 +503,6 @@ vector<ColorPatch> detectColorChart(
   // Dilate gaps so contours don't contain pixels outside patch
   bw = dilateGaps(bw, saveDebugImages, outputDir, stepDebugImages);
 
-  // Morphological constraints for chart detection
-  // - connected component must be larger than 1% of image size
-  // - color chart cannot be larger than 40% of image size
-  const float imSize = bw.cols * bw.rows;
-  const float minNumPixels = 0.01f * imSize;
-  const float maxAreaChart = 0.4f * imSize;
-  static const float kStraightenFactor = 0.08f;
-
   // Connected components
   Mat labels;
   Mat stats;
@@ -515,62 +513,45 @@ vector<ColorPatch> detectColorChart(
   vector<vector<Point>> contours;
   Mat bwLabel(bw.size(), CV_8UC1, Scalar::all(0));
   const Point center = Point(bw.cols / 2, bw.rows / 2);
-  bool isChartFound = false;
+  const int numPatches = numSquaresW * numSquaresH;
   for (int label = 1; label < la; ++label) {
     const int numPixels = stats.at<int>(label, CC_STAT_AREA);
-    if (numPixels < minNumPixels) {
-      continue;
-    }
-
-    const int top  = stats.at<int>(label, CC_STAT_TOP);
+    const int top = stats.at<int>(label, CC_STAT_TOP);
     const int left = stats.at<int>(label, CC_STAT_LEFT);
     const int width = stats.at<int>(label, CC_STAT_WIDTH);
-    const int height  = stats.at<int>(label, CC_STAT_HEIGHT);
-
-    // Assuming chart is centered
-    static const float kFracErrorX = 0.10f;
-    if (left > (1.0f + kFracErrorX) * center.x ||
-        top > center.y ||
-        left + width < (1.0f - kFracErrorX) * center.x ||
-        top + height < center.y) {
-      continue;
-    }
+    const int height = stats.at<int>(label, CC_STAT_HEIGHT);
 
     // Assuming chart doesn't take too much of the image
-    if (width * height > maxAreaChart) {
+    if (numPixels < minAreaChart || width * height > maxAreaChart) {
       continue;
     }
 
     // Get contours for current label
     bwLabel.setTo(Scalar::all(0));
     inRange(labels, label, label, bwLabel);
-    contours = findContours(
+    static const float kStraightenFactor = 0.08f;
+    vector<vector<Point>> contoursI = findContours(
       bwLabel, saveDebugImages, outputDir, stepDebugImages, kStraightenFactor);
 
     // Check if we have at least as many contours as number of patches
-    if (contours.size() >= numSquaresW * numSquaresH) {
-      isChartFound = true;
-      break;
+    // (+1 to account for chart border)
+    if (contoursI.size() >= numPatches + 1) {
+      for (const auto& contour : contoursI) {
+        contours.push_back(contour);
+      }
     }
-  }
-
-  if (!isChartFound) {
-    throw VrCamException("No chart found");
   }
 
   vector<ColorPatch> colorPatchList;
 
   // Morphological constraints for patch filtering
-  // - patch size between 0.01% and 0.45% of image size
-  // - patch aspect ratio <= 1.2
-  // - patch is square
-  const float minArea = 0.01f / 100.0f * imSize;
-  const float maxArea = 0.45f / 100.0f * imSize;
-  static const float kMaxAspectRatio = 1.2f;
+  static const float kMaxAspectRatio = 2.0f;
   static const int kNumEdges = 4;
 
   // Filter contours
   int countPatches = 0;
+  const float minAreaPatch = minAreaChart / numPatches;
+  const float maxAreaPatch = maxAreaChart / numPatches;
   for (int i = 0; i < contours.size(); ++i) {
     vector<Point2i> cont = contours[i];
     RotatedRect boundingBox = minAreaRect(cont);
@@ -585,7 +566,7 @@ vector<ColorPatch> detectColorChart(
       1.0f * std::max(width, height) / (1.0f * std::min(width, height));
 
     // Discard contours that are too small/large, non-square and non-convex
-    if (area < minArea || area > maxArea ||
+    if (area < minAreaPatch || area > maxAreaPatch ||
         cont.size() != kNumEdges ||
         aspectRatio > kMaxAspectRatio ||
         !isContourConvex(cont)) {
@@ -596,7 +577,7 @@ vector<ColorPatch> detectColorChart(
 
     // Create patch mask
     Mat patchMask(bw.size(), CV_8UC1, Scalar::all(0));
-    patchMask(boundingRect(cont)).setTo(Scalar::all(255));
+    drawContours(patchMask, contours, i, 255, CV_FILLED);
 
     // Add patch to list
     ColorPatch colorPatch;

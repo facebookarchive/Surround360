@@ -160,6 +160,8 @@ vector<ColorPatch> detectColorChart(
   const Mat& image,
   const int numSquaresW,
   const int numSquaresH,
+  const float minAreaChart,
+  const float maxAreaChart,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);

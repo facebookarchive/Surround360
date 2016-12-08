@@ -89,10 +89,15 @@ int main(int argc, char** argv) {
   }
   LOG(INFO) << "Detecting color chart...";
 
+  const float imageSize = raw8.rows * raw8.cols;
+  const float minAreaChart = (1.0f / 100.0f) * imageSize;
+  const float maxAreaChart = (40.0f / 100.0f) * imageSize;
   vector<ColorPatch> colorPatches = detectColorChart(
     raw8,
     FLAGS_num_squares_w,
     FLAGS_num_squares_h,
+    minAreaChart,
+    maxAreaChart,
     FLAGS_save_debug_images,
     FLAGS_output_data_dir,
     stepDebugImages);

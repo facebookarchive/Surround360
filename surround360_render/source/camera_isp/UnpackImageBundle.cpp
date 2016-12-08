@@ -281,7 +281,7 @@ int main(int argc, char** argv) {
         FLAGS_dest_path + "/img_" +
         to_string(frameNumber) + "_cam_" +
         file_tag + "_raw" + to_string(nBits) + ".tiff";
-      imwriteExceptionOnFail(outFilename, outImage);
+      imwriteExceptionOnFail(outFilename, outImage, tiffParams);
     }
 
     if (isDone) {

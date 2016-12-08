@@ -26,6 +26,9 @@ namespace util {
 using namespace std;
 using namespace cv;
 
+// 259: TIFF compression tag. 1: dump mode
+static const vector<int> tiffParams = {259, 1};
+
 // wrapper for cv::imread which throws an exception if loading fails
 Mat imreadExceptionOnFail(const string& filename, const int flags = IMREAD_COLOR);
 

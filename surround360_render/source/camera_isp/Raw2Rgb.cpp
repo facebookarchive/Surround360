@@ -132,7 +132,9 @@ int main(int argc, char* argv[]) {
       throw VrCamException("input is larger that 16 bits per pixel");
     }
 
-    Mat outputImage(inputImage.rows, inputImage.cols, FLAGS_output_bpp == 8 ? CV_8UC3 : CV_16UC3);
+    const int width = inputImage.cols / FLAGS_resize;
+    const int height = inputImage.rows / FLAGS_resize;
+    Mat outputImage(height, width, FLAGS_output_bpp == 8 ? CV_8UC3 : CV_16UC3);
 
 #ifdef USE_HALIDE
     if (FLAGS_accelerate) {

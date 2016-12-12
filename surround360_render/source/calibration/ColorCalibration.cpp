@@ -494,14 +494,23 @@ vector<ColorPatch> detectColorChart(
     imwriteExceptionOnFail(adaptiveThreshImageFilename, bw);
   }
 
+  const int numPatches = numSquaresW * numSquaresH;
+  const float minAreaPatch = minAreaChart / numPatches;
+  const float maxAreaPatch = maxAreaChart / numPatches;
+  const float bwArea = bw.rows * bw.cols;
+  static const float kScaleElement = 10.0f;
+  const float morphElementSize = kScaleElement * minAreaPatch / bwArea;
+
   // Morphological closing to reattach patches
-  bw = fillGaps(bw, saveDebugImages, outputDir, stepDebugImages);
+  bw = fillGaps(bw, morphElementSize, saveDebugImages, outputDir, stepDebugImages);
 
   // Remove small objects
-  bw = removeSmallObjects(bw, saveDebugImages, outputDir, stepDebugImages);
+  static const float kScaleSmallestObject = 0.3f;
+  const float smallestObjectSize = kScaleSmallestObject * minAreaPatch;
+  bw = removeSmallObjects(bw, smallestObjectSize, saveDebugImages, outputDir, stepDebugImages);
 
   // Dilate gaps so contours don't contain pixels outside patch
-  bw = dilateGaps(bw, saveDebugImages, outputDir, stepDebugImages);
+  bw = dilateGaps(bw, morphElementSize, saveDebugImages, outputDir, stepDebugImages);
 
   // Connected components
   Mat labels;
@@ -513,7 +522,6 @@ vector<ColorPatch> detectColorChart(
   vector<vector<Point>> contours;
   Mat bwLabel(bw.size(), CV_8UC1, Scalar::all(0));
   const Point center = Point(bw.cols / 2, bw.rows / 2);
-  const int numPatches = numSquaresW * numSquaresH;
   for (int label = 1; label < la; ++label) {
     const int numPixels = stats.at<int>(label, CC_STAT_AREA);
     const int top = stats.at<int>(label, CC_STAT_TOP);
@@ -550,8 +558,6 @@ vector<ColorPatch> detectColorChart(
 
   // Filter contours
   int countPatches = 0;
-  const float minAreaPatch = minAreaChart / numPatches;
-  const float maxAreaPatch = maxAreaChart / numPatches;
   for (int i = 0; i < contours.size(); ++i) {
     vector<Point2i> cont = contours[i];
     RotatedRect boundingBox = minAreaRect(cont);
@@ -613,12 +619,13 @@ vector<ColorPatch> detectColorChart(
 
 Mat fillGaps(
     const Mat& imageBwIn,
+    const float elementSize,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
 
   Mat imageBwOut;
-  Mat element = createMorphElement(imageBwIn.size(), MORPH_CROSS);
+  Mat element = createMorphElement(imageBwIn.size(), elementSize, MORPH_CROSS);
   morphologyEx(imageBwIn, imageBwOut, MORPH_CLOSE, element);
 
   if (saveDebugImages) {
@@ -632,12 +639,13 @@ Mat fillGaps(
 
 Mat dilateGaps(
     const Mat& imageBwIn,
+    const float elementSize,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
 
   Mat imageBwOut;
-  Mat element = createMorphElement(imageBwIn.size(), MORPH_RECT);
+  Mat element = createMorphElement(imageBwIn.size(), elementSize, MORPH_RECT);
   dilate(imageBwIn, imageBwOut, element);
 
   if (saveDebugImages) {
@@ -649,10 +657,13 @@ Mat dilateGaps(
   return imageBwOut;
 }
 
-Mat createMorphElement(const Size imageSize, const int shape) {
-  static const float kMorphFrac = 0.3f / 100.0f;
+Mat createMorphElement(
+    const Size imageSize,
+    const float elementSize,
+    const int shape) {
+
   const int morphRadius =
-    kMorphFrac * std::min(imageSize.width, imageSize.height);
+    elementSize * std::min(imageSize.width, imageSize.height);
   Size morphSize = Size(2 * morphRadius + 1, 2 * morphRadius + 1);
   return getStructuringElement(
     shape,
@@ -662,12 +673,10 @@ Mat createMorphElement(const Size imageSize, const int shape) {
 
 Mat removeSmallObjects(
     const Mat& imageBwIn,
+    const float smallestObjectSize,
     const bool saveDebugImages,
     const string& outputDir,
     int& stepDebugImages) {
-
-  static const float kMinAreaFrac = 0.01f / 100.0f;
-  const int minArea = kMinAreaFrac * imageBwIn.cols * imageBwIn.rows;
 
   Mat labels;
   Mat stats;
@@ -677,7 +686,7 @@ Mat removeSmallObjects(
     connectedComponentsWithStats(imageBwIn, labels, stats, centroids);
 
   for (int label = 0; label < numConnectedComponents; ++label) {
-    if (stats.at<int>(label, CC_STAT_AREA) < minArea) {
+    if (stats.at<int>(label, CC_STAT_AREA) < smallestObjectSize) {
       labelsSmall.insert(label);
     }
   }

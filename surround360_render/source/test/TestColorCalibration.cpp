@@ -31,6 +31,8 @@ DEFINE_string(image_path,           "",     "path to RAW image containing color 
 DEFINE_string(isp_passthrough_path, "",     "passthrough ISP configuration file path");
 DEFINE_int32(num_squares_w,         6,      "number of squares horizontally");
 DEFINE_int32(num_squares_h,         4,      "number of squares vertically");
+DEFINE_double(min_area_chart_perc,  0.5,    "expected min chart area (% of entire image)");
+DEFINE_double(max_area_chart_perc,  40.0,   "expected max chart area (% of entire image)");
 DEFINE_string(output_data_dir,      ".",    "path to write data for debugging");
 DEFINE_double(clamp_min,            0.0,    "min clamping threshold");
 DEFINE_double(clamp_max,            1.0,    "max clamping threshold");
@@ -90,8 +92,8 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Detecting color chart...";
 
   const float imageSize = raw8.rows * raw8.cols;
-  const float minAreaChart = (1.0f / 100.0f) * imageSize;
-  const float maxAreaChart = (40.0f / 100.0f) * imageSize;
+  const float minAreaChart = (FLAGS_min_area_chart_perc / 100.0f) * imageSize;
+  const float maxAreaChart = (FLAGS_max_area_chart_perc / 100.0f) * imageSize;
   vector<ColorPatch> colorPatches = detectColorChart(
     raw8,
     FLAGS_num_squares_w,

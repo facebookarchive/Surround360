@@ -169,6 +169,7 @@ vector<ColorPatch> detectColorChart(
 // Fills gaps in input binary image
 Mat fillGaps(
   const Mat& imageBw,
+  const float elementSize,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);
@@ -176,16 +177,21 @@ Mat fillGaps(
 // Dilates gaps to avoid outliers on contour detection
 Mat dilateGaps(
   const Mat& imageBw,
+  const float elementSize,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);
 
 // Creates structuring element of given shape for morphological operations
-Mat createMorphElement(const Size imageSize, const int shape);
+Mat createMorphElement(
+  const Size imageSize,
+  const float elementSize,
+  const int shape);
 
 // Removes small objects
 Mat removeSmallObjects(
   const Mat& imageBw,
+  const float smallestObjectSize,
   const bool saveDebugImages,
   const string& outputDir,
   int& stepDebugImages);

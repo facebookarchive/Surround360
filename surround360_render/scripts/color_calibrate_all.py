@@ -27,6 +27,10 @@ COLOR_CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestColorCalibration
 --image_path {IMAGE_PATH}
 --isp_passthrough_path {ISP_JSON}
+--num_squares_w {NUM_SQUARES_W}
+--num_squares_h {NUM_SQUARES_H}
+--min_area_chart_perc {MIN_AREA_CHART_PERC}
+--max_area_chart_perc {MAX_AREA_CHART_PERC}
 --output_data_dir {OUTPUT_DIR}
 --log_dir {LOG_DIR}
 --clamp_min {CLAMP_MIN}
@@ -46,6 +50,11 @@ def parse_args():
   parser.add_argument('--black_level_darkest',  help='if true, assume black level is darkest point', action='store_true')
   parser.add_argument('--black_level_adjust',   help='if true, sets each channel black level to median of all cameras', action='store_true')
   parser.add_argument('--black_level',          help='manual black level', required=False, default='NONE')
+  parser.add_argument('--num_squares_w',        help='number of squares horizontally', required=False, default='6')
+  parser.add_argument('--num_squares_h',        help='number of squares vertically', required=False, default='4')
+  parser.add_argument('--min_area_chart_perc',  help='expected min chart area (% of entire image)', required=False, default='0.5')
+  parser.add_argument('--max_area_chart_perc',  help='expected max chart area (% of entire image)', required=False, default='40.0')
+
   return vars(parser.parse_args())
 
 def start_subprocess(name, cmd):
@@ -89,6 +98,10 @@ if __name__ == "__main__":
   black_level_darkest = args["black_level_darkest"]
   black_level_adjust = args["black_level_adjust"]
   black_level = args["black_level"]
+  num_squares_w = int(args["num_squares_w"])
+  num_squares_h = int(args["num_squares_h"])
+  min_area_chart_perc = float(args["min_area_chart_perc"])
+  max_area_chart_perc = float(args["max_area_chart_perc"])
 
   print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
 
@@ -132,6 +145,10 @@ if __name__ == "__main__":
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "IMAGE_PATH": raw_charts[i],
       "ISP_JSON": isp_passthrough_json,
+      "NUM_SQUARES_W": num_squares_w,
+      "NUM_SQUARES_H": num_squares_h,
+      "MIN_AREA_CHART_PERC": min_area_chart_perc,
+      "MAX_AREA_CHART_PERC": max_area_chart_perc,
       "OUTPUT_DIR": out_dirs[i] + "_" + step,
       "LOG_DIR": out_dirs[i]+ "_" + step,
       "CLAMP_MIN": 0.0,
@@ -194,6 +211,10 @@ if __name__ == "__main__":
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "IMAGE_PATH": raw_charts[i],
       "ISP_JSON": isp_passthrough_json,
+      "NUM_SQUARES_W": num_squares_w,
+      "NUM_SQUARES_H": num_squares_h,
+      "MIN_AREA_CHART_PERC": min_area_chart_perc,
+      "MAX_AREA_CHART_PERC": max_area_chart_perc,
       "OUTPUT_DIR": out_dirs[i]+ "_" + step,
       "LOG_DIR": out_dirs[i]+ "_" + step,
       "CLAMP_MIN": intercept_x_max,

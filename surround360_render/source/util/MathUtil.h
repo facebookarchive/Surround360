@@ -197,21 +197,12 @@ public:
     }
   }
 
-  void setPoint(const int i, const V p) {
-    if (0 <= i && i < points_.size()) {
-      points_[i] = p;
-    }
-  }
-
   void addPoint(const V p) {
     points_.push_back(p);
   }
 
-  V* getPoint(const int i) const {
-    if (0 <= i && i < points_.size()) {
-      return points_[i];
-    }
-    return NULL;
+  void clearPoints() {
+    points_.clear();
   }
 
   inline V operator()(const int i, const int j, const T t) const {

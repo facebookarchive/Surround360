@@ -48,7 +48,8 @@ class CameraIsp {
   cv::Point3f blackLevel;
   cv::Point3f clampMin;
   cv::Point3f clampMax;
-  vector<cv::Point3f> vignetteRollOff;
+  vector<cv::Point3f> vignetteRollOffH;
+  vector<cv::Point3f> vignetteRollOffV;
 
   int stuckPixelThreshold;
   float stuckPixelDarknessThreshold;
@@ -72,13 +73,13 @@ class CameraIsp {
   DemosaicFilter demosaicFilter;
   int resize;
   vector<Vec3f> toneCurveLut;
-  shared_ptr<BezierCurve<float, cv::Point3f > > vignetteCurve;
+  BezierCurve<float, Vec3f> vignetteCurveH;
+  BezierCurve<float, Vec3f> vignetteCurveV;
 
   const int outputBpp;
   const int width;
   const int height;
-  const float halfWidth;
-  const float halfHeight;
+  const int maxDimension;
   const float maxD; // max diagonal distance
   const float sqrtMaxD; // max diagonal distance
 
@@ -429,8 +430,7 @@ class CameraIsp {
       outputBpp(outputBpp),
       width(0),
       height(0),
-      halfWidth(0),
-      halfHeight(0),
+      maxDimension(0),
       maxD(0),
       sqrtMaxD(0) {
 
@@ -447,8 +447,8 @@ class CameraIsp {
     stuckPixelThreshold = 0;
     stuckPixelDarknessThreshold = 0;
     stuckPixelRadius = 0;
-    vignetteRollOff.push_back(Point3f(0.0f, 0.0f, 0.0f));
-    vignetteRollOff.push_back(Point3f(1.0f, 1.0f, 1.0f));
+    vignetteRollOffH.push_back(Vec3f(1.0f, 1.0f, 1.0f));
+    vignetteRollOffV.push_back(Vec3f(1.0f, 1.0f, 1.0f));
     whiteBalanceGain = Point3f(1.0f, 1.0f, 1.0f);
     ccm = Mat::eye(3, 3, CV_32F);
     saturation = 1.0f;
@@ -512,12 +512,17 @@ class CameraIsp {
         VLOG(1) << "Using default stuckPixelRadius = " << stuckPixelRadius << endl;
       }
 
-      if (config["CameraIsp"].HasKey("vignetteRollOff")) {
-        vignetteRollOff = getCoordList(config, "CameraIsp", "vignetteRollOff");
+      if (config["CameraIsp"].HasKey("vignetteRollOffH")) {
+        vignetteRollOffH = getCoordList(config, "CameraIsp", "vignetteRollOffH");
       } else {
-        VLOG(1) << "Using default vignetteRollOff = " << vignetteRollOff << endl;
+        VLOG(1) << "Using default vignetteRollOffH = " << vignetteRollOffH << endl;
       }
 
+      if (config["CameraIsp"].HasKey("vignetteRollOffV")) {
+        vignetteRollOffV = getCoordList(config, "CameraIsp", "vignetteRollOffV");
+      } else {
+        VLOG(1) << "Using default vignetteRollOffV = " << vignetteRollOffV << endl;
+      }
 
       if (config["CameraIsp"].HasKey("whiteBalanceGain")) {
         whiteBalanceGain = getVector(config, "CameraIsp", "whiteBalanceGain");
@@ -636,12 +641,14 @@ class CameraIsp {
       greenBayerPixel[1][1] = false;
     }
 
-    vignetteCurve = shared_ptr<BezierCurve<float, Point3f > > (
-      new BezierCurve<float, Point3f >());
+    vignetteCurveH.clearPoints();
+    for (auto p : vignetteRollOffH) {
+      vignetteCurveH.addPoint(p);
+    }
 
-    for (int i = 0; i < vignetteRollOff.size(); ++i) {
-      Point3f v(vignetteRollOff[i]);
-      vignetteCurve->addPoint(v);
+    vignetteCurveV.clearPoints();
+    for (auto p : vignetteRollOffV) {
+      vignetteCurveV.addPoint(p);
     }
 
     // If saturation is unit this satMat will be the identity matrix.
@@ -671,6 +678,18 @@ class CameraIsp {
 
   inline bool bluePixel(const int i, const int j) const {
     return !(greenBayerPixel[i % 2][j % 2] || redBayerPixel[i % 2][j % 2]);
+  }
+
+  inline int getChannelNumber(const int i, const int j) {
+    return redPixel(i, j) ? 0 : greenPixel(i, j) ? 1 : 2;
+  }
+
+  inline Vec3f curveHAtPixel(const int x) {
+    return vignetteCurveH(float(x) / float(maxDimension));
+  }
+
+  inline Vec3f curveVAtPixel(const int x) {
+    return vignetteCurveV(float(x) / float(maxDimension));
   }
 
   void dumpConfigFile(const string configFileName) {
@@ -709,16 +728,30 @@ class CameraIsp {
           << clampMax.x << ", "
           << clampMax.y << ", "
           << clampMax.z << "],\n";
-      ofs << "        \"vignetteRollOff\" : [";
-      for (int i = 0; i < vignetteRollOff.size(); ++i) {
+      ofs << "        \"vignetteRollOffH\" :  [";
+      for (int i = 0; i < vignetteRollOffH.size(); ++i) {
         if (i > 0) {
-          ofs << "                             ";
+          ofs << "                               ";
         }
         ofs << "["
-            << vignetteRollOff[i].x << ", "
-            << vignetteRollOff[i].y << ", "
-            << vignetteRollOff[i].z << "]";
-        if (i < vignetteRollOff.size()-1) {
+            << vignetteRollOffH[i].x << ", "
+            << vignetteRollOffH[i].y << ", "
+            << vignetteRollOffH[i].z << "]";
+        if (i < vignetteRollOffH.size() - 1) {
+          ofs << ",\n";
+        }
+      }
+      ofs << "],\n";
+      ofs << "        \"vignetteRollOffV\" :  [";
+      for (int i = 0; i < vignetteRollOffV.size(); ++i) {
+        if (i > 0) {
+          ofs << "                               ";
+        }
+        ofs << "["
+            << vignetteRollOffV[i].x << ", "
+            << vignetteRollOffV[i].y << ", "
+            << vignetteRollOffV[i].z << "]";
+        if (i < vignetteRollOffV.size() - 1) {
           ofs << ",\n";
         }
       }
@@ -768,9 +801,7 @@ class CameraIsp {
   virtual void loadImage(const Mat& inputImage) {
     *const_cast<int*>(&width) = inputImage.cols / resize;
     *const_cast<int*>(&height) = inputImage.rows / resize;
-
-    *const_cast<float*>(&halfWidth) = width / 2.0f;
-    *const_cast<float*>(&halfHeight) = height / 2.0f;
+    *const_cast<int*>(&maxDimension) = std::max(width, height);
     *const_cast<float*>(&maxD) = square(width) + square(width);
     *const_cast<float*>(&sqrtMaxD) = sqrt(maxD);
 
@@ -842,6 +873,22 @@ class CameraIsp {
 
   Point3f getClampMax() const {
     return clampMax;
+  }
+
+  void setVignetteRollOffH(const vector<Point3f>& vignetteRollOffH) {
+    this->vignetteRollOffH = vignetteRollOffH;
+  }
+
+  vector<Point3f> getVignetteRollOffH() const {
+    return vignetteRollOffH;
+  }
+
+  void setVignetteRollOffV(const vector<Point3f>& vignetteRollOffV) {
+    this->vignetteRollOffV = vignetteRollOffV;
+  }
+
+  vector<Point3f> getVignetteRollOffV() const {
+    return vignetteRollOffV;
   }
 
   void setCCM(const Mat& ccm) {
@@ -1047,17 +1094,11 @@ class CameraIsp {
 
   void antiVignette() {
     for (int i = 0; i < height; ++i) {
-      const Point3f vV = (*vignetteCurve)(std::abs(i - halfHeight) / halfHeight);
+      const Vec3f vV = curveVAtPixel(i);
       for (int j = 0; j < width; j++) {
-        const Point3f vH = (*vignetteCurve)(std::abs(j - halfWidth)  / halfWidth);
-
-        if (redPixel(i, j)) {
-          rawImage.at<float>(i, j) = rawImage.at<float>(i, j) * vH.x * vV.x;
-        } else if (greenPixel(i, j)) {
-          rawImage.at<float>(i, j) = rawImage.at<float>(i, j) * vH.y * vV.y;
-        } else {
-          rawImage.at<float>(i, j) = rawImage.at<float>(i, j) * vH.z * vV.z;
-        }
+        const Vec3f vH = curveHAtPixel(j);
+        int ch = getChannelNumber(i, j);
+        rawImage.at<float>(i, j) *= vH[ch] * vV[ch];
       }
     }
   }

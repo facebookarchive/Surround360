@@ -96,6 +96,35 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   brew install glog
 ```
 
+* Install folly (method 1):
+  see https://github.com/facebook/folly
+
+* Install folly (method 2 - OS X only):
+<pre>
+  brew install folly
+</pre>
+
+* Install Ceres (method 1 - Linux only)
+  see http://ceres-solver.org/installation.html
+```
+  sudo apt-get install libatlas-base-dev
+  sudo apt-get install libeigen3-dev
+  cd ~
+  git clone https://ceres-solver.googlesource.com/ceres-solver
+  cd ceres-solver
+  mkdir ceres-bin
+  cd ceres-bin
+  cmake ..
+  make -j3
+  sudo make install
+  sudo ln -s /usr/include/eigen3/Eigen /usr/local/include/Eigen
+```
+
+* Install Ceres (method 2 - OSX only)
+<pre>
+  brew install ceres-solver
+</pre>
+
 * Install OpenCV:
 ```
   cd ~

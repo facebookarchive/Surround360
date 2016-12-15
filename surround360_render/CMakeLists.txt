@@ -3,6 +3,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 PROJECT(Surround360Render CXX)
 
 FIND_PACKAGE(OpenCV)
+FIND_PACKAGE(Ceres REQUIRED)
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/util)
@@ -110,7 +111,10 @@ IF (DEFINED HALIDE_DIR)
 
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h")
   ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
+ENDIF()
 
+### Raw2Rgb ###
+IF (DEFINED HALIDE_DIR)
   IF(NOT APPLE AND NOT MSVC)
     TARGET_LINK_LIBRARIES(
        Raw2Rgb
@@ -388,3 +392,48 @@ TARGET_LINK_LIBRARIES(
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
+
+### TestVignettingCalibration ###
+
+IF (DEFINED HALIDE_DIR)
+  ADD_EXECUTABLE(
+    TestVignettingCalibration
+    source/test/TestVignettingCalibration.cpp
+    "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
+  )
+  ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
+  TARGET_COMPILE_FEATURES(TestVignettingCalibration PRIVATE cxx_range_for)
+  TARGET_LINK_LIBRARIES(
+    TestVignettingCalibration
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    LibVrCamera
+    LibJSON
+    gflags
+    glog
+    folly
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    Halide
+    dl
+    ${PLATFORM_SPECIFIC_LIBS}
+  )
+ELSE()
+  ADD_EXECUTABLE(
+    TestVignettingCalibration
+    source/test/TestVignettingCalibration.cpp)
+  TARGET_COMPILE_FEATURES(TestVignettingCalibration PRIVATE cxx_range_for)
+  TARGET_LINK_LIBRARIES(
+    TestVignettingCalibration
+    LibVrCamera
+    LibJSON
+    gflags
+    glog
+    folly
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    ${PLATFORM_SPECIFIC_LIBS}
+  )
+ENDIF()

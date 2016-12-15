@@ -192,7 +192,7 @@ public:
   BezierCurve() {}
 
   BezierCurve(std::vector<V> points) {
-    for (auto p = points.begin(); p != points.end(); p++) {
+    for (auto p : points) {
       points_.push_back(p);
     }
   }

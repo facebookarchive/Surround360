@@ -94,13 +94,13 @@ class CameraIspPipe : public CameraIsp {
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z, sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen8(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     } else {
       if (fast) {
@@ -108,13 +108,13 @@ class CameraIspPipe : public CameraIsp {
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen16(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpenning.x, sharpenning.y, sharpenning.z, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     }
   }

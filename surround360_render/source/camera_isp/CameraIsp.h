@@ -64,7 +64,8 @@ class CameraIsp {
   cv::Point3f lowKeyBoost;
   cv::Point3f highKeyBoost;
   float contrast;
-  cv::Point3f sharpenning;
+  cv::Point3f sharpening;
+  float sharpeningSupport;
   Mat rawImage;
   bool redBayerPixel[2][2];
   bool greenBayerPixel[2][2];
@@ -253,7 +254,7 @@ class CameraIsp {
 
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; ++j) {
-        pGreen.at<float>(i, j) = logf(1.0f + green.at<float>(i, j));
+        pGreen.at<float>(i, j) = green.at<float>(i, j);
         if (redPixel(i, j)) {
           redMinusGreen.at<float>(i, j) = red.at<float>(i, j) - pGreen.at<float>(i, j);
         } else if (!greenPixel(i, j)) {
@@ -453,7 +454,8 @@ class CameraIsp {
     ccm = Mat::eye(3, 3, CV_32F);
     saturation = 1.0f;
     contrast = 1.0f;
-    sharpenning = Point3f(0.0f, 0.0f, 0.0f);
+    sharpening = Point3f(0.0f, 0.0f, 0.0f);
+    sharpeningSupport = sharpeningSupport = 10.0f / 2048.0f; // Approx filter support is 10 pixels
     gamma = Point3f(1.0f, 1.0f, 1.0f);
     lowKeyBoost = Point3f(0.0f, 0.0f, 0.0f);
     highKeyBoost = Point3f(0.0f, 0.0f, 0.0f);
@@ -574,10 +576,16 @@ class CameraIsp {
         VLOG(1) << "Using default constrast = " << contrast << endl;
       }
 
-      if (config["CameraIsp"].HasKey("sharpenning")) {
-        sharpenning = getVector(config, "CameraIsp", "sharpenning");
+      if (config["CameraIsp"].HasKey("sharpening")) {
+        sharpening = getVector(config, "CameraIsp", "sharpening");
       } else {
-        VLOG(1) << "Using default sharpenning = " << sharpenning << endl;
+        VLOG(1) << "Using default sharpening = " << sharpening << endl;
+      }
+
+      if (config["CameraIsp"].HasKey("sharpeningSupport")) {
+        sharpeningSupport = getDouble(config, "CameraIsp", "sharpeningSupport");
+      } else {
+        VLOG(1) << "Using default sharpening support = " << sharpeningSupport << endl;
       }
 
       if (config["CameraIsp"].HasKey("bayerPattern")) {
@@ -779,10 +787,10 @@ class CameraIsp {
           << ccm.at<float>(2,2) << "]],\n";
       ofs.precision(3);
       ofs << fixed;
-      ofs << "        \"sharpenning\" : ["
-          << sharpenning.x << ", "
-          << sharpenning.y << ", "
-          << sharpenning.z << "],\n";
+      ofs << "        \"sharpening\" : ["
+          << sharpening.x << ", "
+          << sharpening.y << ", "
+          << sharpening.z << "],\n";
       ofs << "        \"saturation\" : " << saturation << ",\n";
       ofs << "        \"contrast\" : " << contrast << ",\n";
       ofs << "        \"gamma\" : ["
@@ -809,13 +817,11 @@ class CameraIsp {
 
     // Copy and convert to float
     uint8_t depth = inputImage.type() & CV_MAT_DEPTH_MASK;
+    // Match the input bits per pixel overriding what is in the config file.
     if (depth == CV_8U) {
       bitsPerPixel = 8;
       resizeInput<uint8_t>(inputImage);
     } else if (depth == CV_16U) {
-      // Actual bits per pixel could be 10, 12, or upto 16 so we have
-      // to rely on the specification in the isp config file since
-      // it's camera/sensor dependent.
       bitsPerPixel = 16;
       maxPixelValue = (1 << bitsPerPixel) - 1;
 
@@ -823,6 +829,14 @@ class CameraIsp {
     } else {
       throw VrCamException("input is larger that 16 bits per pixel");
     }
+  }
+
+  int getBitsPerPixel() const {
+    return bitsPerPixel;
+  }
+
+  void setBitsPerPixel(const int bitsPerPixel)  {
+    this->bitsPerPixel = bitsPerPixel;
   }
 
   int getMaxPixelValue() const {
@@ -897,6 +911,10 @@ class CameraIsp {
 
   Mat getCCM() const {
     return ccm;
+  }
+
+  uint32_t getFilters() const {
+    return filters;
   }
 
   void setWhiteBalance(const Point3f whiteBalanceGain ) {
@@ -1194,12 +1212,12 @@ class CameraIsp {
   void sharpen() {
     Mat lowPass(height, width, CV_32FC3);
     const WrapBoundary<float> wrapB;
-    iirLowPass<WrapBoundary<float>, WrapBoundary<float>, Vec3f>(demosaicedImage, 0.25f, lowPass, wrapB, wrapB, 1.0f);
+    iirLowPass<WrapBoundary<float>, WrapBoundary<float>, Vec3f>(demosaicedImage, sharpeningSupport, lowPass, wrapB, wrapB, 1.0f);
     sharpenWithIirLowPass<Vec3f>(demosaicedImage,
                           lowPass,
-                          1.0f + sharpenning.x,
-                          1.0f + sharpenning.y,
-                          1.0f + sharpenning.z);
+                          1.0f + sharpening.x,
+                          1.0f + sharpening.y,
+                          1.0f + sharpening.z);
   }
 
  protected:

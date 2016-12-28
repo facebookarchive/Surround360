@@ -205,7 +205,7 @@ class CameraIspGen
       0))));
 
     // Homogenity calulation over a diameter size region
-    const int w = 2;
+    const int w = 4;
     const int diameter = 2 * w + 1;
     const int diameterSquared = diameter * diameter;
     RDom d(0, diameter, 0, diameter);
@@ -225,8 +225,7 @@ class CameraIspGen
     // green channel estimate based on how horizontal or vertical the
     // region is.
     Func g;
-    Expr alpha = cast<float>(hCount(x, y)) / float(diameterSquared);
-    g(x, y) = lerp(gV(x, y), gH(x, y), alpha);
+    g(x, y) = select(hCount(x, y) < diameterSquared / 2, gV(x, y), gH(x, y));
 
     // Red and blue minus the log of the green channel
     Func rmg, bmg;
@@ -482,12 +481,6 @@ class CameraIspGen
     return transpose;
   }
 
-  Func noiseGain(Func lowPass) {
-    Func dd("dd");
-    dd(x, y, c) = clamp(select(lowPass(x, y, c) < 128.0f, lowPass(x, y, c) / 128.0f, 1.0f), 0.0f, 1.0f);
-    return dd;
-  }
-
   Func applyUnsharpMask(
       Func input,
       Expr width,
@@ -496,6 +489,7 @@ class CameraIspGen
       Expr sG,
       Expr sB,
       Expr alpha,
+      Param<float> noiseCore,
       Param<bool> BGR,
       int outputBpp) {
 
@@ -504,18 +498,18 @@ class CameraIspGen
     lowPass0 = lp(input, height, alpha);
     lowPass = lp(lowPass0, width, alpha);
 
-    Func ng("ng");
-    ng = noiseGain(lowPass);
-
     Func highPass("hp");
     highPass(x, y, c) =  cast<float>(input(x, y, c)) - lowPass(x, y, c);
+
+    Func noiseGain("noiseGain");
+    noiseGain(x, y, c) = 1.0f - exp(-(highPass(x, y, c) * highPass(x, y, c) * noiseCore));
 
     Expr cp = select(BGR == 0, c, 2 - c);
     const int range = (1 << outputBpp) - 1;
 
     Expr outputVal =
       clamp(
-          lowPass(x, y, cp) + highPass(x, y, cp) * ng(x, y, c) *
+          lowPass(x, y, cp) + highPass(x, y, cp) * noiseGain(x, y, c) *
           select(cp == 0, sR, cp == 1, sG, sB),
           0, range);
 
@@ -564,6 +558,7 @@ class CameraIspGen
       Param<float> sharpenningG,
       Param<float> sharpenningB,
       Param<float> sharpeningSupport,
+      Param<float> noiseCore,
       ImageParam ccm,
       ImageParam toneTable,
       Param<bool> BGR,
@@ -596,7 +591,7 @@ class CameraIspGen
       ispOutput(x, y, c) = toneCorrected(x , y, cp);
     } else {
       Expr alpha = pow(sharpeningSupport, 1.0f/4.0f);
-      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, alpha, BGR, outputBpp);
+      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, alpha, noiseCore, BGR, outputBpp);
     }
     // Schedule it using local vars
     Var yii("yii"), xi("xi");
@@ -657,6 +652,7 @@ int main(int argc, char **argv) {
   Param<float> sharpenningG("sharpenningG");
   Param<float> sharpenningB("sharpenninngB");
   Param<float> sharpeningSupport("sharpeningSupport");
+  Param<float> noiseCore("noiseCore");
   ImageParam ccm(Float(32), 2, "ccm");
   ImageParam toneTable(UInt(FLAGS_output_bpp), 2, "toneTable");
   Param<bool> BGR;
@@ -682,7 +678,7 @@ int main(int argc, char **argv) {
       blackLevelR, blackLevelG, blackLevelB,
       whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
       clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-      sharpenningR, sharpenningG, sharpenningB, sharpeningSupport,
+      sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
       ccm, toneTable, BGR, FLAGS_output_bpp);
 
   Func cameraIspFast =
@@ -691,7 +687,7 @@ int main(int argc, char **argv) {
         blackLevelR, blackLevelG, blackLevelB,
         whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
         clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-        sharpenningR, sharpenningG, sharpenningB, sharpeningSupport,
+        sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
         ccm, toneTable, BGR, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
@@ -699,7 +695,7 @@ int main(int argc, char **argv) {
     blackLevelR, blackLevelG, blackLevelB,
     whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
     clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, ccm, toneTable,  BGR};
+    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable,  BGR};
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling

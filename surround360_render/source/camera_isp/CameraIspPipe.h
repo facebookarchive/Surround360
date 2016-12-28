@@ -94,13 +94,15 @@ class CameraIspPipe : public CameraIsp {
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpening.x, sharpening.y, sharpening.z, sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z, sharpeningSupport, noiseCore,
+            &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen8(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, noiseCore,
+            &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     } else {
       if (fast) {
@@ -108,13 +110,15 @@ class CameraIspPipe : public CameraIsp {
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, noiseCore,
+            &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       } else {
         CameraIspGen16(
             &inputBufferBp, width, height, &vignetteTableHBp, &vignetteTableVBp,
             blackLevel.x, blackLevel.y, blackLevel.z, whiteBalanceGain.x, whiteBalanceGain.y, whiteBalanceGain.z,
             clampMin.x, clampMin.y, clampMin.z, clampMax.x, clampMax.y, clampMax.z,
-            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
+            sharpening.x, sharpening.y, sharpening.z,  sharpeningSupport, noiseCore,
+            &ccMatBp, &toneTableBp, swizzle, &outputBufferBp);
       }
     }
   }
@@ -135,20 +139,13 @@ class CameraIspPipe : public CameraIsp {
     outputBufferBp.stride[1] = 3 * width;
     outputBufferBp.stride[2] = 1;
 
-    // The stage following the CCM maps tone curve lut to 256 so we
-    // scale the pixel by the lut size here once instead of doing it
-    // for every pixel.
-    compositeCCM *= float(kToneCurveLutSize);
-
     toneCurveTable = Mat(kToneCurveLutSize, 3, outputBpp == 8 ? CV_8U : CV_16U);
 
     // Convert the tone curve to a 8 bit output table
-    const float range = float((1 << outputBpp) - 1);
-
     for (int i = 0; i < kToneCurveLutSize; ++i) {
-      const int r = int(clamp(toneCurveLut[i][0] * range, 0.0f, range));
-      const int g = int(clamp(toneCurveLut[i][1] * range, 0.0f, range));
-      const int b = int(clamp(toneCurveLut[i][1] * range, 0.0f, range));
+      const int r = toneCurveLut[i][0];
+      const int g = toneCurveLut[i][1];
+      const int b = toneCurveLut[i][2];
 
       if (outputBpp == 8) {
         toneCurveTable.at<uint8_t>(i, 0) = r;

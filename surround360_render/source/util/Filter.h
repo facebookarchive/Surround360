@@ -56,17 +56,15 @@ void iirLowPass(
     for (int j = 0; j < lpImage.cols; j++) {
       Vec3f ip(inputImage.at<P>(i,j));
       v = lerp(ip, v, alpha);
-      buffer.at<Vec3f>(hBoundary(j-1, lpImage.cols),0) = v;
+      buffer.at<Vec3f>(hBoundary(j-1, lpImage.cols), 0) = v;
     }
 
     // Anticausal pass
-    v = buffer.at<Vec3f>(0, 0);
+    v = buffer.at<Vec3f>(i, 0);
     for (int j = lpImage.cols-1; j >= 0; j--) {
       Vec3f ip(buffer.at<Vec3f>(wrap(j, lpImage.cols), 0));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(i, hBoundary(j+1, lpImage.cols))[0] = clamp(v[0], 0.0f, maxVal);
-      lpImage.at<P>(i, hBoundary(j+1, lpImage.cols))[1] = clamp(v[1], 0.0f, maxVal);
-      lpImage.at<P>(i, hBoundary(j+1, lpImage.cols))[2] = clamp(v[2], 0.0f, maxVal);
+      lpImage.at<P>(i, hBoundary(j+1, lpImage.cols)) = v;
     }
   }
 
@@ -77,16 +75,14 @@ void iirLowPass(
     for (int i = 0; i < lpImage.rows; ++i) {
       Vec3f ip(lpImage.at<P>(i,j));
       v = lerp(ip, v, alpha);
-      buffer.at<Vec3f>(vBoundary(i-1, lpImage.rows),0) = v;
+      buffer.at<Vec3f>(vBoundary(i-1, lpImage.rows), 0) = v;
     }
     // Anticausal pass
-    v = buffer.at<Vec3f>(lpImage.rows-2,0);
+    v = buffer.at<Vec3f>(lpImage.rows-2, 0);
     for (int i = lpImage.rows-1; i >= -1; i--) {
-      Vec3f ip = buffer.at<Vec3f>(reflect(i, lpImage.rows),0);
+      Vec3f ip = buffer.at<Vec3f>(reflect(i, lpImage.rows), 0);
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(vBoundary(i+1, lpImage.rows),j)[0] = clamp(v[0], 0.0f, maxVal);
-      lpImage.at<P>(vBoundary(i+1, lpImage.rows),j)[1] = clamp(v[1], 0.0f, maxVal);
-      lpImage.at<P>(vBoundary(i+1, lpImage.rows),j)[2] = clamp(v[2], 0.0f, maxVal);
+      lpImage.at<P>(vBoundary(i+1, lpImage.rows),j) = v;
     }
   }
 }
@@ -98,15 +94,28 @@ void sharpenWithIirLowPass(
     const float rAmount,
     const float gAmount,
     const float bAmount,
+    const float noiseCore = 100.0f,
     const float maxVal = 255.0f) {
-
+  // Iir unsharp mask with noise coring
   for (int i = 0; i < inputImage.rows; ++i) {
     for (int j = 0; j < inputImage.cols; ++j) {
       const Vec3f lp = lpImage.at<P>(i, j);
       P& p = inputImage.at<P>(i, j);
-      p[0] = clamp(lp[0] + (float(p[0]) - lp[0]) * rAmount,  0.0f, maxVal);
-      p[1] = clamp(lp[1] + (float(p[1]) - lp[1]) * gAmount,  0.0f, maxVal);
-      p[2] = clamp(lp[2] + (float(p[2]) - lp[2]) * bAmount,  0.0f, maxVal);
+      // High pass signal - just the residual of the low pass
+      // subtracted from the original signal.
+      P hp;
+      hp[0] = p[0] - lp[0];
+      hp[1] = p[1] - lp[1];
+      hp[2] = p[2] - lp[2];
+      // Noise coring
+      P ng;
+      ng[0] = 1.0f - expf(-(square(hp[0]) * noiseCore));
+      ng[1] = 1.0f - expf(-(square(hp[1]) * noiseCore));
+      ng[2] = 1.0f - expf(-(square(hp[2]) * noiseCore));
+
+      p[0] = clamp(lp[0] + hp[0] * ng[0] * rAmount,  0.0f, maxVal);
+      p[1] = clamp(lp[1] + hp[1] * ng[1] * gAmount,  0.0f, maxVal);
+      p[2] = clamp(lp[2] + hp[2] * ng[2] * bAmount,  0.0f, maxVal);
     }
   }
 }
@@ -115,11 +124,11 @@ template <typename P>
 inline void sharpenWithIirLowPass(
     Mat& inputImage,
     const Mat& lpImage,
-    const float amount) {
+    const float amount,
+    const float noiseCore = 100.0f) {
 
-  sharpenWithIirLowPass<P>(inputImage, lpImage, amount, amount, amount);
+  sharpenWithIirLowPass<P>(inputImage, lpImage, amount, amount, amount, noiseCore);
 }
 
 }
 }
-

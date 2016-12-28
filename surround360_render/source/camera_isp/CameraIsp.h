@@ -66,6 +66,7 @@ class CameraIsp {
   float contrast;
   cv::Point3f sharpening;
   float sharpeningSupport;
+  float noiseCore;
   Mat rawImage;
   bool redBayerPixel[2][2];
   bool greenBayerPixel[2][2];
@@ -227,7 +228,7 @@ class CameraIsp {
         }
       }
     }
-    const int w = 2;
+    const int w = 4;
     const int diameter = 2 * w + 1;
     const int diameterSquared = square(diameter);
 
@@ -242,8 +243,7 @@ class CameraIsp {
             hCount += (dH.at<float>(il, jk) <= dV.at<float>(il, jk));
           }
         }
-        const float alpha = float(hCount) / diameterSquared;
-        green.at<float>(i, j) = lerp(gV.at<float>(i, j), gH.at<float>(i, j), alpha);
+        green.at<float>(i, j) = hCount < diameterSquared / 2 ? gV.at<float>(i, j) : gH.at<float>(i, j);
       }
     }
 
@@ -393,7 +393,7 @@ class CameraIsp {
   // Build the composite tone curve
   void buildToneCurveLut() {
     toneCurveLut.clear();
-
+    const float range = float((1 << outputBpp) - 1);
     const float dx = 1.0f / float(kToneCurveLutSize - 1);
 
     // Contrast angle constants
@@ -415,9 +415,9 @@ class CameraIsp {
       b = lowKey(lowKeyBoost.z, b) + highKey(highKeyBoost.z, b);
 
       // Then contrast
-      r = clamp(slope * r + bias, 0.0f, 1.0f);
-      g = clamp(slope * g + bias, 0.0f, 1.0f);
-      b = clamp(slope * b + bias, 0.0f, 1.0f);
+      r = clamp((slope * r + bias) * range, 0.0f, range);
+      g = clamp((slope * g + bias) * range, 0.0f, range);
+      b = clamp((slope * b + bias) * range, 0.0f, range);
 
       // Place it in the table.
       toneCurveLut.push_back(Vec3f(r, g, b));
@@ -456,6 +456,7 @@ class CameraIsp {
     contrast = 1.0f;
     sharpening = Point3f(0.0f, 0.0f, 0.0f);
     sharpeningSupport = sharpeningSupport = 10.0f / 2048.0f; // Approx filter support is 10 pixels
+    noiseCore = 1000.0f;
     gamma = Point3f(1.0f, 1.0f, 1.0f);
     lowKeyBoost = Point3f(0.0f, 0.0f, 0.0f);
     highKeyBoost = Point3f(0.0f, 0.0f, 0.0f);
@@ -588,6 +589,12 @@ class CameraIsp {
         VLOG(1) << "Using default sharpening support = " << sharpeningSupport << endl;
       }
 
+      if (config["CameraIsp"].HasKey("noiseCore")) {
+        noiseCore = getDouble(config, "CameraIsp", "noiseCore");
+      } else {
+        VLOG(1) << "Using default noise core = " << noiseCore << endl;
+      }
+
       if (config["CameraIsp"].HasKey("bayerPattern")) {
         bayerPattern = getString(config, "CameraIsp", "bayerPattern");
       } else {
@@ -670,6 +677,11 @@ class CameraIsp {
 
     transpose(ccm, compositeCCM);
     compositeCCM *= satMat;
+
+    // The stage following the CCM maps tone curve lut to 12bits so we
+    // scale the pixel by the lut size here once instead of doing it
+    // for every pixel.
+    compositeCCM *= float(kToneCurveLutSize - 1);
 
     // Build the tone curve table
     buildToneCurveLut();
@@ -1184,40 +1196,41 @@ class CameraIsp {
     const float kToneCurveLutRange = kToneCurveLutSize - 1;
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
-        Vec3f v;
-        v[0] =
+        Vec3f p =  demosaicedImage.at<Vec3f>(i, j);
+        Vec3f v(
           toneCurveLut[
               clamp(
-                  compositeCCM.at<float>(0,0) * demosaicedImage.at<Vec3f>(i, j)[0] +
-                  compositeCCM.at<float>(0,1) * demosaicedImage.at<Vec3f>(i, j)[1] +
-                  compositeCCM.at<float>(0,2) * demosaicedImage.at<Vec3f>(i, j)[2], 0.0f, 1.0f) * kToneCurveLutRange][0];
-        v[1] =
+                  compositeCCM.at<float>(0,0) * p[0] +
+                  compositeCCM.at<float>(0,1) * p[1] +
+                  compositeCCM.at<float>(0,2) * p[2], 0.0f, kToneCurveLutRange)][0],
           toneCurveLut[
               clamp(
-                  compositeCCM.at<float>(1,0) * demosaicedImage.at<Vec3f>(i, j)[0] +
-                  compositeCCM.at<float>(1,1) * demosaicedImage.at<Vec3f>(i, j)[1] +
-                  compositeCCM.at<float>(1,2) * demosaicedImage.at<Vec3f>(i, j)[2], 0.0f, 1.0f) * kToneCurveLutRange][1];
-        v[2] =
+                  compositeCCM.at<float>(1,0) * p[0] +
+                  compositeCCM.at<float>(1,1) * p[1] +
+                  compositeCCM.at<float>(1,2) * p[2], 0.0f, kToneCurveLutRange)][1],
           toneCurveLut[
               clamp(
-                  compositeCCM.at<float>(2,0) * demosaicedImage.at<Vec3f>(i, j)[0] +
-                  compositeCCM.at<float>(2,1) * demosaicedImage.at<Vec3f>(i, j)[1] +
-                  compositeCCM.at<float>(2,2) * demosaicedImage.at<Vec3f>(i, j)[2], 0.0f, 1.0f) * kToneCurveLutRange][2];
-
+                  compositeCCM.at<float>(2,0) * p[0] +
+                  compositeCCM.at<float>(2,1) * p[1] +
+                  compositeCCM.at<float>(2,2) * p[2], 0.0f, kToneCurveLutRange)][2]);
         demosaicedImage.at<Vec3f>(i, j) = v;
       }
     }
   }
 
   void sharpen() {
-    Mat lowPass(height, width, CV_32FC3);
-    const WrapBoundary<float> wrapB;
-    iirLowPass<WrapBoundary<float>, WrapBoundary<float>, Vec3f>(demosaicedImage, sharpeningSupport, lowPass, wrapB, wrapB, 1.0f);
-    sharpenWithIirLowPass<Vec3f>(demosaicedImage,
-                          lowPass,
-                          1.0f + sharpening.x,
-                          1.0f + sharpening.y,
-                          1.0f + sharpening.z);
+    if (sharpening.x != 0.0 && sharpening.y != 0.0 && sharpening.z != 0.0) {
+      Mat lowPass(height, width, CV_32FC3);
+      const WrapBoundary<float> wrapB;
+      iirLowPass<WrapBoundary<float>, WrapBoundary<float>, Vec3f>(demosaicedImage, sharpeningSupport, lowPass, wrapB, wrapB, 1.0f);
+      sharpenWithIirLowPass<Vec3f>(demosaicedImage,
+          lowPass,
+          1.0f + sharpening.x,
+          1.0f + sharpening.y,
+          1.0f + sharpening.z,
+          noiseCore,
+          (1 << outputBpp) - 1.0f);
+    }
   }
 
  protected:
@@ -1247,10 +1260,6 @@ class CameraIsp {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
         Vec3f& dp = demosaicedImage.at<Vec3f>(i, j);
-
-        dp[0] = clamp(dp[0] * range, 0.0f, range);
-        dp[1] = clamp(dp[1] * range, 0.0f, range);
-        dp[2] = clamp(dp[2] * range, 0.0f, range);
 
         if (outputBpp == 8) {
           outputImage.at<Vec3b>(i, j)[c0] = dp[0];

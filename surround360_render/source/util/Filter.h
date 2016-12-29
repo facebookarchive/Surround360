@@ -103,16 +103,16 @@ void sharpenWithIirLowPass(
       P& p = inputImage.at<P>(i, j);
       // High pass signal - just the residual of the low pass
       // subtracted from the original signal.
-      P hp;
+      Vec3f hp;
       hp[0] = p[0] - lp[0];
       hp[1] = p[1] - lp[1];
       hp[2] = p[2] - lp[2];
       // Noise coring
-      P ng;
+      Vec3f ng;
       ng[0] = 1.0f - expf(-(square(hp[0]) * noiseCore));
       ng[1] = 1.0f - expf(-(square(hp[1]) * noiseCore));
       ng[2] = 1.0f - expf(-(square(hp[2]) * noiseCore));
-
+      // Unsharp mask with coring
       p[0] = clamp(lp[0] + hp[0] * ng[0] * rAmount,  0.0f, maxVal);
       p[1] = clamp(lp[1] + hp[1] * ng[1] * gAmount,  0.0f, maxVal);
       p[2] = clamp(lp[2] + hp[2] * ng[2] * bAmount,  0.0f, maxVal);

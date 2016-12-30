@@ -48,41 +48,43 @@ void iirLowPass(
   const float alpha = powf(amount, 1.0f/4.0f);
 
   Mat buffer(max(inputImage.rows, inputImage.cols), 1, CV_32FC3);
+  const int width = inputImage.cols;
+  const int height = inputImage.rows;
 
   // Horizontal pass
-  for (int i = 0; i < lpImage.rows; ++i) {
+  for (int i = 0; i < height; ++i) {
     // Causal pass
-    Vec3f v(inputImage.at<P>(i, lpImage.cols-1));
-    for (int j = 0; j < lpImage.cols; j++) {
-      Vec3f ip(inputImage.at<P>(i,j));
+    Vec3f v(inputImage.at<P>(i, 0));
+    for (int j = 1; j <= width; ++j) {
+      Vec3f ip(inputImage.at<P>(i, hBoundary(j, width)));
       v = lerp(ip, v, alpha);
-      buffer.at<Vec3f>(hBoundary(j-1, lpImage.cols), 0) = v;
+      buffer.at<Vec3f>(hBoundary(j - 1, width)) = v;
     }
 
     // Anticausal pass
-    v = buffer.at<Vec3f>(i, 0);
-    for (int j = lpImage.cols-1; j >= 0; j--) {
-      Vec3f ip(buffer.at<Vec3f>(wrap(j, lpImage.cols), 0));
+    v = buffer.at<Vec3f>(width - 1);
+    for (int j = width - 2; j >= -1; --j) {
+      Vec3f ip(buffer.at<Vec3f>(hBoundary(j, width)));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(i, hBoundary(j+1, lpImage.cols)) = v;
+      lpImage.at<P>(i, hBoundary(j + 1, width)) = v;
     }
   }
 
   // Vertical pass
-  for (int j = 0; j < lpImage.cols; j++) {
+  for (int j = 0; j < width; ++j) {
     // Causal pass
-    Vec3f v(lpImage.at<P>(1,j));
-    for (int i = 0; i < lpImage.rows; ++i) {
-      Vec3f ip(lpImage.at<P>(i,j));
+    Vec3f v(lpImage.at<P>(0, j));
+    for (int i = 1; i < height; ++i) {
+      Vec3f ip(lpImage.at<P>(vBoundary(i, height), j));
       v = lerp(ip, v, alpha);
-      buffer.at<Vec3f>(vBoundary(i-1, lpImage.rows), 0) = v;
+      buffer.at<Vec3f>(vBoundary(i - 1, height)) = v;
     }
     // Anticausal pass
-    v = buffer.at<Vec3f>(lpImage.rows-2, 0);
-    for (int i = lpImage.rows-1; i >= -1; i--) {
-      Vec3f ip = buffer.at<Vec3f>(reflect(i, lpImage.rows), 0);
+    v = buffer.at<Vec3f>(height - 1);
+    for (int i = height - 2; i >= -1; --i) {
+      Vec3f ip = buffer.at<Vec3f>(vBoundary(i, height));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(vBoundary(i+1, lpImage.rows),j) = v;
+      lpImage.at<P>(vBoundary(i + 1, height), j) = v;
     }
   }
 }

@@ -61,19 +61,17 @@ static void toLab(
     double& L,
     double& A,
     double& B) {
-  static bool firstTimeThru = true;
-  static const double kD65White[3] = {0.950456, 1, 1.088754};
-  double rgbToXyz[3][3] = {
-    { 0.412453, 0.357580, 0.180423 },
-    { 0.212671, 0.715160, 0.072169 },
-    { 0.019334, 0.119193, 0.950227 } };
+  static const double kD50White[3] = {0.9642, 1.0, 0.8249};
 
-  if (firstTimeThru) {
-    firstTimeThru = false;
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        rgbToXyz[i][j] = rgbToXyz[i][j] / kD65White[i];
-      }
+  // Bradford-adapted D50 matrix
+  double rgbToXyz[3][3] = {
+    { 0.4360747, 0.3850649, 0.1430804 },
+    { 0.2225045, 0.7168786, 0.0606169 },
+    { 0.0139322, 0.0971045, 0.7141733 } };
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      rgbToXyz[i][j] = rgbToXyz[i][j] / kD50White[i];
     }
   }
 

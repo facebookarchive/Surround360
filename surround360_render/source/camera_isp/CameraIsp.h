@@ -805,6 +805,14 @@ class CameraIsp {
           << sharpening.z << "],\n";
       ofs << "        \"saturation\" : " << saturation << ",\n";
       ofs << "        \"contrast\" : " << contrast << ",\n";
+      ofs << "        \"lowKeyBoost\" : ["
+          << lowKeyBoost.x << ", "
+          << lowKeyBoost.y << ", "
+          << lowKeyBoost.z << "],\n";
+      ofs << "        \"highKeyBoost\" : ["
+          << highKeyBoost.x << ", "
+          << highKeyBoost.y << ", "
+          << highKeyBoost.z << "],\n";
       ofs << "        \"gamma\" : ["
           << gamma.x << ", "
           << gamma.y << ", "

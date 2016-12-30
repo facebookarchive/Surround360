@@ -15,19 +15,141 @@
 #include <string>
 #include <vector>
 
-#include "CameraIsp.h"
+#include "ColorspaceConversion.h"
 #include "CvUtil.h"
-#include "LinearRegression.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
+
+#include "ceres/ceres.h"
 
 namespace surround360 {
 namespace color_calibration {
 
 using namespace std;
 using namespace cv;
-using namespace linear_regression;
 using namespace util;
+
+vector<double> applyColorParams(
+    const vector<double>& rgb,
+    const double illumScale,
+    const double* const bl,
+    const double* const wbAndCcm) {
+
+  // Black level
+  vector<double> rgbBL(3, 0.0);
+  const int numChannels = rgbBL.size();
+  for (int i = 0; i < numChannels; ++i) {
+    const double eps = std::numeric_limits<double>::epsilon();
+    rgbBL[i] = (rgb[i] - bl[i]) / (1.0 - bl[i] + eps);
+    rgbBL[i] *= illumScale;
+  }
+
+  // WB * CCM * rgb
+  vector<double> rgbWbAndCcm(numChannels, 0.0);
+  for (int x = 0; x < numChannels; ++x) {
+    for (int y = 0; y < numChannels; ++y) {
+      rgbWbAndCcm[x] += wbAndCcm[x * numChannels + y] * rgbBL[y];
+    }
+  }
+
+  vector<double> lab(numChannels, 0.0);
+  toLab(rgbWbAndCcm[0], rgbWbAndCcm[1], rgbWbAndCcm[2], lab[0], lab[1], lab[2]);
+  return lab;
+}
+
+// We want to minimize
+// sum_i=1^N ||LABgt_i - LAB(M * (s_i * RGBin_i - BL) / (1 - BL))||^2
+// where
+// N: number of color patches
+// LABgt_i: lab ground truth for i-th color patch
+// M: 3x3 matrix (can be interpreted as WB * CCM)
+// s_i: non-uniform illumination on i-th patch
+// RGBin_i: RGB value of color patch (input)
+// BL: black level
+// To force the non-uniform illumination to be a smooth surface, we treat the
+// color chart as a Bezier surface
+template<int TBezierX, int TBezierY>
+struct IspFunctor {
+  static ceres::CostFunction* addResidual(
+      ceres::Problem& problem,
+      vector<double>& bezierX,
+      vector<double>& bezierY,
+      vector<double>& bl,
+      vector<double>& wbAndCcm,
+      const double x,
+      const double y,
+      const vector<double> rgb,
+      const vector<double> labRef) {
+
+    CHECK_EQ(TBezierX + 1, bezierX.size());
+    CHECK_EQ(TBezierY + 1, bezierY.size());
+
+    auto* cost = new CostFunction(new IspFunctor(x, y, rgb, labRef));
+    problem.AddResidualBlock(
+      cost,
+      nullptr,  // loss
+      bezierX.data(),
+      bezierY.data(),
+      bl.data(),
+      wbAndCcm.data());
+    return cost;
+  }
+
+  bool operator()(
+      const double* const bezierX,
+      const double* const bezierY,
+      const double* const bl,
+      const double* const wbAndCcm,
+      double* residuals) const {
+
+    BezierCurve<float, double> bX;
+    BezierCurve<float, double> bY;
+
+    for (int i = 0; i <= TBezierX; ++i) {
+      bX.addPoint(bezierX[i]);
+    }
+    for (int i = 0; i <= TBezierY; ++i) {
+      bY.addPoint(bezierY[i]);
+    }
+
+    const double illumScale = bX(x) * bY(y);
+    vector<double> lab = applyColorParams(rgb, illumScale, bl, wbAndCcm);
+
+    for (int i = 0; i < lab.size(); ++i) {
+      residuals[i] = labRef[i] - lab[i];
+    }
+
+    CHECK(isfinite(*residuals));
+    return true;
+  }
+
+ private:
+  using CostFunction = ceres::NumericDiffCostFunction<
+    IspFunctor,
+    ceres::CENTRAL,
+    3,  // residuals
+    TBezierX + 1,  // bezier X
+    TBezierY + 1,  // bezier Y
+    3,  // bl
+    9>;  // wb and ccm
+
+  IspFunctor(
+      const double x,
+      const double y,
+      const vector<double> rgb,
+      const vector<double> labRef) :
+
+    x(x),
+    y(y),
+    rgb(rgb),
+    labRef(labRef) {
+  }
+
+  const double x;
+  const double y;
+  const vector<double> rgb;
+  const vector<double> labRef;
+};
 
 int getBitsPerPixel(const Mat& image) {
   uint8_t depth = image.type() & CV_MAT_DEPTH_MASK;
@@ -45,17 +167,6 @@ string getJson(const string& filename) {
     istreambuf_iterator<char>());
 
   return json;
-}
-
-// From darkest to brightest
-vector<int> getMacBethGrays() {
-  static const int kNumGrayPatches = 5;
-  vector<int> macBethGrayValues;
-  const int iStart = rgbLinearMacbeth.size() - 1;
-  for (int i = iStart; i >= iStart - kNumGrayPatches; --i) {
-    macBethGrayValues.push_back(rgbLinearMacbeth[i][0]);
-  }
-  return macBethGrayValues;
 }
 
 Mat getRaw(const string& ispConfigFile, const Mat& image) {
@@ -96,14 +207,14 @@ ColorResponse computeRGBResponse(
   // Get RGB medians in raw image
   computeRGBMedians(colorPatches, raw, isRaw, ispConfigFile);
 
-  const vector<int> macBethGrayValues = getMacBethGrays();
+  // const vector<int> macBethGrayValues = getMacBethGrays();
   const int iStart = colorPatches.size() - 1;
 
   // Line between second darkest and second brightest medians
   static const int kBrightIdx = 4;
   static const int kDarkIdx = 1;
-  const float xDark = float(macBethGrayValues[kDarkIdx]) / 255.0f;
-  const float xBright = float(macBethGrayValues[kBrightIdx]) / 255.0f;
+  const float xDark = float(rgbGrayLinearMacbeth[kDarkIdx]) / 255.0f;
+  const float xBright = float(rgbGrayLinearMacbeth[kBrightIdx]) / 255.0f;
   const Vec3f& yDark = colorPatches[iStart - kDarkIdx].rgbMedian;
   const Vec3f& yBright = colorPatches[iStart - kBrightIdx].rgbMedian;
 
@@ -166,120 +277,33 @@ void saveXIntercepts(
   interceptXStream.close();
 }
 
-Mat adjustBlackLevel(
-    const string& ispConfigFile,
-    const Mat& rawRef,
-    const Mat& raw,
-    const Point3f& blackLevel) {
+void writeIspConfigFile(
+    const string& ispConfigFileOut,
+    CameraIsp& cameraIsp,
+    const Vec3f& blackLevel,
+    const Vec3f& whiteBalanceGain,
+    const Mat& ccm,
+    const Vec3f& gamma) {
 
-  const int bitsPerPixel = getBitsPerPixel(rawRef);
-  const float maxPixelValue = float((1 << bitsPerPixel) - 1);
-  CameraIsp cameraIsp(getJson(ispConfigFile), bitsPerPixel);
-  cameraIsp.setBlackLevel(blackLevel * maxPixelValue);
-  cameraIsp.setup();
-  cameraIsp.loadImage(rawRef); // Load original image
-  cameraIsp.setRawImage(raw); // Replace with modified version
-  cameraIsp.blackLevelAdjust();
-  return cameraIsp.getRawImage();
-}
-
-Mat whiteBalance(
-    const string& ispConfigFile,
-    const Mat& rawRef,
-    const Mat& raw,
-    const Vec3f& whiteBalanceGain) {
-
-  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(rawRef));
+  cameraIsp.setBlackLevel(blackLevel);
   cameraIsp.setWhiteBalance(whiteBalanceGain);
+  cameraIsp.setCCM(ccm);
+  cameraIsp.setGamma(gamma);
   cameraIsp.setup();
-  cameraIsp.loadImage(rawRef);
-  cameraIsp.setRawImage(raw);
-  cameraIsp.whiteBalance(false); // no clamping
-  return cameraIsp.getRawImage();
+  cameraIsp.dumpConfigFile(ispConfigFileOut);
 }
 
-Mat clampAndStretch(
-    const string& ispConfigFile,
-    const Mat& rawRef,
-    const Mat& raw,
-    const ColorResponse& colorResponse,
-    Vec3f& rgbClampMin,
-    Vec3f& rgbClampMax) {
+void updateIspWithClamps(
+    const string& ispConfigFilePath,
+    const int bpp,
+    const Vec3f& rgbClampMin,
+    const Vec3f& rgbClampMax) {
 
-  // Get values at specific thresholds, assuming response is y = mx + b
-  const Vec3f& m = colorResponse.rgbSlope;
-  const Vec3f& b = colorResponse.rgbInterceptY;
-  const float xMin = rgbClampMin[0];
-  const float xMax = rgbClampMax[0];
-  rgbClampMin = m * xMin + b;
-  rgbClampMax = m * xMax + b;
-
-  static const int kNumChannels = 3;
-  for (int ch = 0; ch < kNumChannels; ++ch) {
-    rgbClampMin[ch] = std::max(0.0f, rgbClampMin[ch]);
-    rgbClampMax[ch] = std::min(1.0f, rgbClampMax[ch]);
-  }
-
-  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(raw));
+  CameraIsp cameraIsp(getJson(ispConfigFilePath), bpp);
   cameraIsp.setClampMin(rgbClampMin);
   cameraIsp.setClampMax(rgbClampMax);
   cameraIsp.setup();
-  cameraIsp.loadImage(rawRef);
-  cameraIsp.setRawImage(raw);
-  cameraIsp.clampAndStretch();
-  return cameraIsp.getRawImage();
-}
-
-Mat demosaic(const string& ispConfigFile, const Mat& rawRef, const Mat& raw) {
-  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(rawRef));
-  cameraIsp.setDemosaicFilter(BILINEAR_DM_FILTER);
-  cameraIsp.setup();
-  cameraIsp.loadImage(rawRef);
-  cameraIsp.setRawImage(raw);
-  cameraIsp.demosaic();
-  return cameraIsp.getDemosaicedImage();
-}
-
-Mat colorCorrect(
-    const string& ispConfigFile,
-    const Mat& rawRef,
-    const Mat& rgb,
-    const Mat& ccm,
-    const Vec3f& gamma) {
-
-  CameraIsp cameraIsp(getJson(ispConfigFile), getBitsPerPixel(rawRef));
-  cameraIsp.setCCM(ccm);
-  cameraIsp.setGamma(gamma);
-  cameraIsp.setup();
-  cameraIsp.loadImage(rawRef);
-  cameraIsp.setDemosaicedImage(rgb);
-  cameraIsp.colorCorrect();
-  return cameraIsp.getDemosaicedImage();
-}
-
-void writeIspConfigFile(
-    const string& ispConfigFile,
-    const string& ispConfigFileOut,
-    const Mat& raw,
-    const Vec3f& blackLevel,
-    const Vec3f& whiteBalanceGain,
-    const Vec3f& clampMin,
-    const Vec3f& clampMax,
-    const Mat& ccm,
-    const Vec3f& gamma) {
-
-  const int bitsPerPixel = getBitsPerPixel(raw);
-  const float maxPixelValue = float((1 << bitsPerPixel) - 1);
-  CameraIsp cameraIsp(getJson(ispConfigFile), bitsPerPixel);
-  cameraIsp.setBlackLevel(blackLevel * maxPixelValue);
-  cameraIsp.setWhiteBalance(whiteBalanceGain);
-  cameraIsp.setClampMin(clampMin);
-  cameraIsp.setClampMax(clampMax);
-  cameraIsp.setCCM(ccm);
-  cameraIsp.setGamma(gamma);
-  cameraIsp.setup();
-  cameraIsp.loadImage(raw);
-  cameraIsp.dumpConfigFile(ispConfigFileOut);
+  cameraIsp.dumpConfigFile(ispConfigFilePath);
 }
 
 Vec3f findBlackLevel(
@@ -317,7 +341,7 @@ Vec3f findBlackLevel(
     // Black level threshold is the lowest non-zero value with enough pixel
     // count (to avoid noise and dead pixels)
     Mat hist = computeHistogram(RGBs[i], Mat());
-    for (int h = 0; h < maxPixelValue; h++) {
+    for (int h = 1; h < maxPixelValue; h++) {
       if (hist.at<float>(h) > kNumPixelsMin) {
         blackLevelThreshold = h;
         break;
@@ -328,6 +352,20 @@ Vec3f findBlackLevel(
     Mat mask;
     inRange(RGBs[i], 0.0f, blackLevelThreshold, mask);
     blackHoleMask = (blackHoleMask | mask);
+  }
+
+  // Dilate black hole mask to help contour detection
+  static const int kDilationSize = 1;
+  Mat element = getStructuringElement(
+    MORPH_RECT,
+    Size(2 * kDilationSize + 1, 2 * kDilationSize + 1),
+    Point2f(kDilationSize, kDilationSize));
+  dilate(blackHoleMask, blackHoleMask, element);
+
+  if (saveDebugImages) {
+    const string blackHoleDilatedImageFilename = outputDir + "/" +
+      to_string(++stepDebugImages) + "_black_hole_mask_dilated.png";
+    imwriteExceptionOnFail(blackHoleDilatedImageFilename, 255.0f * blackHoleMask);
   }
 
   // Black hole mask can contain outliers and pixels outside black hole. We need
@@ -371,7 +409,7 @@ Vec3f findBlackLevel(
   if (saveDebugImages) {
     Mat contoursPlot = Mat::zeros(blackHoleMask.size(), CV_8UC3);
     RNG rng(12345);
-    for(int i = 0; i < contoursFiltered.size(); ++i) {
+    for (int i = 0; i < contoursFiltered.size(); ++i) {
       Scalar color =
         Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
       drawContours(contoursPlot, contoursFiltered, i, color);
@@ -387,7 +425,7 @@ Vec3f findBlackLevel(
   vector<Vec3f> blackLevels(contoursFiltered.size());
   double minNorm = DBL_MAX;
   int minNormIdx = 0;
-  for(int i = 0; i < contoursFiltered.size(); ++i) {
+  for (int i = 0; i < contoursFiltered.size(); ++i) {
     // Create contour mask
     blackHoleMasks[i] = Mat::zeros(blackHoleMask.size(), CV_8UC1);
     drawContours(blackHoleMasks[i], contoursFiltered, i, Scalar(255), CV_FILLED);
@@ -415,7 +453,7 @@ Vec3f findBlackLevel(
     rawRGB.setTo(Scalar(0, maxPixelValue, 0), blackHoleMask);
 
     const string blackHoleMaskImageFilename =
-      outputDir + "/" + to_string(++stepDebugImages) + "_black_hole_mask.png";
+      outputDir + "/" + to_string(++stepDebugImages) + "_black_hole.png";
     imwriteExceptionOnFail(blackHoleMaskImageFilename, rawRGB);
   }
 
@@ -729,7 +767,7 @@ vector<vector<Point>> findContours(
     kOffset);
 
   // Straighten contours to minimize number of vertices
-  for(int i = 0; i < contours.size(); ++i) {
+  for (int i = 0; i < contours.size(); ++i) {
     const double epsilonPolyDP =
       straightenFactor * arcLength(contours[i], true);
     approxPolyDP(contours[i], contours[i], epsilonPolyDP, true);
@@ -738,7 +776,7 @@ vector<vector<Point>> findContours(
   if (saveDebugImages) {
     Mat contoursPlot = Mat::zeros(image.size(), CV_8UC3);
     RNG rng(12345);
-    for(int i = 0; i < contours.size(); ++i) {
+    for (int i = 0; i < contours.size(); ++i) {
       Scalar color =
         Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
       drawContours(contoursPlot, contours, i, color);
@@ -746,14 +784,14 @@ vector<vector<Point>> findContours(
     const string contoursImageFilename =
       outputDir + "/" + to_string(++stepDebugImages) + "_contours.png";
     imwriteExceptionOnFail(contoursImageFilename, contoursPlot);
-   }
+  }
 
   return contours;
 }
 
 vector<ColorPatch> removeContourOutliers(vector<ColorPatch> colorPatchList) {
   // Store min distance between patches, for each patch
-  vector<float> minDistances (colorPatchList.size(), FLT_MAX);
+  vector<float> minDistances(colorPatchList.size(), FLT_MAX);
   for (int iPatch = 0; iPatch < colorPatchList.size(); ++iPatch) {
     for (int jPatch = 0; jPatch < colorPatchList.size(); ++jPatch) {
       if (iPatch == jPatch) {
@@ -1019,7 +1057,7 @@ Vec3f plotGrayPatchResponse(
   computeRGBMedians(colorPatchesPlot, image, isRaw, ispConfigFile);
 
   CameraIsp cameraIsp(getJson(ispConfigFile), bitsPerPixel);
-  const vector<int> macBethGrayValues = getMacBethGrays();
+  // const vector<int> macBethGrayValues = getMacBethGrays();
   const int iStart = colorPatchesPlot.size() - 1;
   const Point2f pShift = Point2f(5.0f * kScalePlot, 0.0f);
   const Point2f pShiftText = Point2f(pShift.x, 0.0f);
@@ -1030,7 +1068,7 @@ Vec3f plotGrayPatchResponse(
   static const int kRadiusCircle = 3;
   for (int i = iStart; i >= iStart - kNumGreyPatches; --i) {
     const float xCoord =
-      maxScaled * float(macBethGrayValues[iStart - i]) / 255.0f;
+      maxScaled * float(rgbGrayLinearMacbeth[iStart - i]) / 255.0f;
 
     // Only consider pixels inside patch mask
     Mat locs;
@@ -1085,9 +1123,9 @@ Vec3f plotGrayPatchResponse(
   // Line between second darkest and second brightest medians
   static const int kBrightIdx = 4;
   static const int kDarkIdx = 1;
-  const float xDark = maxScaled * float(macBethGrayValues[kDarkIdx]) / 255.0f;
+  const float xDark = maxScaled * float(rgbGrayLinearMacbeth[kDarkIdx]) / 255.0f;
   const float xBright =
-    maxScaled * float(macBethGrayValues[kBrightIdx]) / 255.0f;
+    maxScaled * float(rgbGrayLinearMacbeth[kBrightIdx]) / 255.0f;
   const Vec3f& yDark = maxScaled * colorPatchesPlot[iStart - kDarkIdx].rgbMedian;
   const Vec3f& yBright =
     maxScaled * colorPatchesPlot[iStart - kBrightIdx].rgbMedian;
@@ -1141,107 +1179,249 @@ Vec3f plotGrayPatchResponse(
   return yIntercepts;
 }
 
-Vec3f computeWhiteBalanceGains(const ColorResponse& colorResponse) {
-  // White balance is inverse of the RGB slopes (ground truth has slope = 1)
-  Vec3f wbGains;
-  divide(Vec3f(1.0f, 1.0f, 1.0f), colorResponse.rgbSlope, wbGains);
-  return wbGains;
-}
+void obtainIspParams(
+    vector<ColorPatch>& colorPatches,
+    const Size& imageSize,
+    const bool isBlackLevelSet,
+    const bool saveDebugImages,
+    const string& outputDir,
+    int& stepDebugImages,
+    Vec3f& blackLevel,
+    Vec3f& whiteBalance,
+    Mat& ccm) {
 
-Mat computeCCM(const vector<ColorPatch>& colorPatches) {
-  vector<vector<float>> inputs;
-  vector<vector<float>> outputs;
+  ceres::Problem problem;
+
+  // Initialize estimates
+  static const int kNumChannels = 3;
+  vector<double> bl(kNumChannels, 0.0);
+
+  if (isBlackLevelSet) {
+    for (int i = 0; i < kNumChannels; ++i) {
+      bl[i] = blackLevel[i];
+    }
+  }
+  vector<double> wbAndCcm(kNumChannels * kNumChannels, 0.0);
+  for (int i = 0; i < kNumChannels; ++i) {
+    wbAndCcm[i * (kNumChannels + 1)] = 1.0;
+  }
+  static const int kBezierOrderX = 4;
+  static const int kBezierOrderY = 4;
+  vector<double> bezierX(kBezierOrderX + 1, 1.0);
+  vector<double> bezierY(kBezierOrderY + 1, 1.0);
 
   // Assuming raster scan order
   // Assuming color patch medians are [0..1]
+  float xMin = FLT_MAX;
+  float xMax = 0.0f;
+  float yMin = FLT_MAX;
+  float yMax = 0.0f;
+  for (int i = 0; i < colorPatches.size(); ++i) {
+    Point2f centroid = colorPatches[i].centroid;
+    xMin = std::min(xMin, centroid.x);
+    xMax = std::max(xMax, centroid.x);
+    yMin = std::min(yMin, centroid.y);
+    yMax = std::max(yMax, centroid.y);
+  }
+  const Point2f bezierTL = colorPatches[0].centroid;
+  const float width = xMax - xMin;
+  const float height = yMax - yMin;
+
+  // Create residuals
+  vector<vector<double>> rgbsRef(colorPatches.size());
   for (int i = 0; i < colorPatches.size(); ++i) {
     Vec3f patchRGB = colorPatches[i].rgbMedian;
-
-    vector<float> patchRGBv {patchRGB[0], patchRGB[1], patchRGB[2]};
-    inputs.push_back(patchRGBv);
-
-    // Convert RGB to float
-    vector<float> rgbLinearMacbethOut(
-      rgbLinearMacbeth[i].begin(),
-      rgbLinearMacbeth[i].end());
-
-    // Normalize ground truth color patch to [0..1]
-    transform(
-      rgbLinearMacbethOut.begin(),
-      rgbLinearMacbethOut.end(),
-      rgbLinearMacbethOut.begin(),
-      bind1st(multiplies<float>(), 1.0f / 255.0f));
-
-    outputs.push_back(rgbLinearMacbethOut);
+    rgbsRef[i] = {patchRGB[0], patchRGB[1], patchRGB[2]};
+    const vector<double> labRef(labMacbeth[i].begin(), labMacbeth[i].end());
+    const Point2f centroid = colorPatches[i].centroid - bezierTL;
+    IspFunctor<kBezierOrderX, kBezierOrderY>::addResidual(
+      problem,
+      bezierX,
+      bezierY,
+      bl,
+      wbAndCcm,
+      centroid.x / width,
+      centroid.y / height,
+      rgbsRef[i],
+      labRef);
   }
 
-  static const int kInputDim = 3;
-  static const int kOutputDim = 3;
-  static const int kNumIterations = 100000;
-  static const float kStepSize = 0.1f;
-  static const bool kPrintObjective = false;
-  vector<vector<float>> ccm = solveLinearRegressionRdToRk(
-    kInputDim,
-    kOutputDim,
-    inputs,
-    outputs,
-    kNumIterations,
-    kStepSize,
-    kPrintObjective);
-
-  // Make sure we have a 3x3 matrix
-  assert(ccm.size() == 3 && ccm.size() == ccm[0].size());
-
-  // Convert to Mat
-  Mat ccmMat(ccm.size(), ccm.at(0).size(), CV_32FC1);
-  for(int y = 0; y < ccmMat.rows; ++y) {
-    for(int x = 0; x < ccmMat.cols; ++x) {
-      ccmMat.at<float>(y, x) = ccm.at(y).at(x);
+  // Lock black level if known
+  if (isBlackLevelSet) {
+    problem.SetParameterBlockConstant(&bl[0]);
+  } else {
+    // Set black level bounds
+    for (int i = 0; i < kNumChannels; ++i) {
+      problem.SetParameterLowerBound(&bl[0], i, 0.0);
+      problem.SetParameterUpperBound(&bl[0], i, 1.0);
     }
   }
 
-  return ccmMat;
-}
+  // Lock first Bezier control points to 1 to give it less weight in the overall
+  // solution
+  std::vector<int> constantControlPoints;
+  constantControlPoints.push_back(0);
+  ceres::SubsetParameterization* subsetParameterizationX =
+    new ceres::SubsetParameterization(bezierX.size(), constantControlPoints);
+  ceres::SubsetParameterization* subsetParameterizationY =
+    new ceres::SubsetParameterization(bezierY.size(), constantControlPoints);
+  problem.SetParameterization(&bezierX[0], subsetParameterizationX);
+  problem.SetParameterization(&bezierY[0], subsetParameterizationY);
 
-pair<Vec4f, Vec4f> computeColorPatchErrors(
-    const Mat& imBefore,
-    const Mat& imAfter,
-    const vector<ColorPatch>& colorPatches) {
+  ceres::Solver::Options options;
+  options.max_num_iterations = 1000;
+  options.minimizer_progress_to_stdout = saveDebugImages;
+  ceres::Solver::Summary summary;
+  Solve(options, &problem, &summary);
+  LOG(INFO) << summary.FullReport();
 
-  // Compute errors in [0..255]
-  static const float kScale = 255.0f;
-  imBefore *= kScale;
-  imAfter *= kScale;
+  blackLevel = Vec3f(bl[0], bl[1], bl[2]);
 
-  Vec4f errBefore = Vec4f(0.0f, 0.0f, 0.0f, 0.0f);
-  Vec4f errAfter = Vec4f(0.0f, 0.0f, 0.0f, 0.0f);
-  const int numPatches =  colorPatches.size();
+  LOG(INFO) << "Black level: " << blackLevel;
 
-  for (int i = 0; i < numPatches; ++i) {
-    Vec3f medianBefore = imBefore.at<Vec3f>(colorPatches[i].centroid);
-    Vec3f medianAfter = imAfter.at<Vec3f>(colorPatches[i].centroid);
-    Vec3f macbethPatchVal = Vec3i {
-      rgbLinearMacbeth[i][0],
-      rgbLinearMacbeth[i][1],
-      rgbLinearMacbeth[i][2] };
-
-    Vec3f diffBefore = colorPatches[i].rgbMedian  - macbethPatchVal;
-    Vec3f diffAfter = medianAfter - macbethPatchVal;
-
-    // RGB error
-    errBefore[0] += norm(diffBefore, NORM_L2) / numPatches;
-    errAfter[0] += norm(diffAfter, NORM_L2) / numPatches;
-
-    // B, G, R errors
-    static const int kErrorTypes = 4;
-    for (int iErr = 1; iErr < kErrorTypes; ++iErr) {
-      errBefore[iErr] += fabs(diffBefore[iErr - 1]) / numPatches;
-      errAfter[iErr] += fabs(diffAfter[iErr - 1]) / numPatches;
+  Mat wbAndCcmMat(kNumChannels, kNumChannels, CV_32FC1);
+  for (int y = 0; y < kNumChannels; ++y) {
+    for (int x = 0; x < kNumChannels; ++x) {
+      wbAndCcmMat.at<float>(y, x) = wbAndCcm[y * kNumChannels + x];
     }
   }
 
-  return make_pair(errBefore, errAfter);
+  LOG(INFO) << "WB and CCM: " << wbAndCcmMat;
+
+  // M = CCM * WB
+  // If GT is [1, 1, 1] and input is x = [x1, x2, x3], we want M * x = [a, a, a]
+  // (= keep grays gray)
+  // => x = M^-1 * [a, a, a]
+  // => WB = diag(1 / N(x)), where N(xi) = xi / max(x)
+  // (= scaling 2 channels to the most sensitive one)
+  // => WB * x = [b, b, b]
+  // CCM * WB * x = [a, a, a]
+  // => CCM * [b, b, b] = [a, a, a]
+  // => sum(CCM ith row) = a / b, for all i
+  // => CCM /= sum(CCM row) so each row sums to one
+
+  Mat balanced = (wbAndCcmMat.inv() * Mat::ones(3, 1, CV_32FC1)).t();
+
+  double balancedMax;
+  minMaxLoc(balanced, nullptr, &balancedMax);
+
+  whiteBalance = Vec3f(
+    balancedMax / balanced.at<float>(0),
+    balancedMax / balanced.at<float>(1),
+    balancedMax / balanced.at<float>(2));
+
+  LOG(INFO) << "White balance: " << whiteBalance;
+
+  // Divide each column by WB
+  ccm = Mat::zeros(kNumChannels, kNumChannels, CV_32FC1);
+  ccm.col(0) = wbAndCcmMat.col(0) / whiteBalance[0];
+  ccm.col(1) = wbAndCcmMat.col(1) / whiteBalance[1];
+  ccm.col(2) = wbAndCcmMat.col(2) / whiteBalance[2];
+
+  // Force CCM rows to sum to 1
+  ccm /= sum(ccm.row(0))[0];
+
+  LOG(INFO) << "CCM: " << ccm;
+
+  for (int i = 0; i <= kBezierOrderX; ++i) {
+    LOG(INFO) << "bezierX[" << i << "]: " << bezierX[i];
+  }
+  for (int i = 0; i <= kBezierOrderY; ++i) {
+    LOG(INFO) << "bezierY[" << i << "]: " << bezierY[i];
+  }
+
+  BezierCurve<float, double> bX(bezierX);
+  BezierCurve<float, double> bY(bezierY);
+
+  vector<float> illuminationScales(colorPatches.size());
+  for (int i = 0; i < colorPatches.size(); ++i) {
+    Point2f centroid = colorPatches[i].centroid - bezierTL;
+    const float bezier = bX(centroid.x / width) * bY(centroid.y / height);
+    illuminationScales[i] = bezier;
+  }
+
+  if (saveDebugImages) {
+    // Plot inverse illumination scales
+    Mat illum(imageSize, CV_32FC1, Scalar::all(1.0f));
+
+    for (int i = 0; i < colorPatches.size(); ++i) {
+      LOG(INFO) << "patch " << i << ": " << colorPatches[i].centroid
+                << ", illum: " << illuminationScales[i];
+      const float bezierStretched =
+        illuminationScales[i] / illuminationScales[1];
+      static const int kRadius = 30;
+      static const int kThickness = -1;  // filled
+      const Point center = colorPatches[i].centroid;
+      circle(illum, center, kRadius, 1.0f / bezierStretched, kThickness);
+    }
+
+    const string illumFilename =
+      outputDir + "/" + to_string(++stepDebugImages) + "_illumination.png";
+    static const float kAverageIllumination = 128.0f;
+    imwriteExceptionOnFail(illumFilename, kAverageIllumination * illum);
+  }
+
+  // Save illumination scales to file
+  const string illumsFilename = outputDir + "/illumination_scales.txt";
+  ofstream illumStream(illumsFilename, ios::out);
+  if (!illumStream) {
+    throw VrCamException("file open failed: " + illumsFilename);
+  }
+  for (auto illumination : illuminationScales) {
+    illumStream << illumination;
+  }
+  illumStream.close();
+
+  LOG(INFO) << "Computing errors...";
+
+  // Get Lab for rach color patch
+  for (int i = 0; i < colorPatches.size(); ++i) {
+    vector<double> labOut = applyColorParams(
+      rgbsRef[i],
+      illuminationScales[i],
+      bl.data(),
+      wbAndCcm.data());
+    colorPatches[i].labMedian = Vec3f(labOut[0], labOut[1], labOut[2]);
+  }
+  computeColorPatchErrors(colorPatches, outputDir, "ceres");
 }
 
-} // namespace color_calibration
-} // namespace surround360
+void computeColorPatchErrors(
+    const vector<ColorPatch>& colorPatches,
+    const string& outputDir,
+    const string& titleExtra) {
+
+  vector<float> deltaE(colorPatches.size(), 0.0f);
+  for (int i = 0; i < colorPatches.size(); ++i) {
+    vector<double> labRef(labMacbeth[i].begin(), labMacbeth[i].end());
+    Vec3f labOut3f = colorPatches[i].labMedian;
+    const vector<double> labOut = {labOut3f[0], labOut3f[1], labOut3f[2]};
+
+    for (int j = 0; j < labOut.size(); ++j) {
+      deltaE[i] += square(labRef[j] - labOut[j]);
+    }
+    deltaE[i] = std::sqrt(deltaE[i]);
+
+    LOG(INFO) << "Patch " << i
+              << ": Lab out: [" << labOut[0] << ", " << labOut[1] << ", " << labOut[2]
+              << "], Lab ref: [" << labRef[0] << ", " << labRef[1] << ", " << labRef[2]
+              << "] DeltaE: " << deltaE[i];
+  }
+
+  const float deltaSum = accumulate(deltaE.begin(), deltaE.end(), 0.0);
+  LOG(INFO) << "DeltaE mean: " << (deltaSum / deltaE.size());
+
+  // Save deltas to file
+  const string deltaEFilename = outputDir + "/deltaE_" + titleExtra + ".txt";
+  ofstream deltaEStream(deltaEFilename, ios::out);
+  if (!deltaEStream) {
+    throw VrCamException("file open failed: " + deltaEFilename);
+  }
+  for (int i = 0; i < deltaE.size(); ++i) {
+    deltaEStream << deltaE[i] << "\n";
+  }
+  deltaEStream.close();
+}
+
+}  // namespace color_calibration
+}  // namespace surround360

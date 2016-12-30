@@ -385,20 +385,67 @@ TARGET_LINK_LIBRARIES(
 
 ### TestColorCalibration ###
 
-ADD_EXECUTABLE(
-  TestColorCalibration
-  source/test/TestColorCalibration.cpp
-)
-TARGET_COMPILE_FEATURES(TestColorCalibration PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestColorCalibration
-  LibVrCamera
-  LibJSON
-  gflags
-  glog
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
+IF (DEFINED HALIDE_DIR)
+  ADD_EXECUTABLE(
+    TestColorCalibration
+    source/test/TestColorCalibration.cpp
+    "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
+  )
+  ADD_DEPENDENCIES(TestColorCalibration CameraIspGen)
+  TARGET_COMPILE_FEATURES(TestColorCalibration PRIVATE cxx_range_for)
+
+  IF(NOT APPLE AND NOT MSVC)
+    TARGET_LINK_LIBRARIES(
+      TestColorCalibration
+      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+      LibVrCamera
+      LibJSON
+      gflags
+      glog
+      ${OpenCV_LIBS}
+      ${CERES_LIBRARIES}
+      Halide
+      dl
+      tinfo
+      ${PLATFORM_SPECIFIC_LIBS}
+    )
+  ELSE()
+  TARGET_LINK_LIBRARIES(
+    TestColorCalibration
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    LibVrCamera
+    LibJSON
+    gflags
+    glog
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    Halide
+    dl
+    ${PLATFORM_SPECIFIC_LIBS}
+  )
+  ENDIF()
+ELSE()
+  ADD_EXECUTABLE(
+    TestColorCalibration
+    source/test/TestColorCalibration.cpp)
+  TARGET_COMPILE_FEATURES(TestColorCalibration PRIVATE cxx_range_for)
+  TARGET_LINK_LIBRARIES(
+    TestColorCalibration
+    LibVrCamera
+    LibJSON
+    gflags
+    glog
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    ${PLATFORM_SPECIFIC_LIBS}
+  )
+ENDIF()
 
 ### TestVignettingCalibration ###
 

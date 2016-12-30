@@ -10,6 +10,7 @@
 #pragma once
 
 #include <vector>
+#include "CameraIsp.h"
 
 #include "opencv2/imgproc.hpp"
 
@@ -23,6 +24,7 @@ struct ColorPatch {
   Point2f centroid;
   Mat mask;
   Vec3f rgbMedian;
+  Vec3f labMedian;
 };
 
 struct ColorResponse {
@@ -32,33 +34,36 @@ struct ColorResponse {
   Vec3f rgbSlope;
 };
 
-// MacBeth Linear RGB patches from http://www.babelcolor.com/colorchecker-2.htm#CCP2_data
-// Un-gamma corrected sRGB: INT(255 * (sRGB/255)^2.2)
-const vector<vector<int>> rgbLinearMacbeth = {
-  {44, 20, 13},
-  {147, 76, 56},
-  {26, 50, 86},
-  {25, 38, 12},
-  {57, 55, 112},
-  {27, 133, 107},
-  {192, 51, 6},
-  {13, 26, 104},
-  {146, 20, 30},
-  {28, 9, 36},
-  {89, 131, 11},
-  {204, 93, 4},
-  {3, 11, 76},
-  {13, 78, 16},
-  {118, 6, 9},
-  {219, 146, 0},
-  {138, 22, 80},
-  {0, 64, 104},
-  {233, 233, 228},
-  {150, 153, 153},
-  {92, 95, 95},
-  {49, 49, 49},
-  {21, 22, 23},
-  {6, 6, 7}
+// Reference grayscale values for plotting purposes
+const vector<int> rgbGrayLinearMacbeth = {6, 21, 49, 92, 150, 233};
+
+// MacBeth patches from X-Rite website
+// http://xritephoto.com/ph_product_overview.aspx?ID=938&Action=Support&SupportID=5884
+const vector<vector<float>> labMacbeth = {
+  {37.54, 14.37, 14.92},
+  {64.66, 19.27, 17.5},
+  {49.32, -3.82, -22.54},
+  {43.46, -12.74, 22.72},
+  {54.94, 9.61, -24.79},
+  {70.48, -32.26, -0.37},
+  {62.73, 35.83, 56.5},
+  {39.43, 10.75, -45.17},
+  {50.57, 48.64, 16.67},
+  {30.1, 22.54, -20.87},
+  {71.77, -24.13, 58.19},
+  {71.51, 18.24, 67.37},
+  {28.37, 15.42, -49.8},
+  {54.38, -39.72, 32.27},
+  {42.43, 51.05, 28.62},
+  {81.8, 2.67, 80.41},
+  {50.63, 51.28, -14.12},
+  {49.57, -29.71, -28.32},
+  {95.19, -1.03, 2.93},
+  {81.29, -0.57, 0.44},
+  {66.89, -0.75, -0.06},
+  {50.76, -0.13, 0.14},
+  {35.63, -0.46, -0.48},
+  {20.64, 0.07, -0.46}
 };
 
 // Get image bit depth
@@ -66,9 +71,6 @@ int getBitsPerPixel(const Mat& image);
 
 // Loads the given JSON file into a usable string
 string getJson(const string& filename);
-
-// Gets ground truth values for each gray patch on the MacBeth chart
-vector<int> getMacBethGrays();
 
 // Loads raw image using the ISP setup, so output is 16-bit and [0..1]
 Mat getRaw(const string& ispConfigFile, const Mat& image);
@@ -96,52 +98,21 @@ void saveBlackLevel(const Vec3f& blackLevel, const string& outputDir);
 // to text file
 void saveXIntercepts(const ColorResponse& colorResponse, const string& outputDir);
 
-// Applies ISP black level adjustment to input raw image
-Mat adjustBlackLevel(
-  const string& ispConfigFile,
-  const Mat& rawRef,
-  const Mat& raw,
-  const Point3f& blackLevel);
-
-// Applies ISP white balance gains to input raw image
-Mat whiteBalance(
-  const string& ispConfigFile,
-  const Mat& rawRef,
-  const Mat& raw,
-  const Vec3f& whiteBalanceGain);
-
-// Applies ISP clamping and contrast stretching
-// contrast
-Mat clampAndStretch(
-  const string& ispConfigFile,
-  const Mat& rawRef,
-  const Mat& raw,
-  const ColorResponse& colorResponse,
-  Vec3f& rgbClampMin,
-  Vec3f& rgbClampMax);
-
-// Applies ISP demosaicing step
-Mat demosaic(const string& ispConfigFile, const Mat& rawRef, const Mat& raw);
-
-// Applies ISP color correction
-Mat colorCorrect(
-  const string& ispConfigFile,
-  const Mat& rawRef,
-  const Mat& rgb,
-  const Mat& ccm,
-  const Vec3f& gamma = Vec3f(1.0f, 1.0f, 1.0f));
-
 // Generates ISP config file with all the given parameters
 void writeIspConfigFile(
-  const string& ispConfigFileIn,
   const string& ispConfigFileOut,
-  const Mat& raw,
-  const Vec3f& blackLevel = Vec3f(0.0f, 0.0f, 0.0f),
-  const Vec3f& whiteBalanceGain = Vec3f(1.0f, 1.0f, 1.0f),
-  const Vec3f& clampMin = Vec3f(0.0f, 0.0f, 0.0f),
-  const Vec3f& clampMax = Vec3f(1.0f, 1.0f, 1.0f),
-  const Mat& ccm = Mat::eye(3, 3, CV_32F),
-  const Vec3f& gamma = Vec3f(1.0f, 1.0f, 1.0f));
+  CameraIsp& cameraIsp,
+  const Vec3f& blackLevel,
+  const Vec3f& whiteBalanceGain,
+  const Mat& ccm,
+  const Vec3f& gamma);
+
+// Updates input ISP config file with clamp values
+void updateIspWithClamps(
+  const string& ispConfigFilePath,
+  const int bpp,
+  const Vec3f& clampMin,
+  const Vec3f& clampMax);
 
 // Finds black level. Assumes there's a black hole in the input image
 Vec3f findBlackLevel(
@@ -251,20 +222,24 @@ Vec3f plotGrayPatchResponse(
   const string& outputDir,
   int& stepDebugImages);
 
-// Computes white balance gains so that color response matches ground truth
-Vec3f computeWhiteBalanceGains(const ColorResponse& colorResponse);
+// Calculates black level, white balance and CCM from given color patches
+void obtainIspParams(
+  vector<ColorPatch>& colorPatches,
+  const Size& imageSize,
+  const bool isBlackLevelSet,
+  const bool saveDebugImages,
+  const string& outputDir,
+  int& stepDebugImages,
+  Vec3f& blackLevel,
+  Vec3f& whiteBalance,
+  Mat& ccm);
 
-// Compute color correction matrix from patch info
-Mat computeCCM(const vector<ColorPatch>& colorPatches);
-
-// Compute L2 errors between corrected color patches and MacBeth ground truth
-// The output is a pair of vectors such that
-// Vector 1: errRGB, errB, errG, errR BEFORE correction
-// Vector 2: errRGB, errB, errG, errR AFTER correction
-pair<Vec4f, Vec4f> computeColorPatchErrors(
-  const Mat& imBefore,
-  const Mat& imAfter,
-  const vector<ColorPatch>& colorPatches);
+// Compute DeltaE errors between corrected color patches and MacBeth ground
+// truth (Lab)
+void computeColorPatchErrors(
+  const vector<ColorPatch>& colorPatches,
+  const string& outputDir,
+  const string& titleExtra);
 
 } // namespace color_calibration
 } // namespace surround360

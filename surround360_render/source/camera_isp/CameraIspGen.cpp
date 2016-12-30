@@ -324,6 +324,13 @@ class CameraIspGen
     // gb refers to green sites in the blue rows
     // gr refers to green sites in the red rows
 
+    // We want to express black level, white balance, and clamping as A(x - B)
+    // Assuming x in [0, 1]
+    // y = [(WB(x - BL)/(1 - BL)) - CLmin] / (CLmax - CLmin)
+    //   = WB[x - (BL + CLmin(1 - BL) / WB)] / [(1 - BL)(CLmax - CLmin)]
+    //   = A(x - B),
+    //     A = WB / [(1 - BL)(CLmax - CLmin)], B = BL + CLmin(1 - BL) / WB
+
     Expr minRawR = blackLevelR;
     Expr minRawG = blackLevelG;
     Expr minRawB = blackLevelB;

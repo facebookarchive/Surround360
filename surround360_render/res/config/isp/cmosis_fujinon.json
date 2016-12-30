@@ -31,7 +31,7 @@
         "contrast" : 1.0,
         "lowKeyBoost" : [-0.2, -0.2, -0.2],
         "highKeyBoost" : [0.2, 0.2, 0.2],
-        "gamma" : [0.4545, 0.4545, 0.4545]
+        "gamma" : [0.4545, 0.4545, 0.4545],
         "bayerPattern" : "GBRG"
     }
 }

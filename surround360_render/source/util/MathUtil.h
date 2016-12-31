@@ -40,7 +40,7 @@ inline T clamp(const T& x, const T& a, const T& b) {
 
 template <typename T>
 inline T reflect(const T x, const T r) {
-  return x < T(0) ? -x : x >= r ? 2*r - x - 1 : x;
+  return x < T(0) ? -x : x >= r ? 2*r - x - 2 : x;
 }
 
 template <typename T>

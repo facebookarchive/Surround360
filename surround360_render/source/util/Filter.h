@@ -47,9 +47,11 @@ void iirLowPass(
 
   const float alpha = powf(amount, 1.0f/4.0f);
 
-  Mat buffer(max(inputImage.rows, inputImage.cols), 1, CV_32FC3);
   const int width = inputImage.cols;
   const int height = inputImage.rows;
+  Mat buffer(std::max(width, height), 1, CV_32FC3);
+  const Vec3f zf(0, 0, 0);
+  assert(width == lpImage.cols && height == lpImage.rows);
 
   // Horizontal pass
   for (int i = 0; i < height; ++i) {
@@ -62,11 +64,12 @@ void iirLowPass(
     }
 
     // Anticausal pass
-    v = buffer.at<Vec3f>(width - 1);
     for (int j = width - 2; j >= -1; --j) {
       Vec3f ip(buffer.at<Vec3f>(hBoundary(j, width)));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(i, hBoundary(j + 1, width)) = v;
+      lpImage.at<P>(i, j + 1)[0] = clamp(v[0], 0.0f, maxVal);
+      lpImage.at<P>(i, j + 1)[1] = clamp(v[1], 0.0f, maxVal);
+      lpImage.at<P>(i, j + 1)[2] = clamp(v[2], 0.0f, maxVal);
     }
   }
 
@@ -74,17 +77,18 @@ void iirLowPass(
   for (int j = 0; j < width; ++j) {
     // Causal pass
     Vec3f v(lpImage.at<P>(0, j));
-    for (int i = 1; i < height; ++i) {
+    for (int i = 1; i <= height; ++i) {
       Vec3f ip(lpImage.at<P>(vBoundary(i, height), j));
       v = lerp(ip, v, alpha);
       buffer.at<Vec3f>(vBoundary(i - 1, height)) = v;
     }
     // Anticausal pass
-    v = buffer.at<Vec3f>(height - 1);
     for (int i = height - 2; i >= -1; --i) {
       Vec3f ip = buffer.at<Vec3f>(vBoundary(i, height));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(vBoundary(i + 1, height), j) = v;
+      lpImage.at<P>(i + 1, j)[0] = clamp(v[0], 0.0f, maxVal);
+      lpImage.at<P>(i + 1, j)[1] = clamp(v[1], 0.0f, maxVal);
+      lpImage.at<P>(i + 1, j)[2] = clamp(v[2], 0.0f, maxVal);
     }
   }
 }
@@ -105,15 +109,15 @@ void sharpenWithIirLowPass(
       P& p = inputImage.at<P>(i, j);
       // High pass signal - just the residual of the low pass
       // subtracted from the original signal.
-      Vec3f hp;
-      hp[0] = p[0] - lp[0];
-      hp[1] = p[1] - lp[1];
-      hp[2] = p[2] - lp[2];
+      const Vec3f hp(
+          p[0] - lp[0],
+          p[1] - lp[1],
+          p[2] - lp[2]);
       // Noise coring
-      Vec3f ng;
-      ng[0] = 1.0f - expf(-(square(hp[0]) * noiseCore));
-      ng[1] = 1.0f - expf(-(square(hp[1]) * noiseCore));
-      ng[2] = 1.0f - expf(-(square(hp[2]) * noiseCore));
+      const Vec3f ng(
+          1.0f - expf(-(square(hp[0]) * noiseCore)),
+          1.0f - expf(-(square(hp[1]) * noiseCore)),
+          1.0f - expf(-(square(hp[2]) * noiseCore)));
       // Unsharp mask with coring
       p[0] = clamp(lp[0] + hp[0] * ng[0] * rAmount,  0.0f, maxVal);
       p[1] = clamp(lp[1] + hp[1] * ng[1] * gAmount,  0.0f, maxVal);

@@ -147,36 +147,31 @@ class CameraIsp {
   }
 
   void demosaicFrequencyFilter(Mat& r, Mat& g, Mat& b) const {
-    Butterworth dFilter(0.0f, 2.0f, width + height, 0.5f, 4);
-    Sinc sFilter(-4.0, 4.0,  width + height);
+    // Green/luma 4-th order Butterworth lp filter
+    const Butterworth dFilter(0.0f, 2.0f, width + height, 1.0f, 4);
+    // Chrome cross over filter
+    const Butterworth dcFilter(0.0f, 2.0f, width + height, 1.0f, 2.0f);
 
+    //  Do a per pixel filtering in DCT space
     for (int i = 0; i < height; ++i) {
       const float y = float(i) / float(height - 1);
-      const float y2 = y / 2.0f;
       for (int j = 0; j < width; ++j) {
         const float x = float(j) / float(width - 1);
-        const float x2 = x / 2.0f;
-        const float d = sqrt(square(x2) + square(y2) - square(x2 + y2)/2);
-        const float scale = (sFilter(lerp(1.0f, 0.0f, d))*10 + 1.0f) / 1.5f;
-        const float gGain = dFilter(x2 + y2) * scale;
-        const float rgGain = dFilter(x) * dFilter(y) * 2.0f / 1.5f;
+        // Diagonal distance and half
+        static const float kDScale = 1.2f;
+        const float d = (x + y) * kDScale;
+        const float kSharpen = d / 2.5f + 1.0f;
+        const float gGain  = 2.0f * dFilter(d) * kSharpen;
+        const float rbGain = 4.0f * dFilter(d);
+        g.at<float>(i, j) *= gGain;
 
-        // Filter the green separately
-        g.at<float>(i, j) =
-          g.at<float>(i, j) * gGain +
-          r.at<float>(i, j) * rgGain +
-          b.at<float>(i, j) * rgGain;
-        // Filter for chroma that r - g and b - g vary slowly in most
-        // natural scenes.
-        float dr = r.at<float>(i, j) * 4.0f - g.at<float>(i, j);
-        float db = b.at<float>(i, j) * 4.0f - g.at<float>(i, j);
-        const float cGain = dFilter(x * 2.0f) * dFilter(y * 2.0f);
+        const float kCrossoverCutoff = 3.0f;
+        const float d2 = d * 2 * kCrossoverCutoff;
 
-        dr *= cGain;
-        db *= cGain;
-
-        r.at<float>(i, j) = dr + g.at<float>(i, j);
-        b.at<float>(i, j) = db + g.at<float>(i, j);
+        // Cross over blend value
+        const float alpha = dcFilter(d2);
+        r.at<float>(i, j) = lerp(g.at<float>(i, j), r.at<float>(i, j) * rbGain, alpha);
+        b.at<float>(i, j) = lerp(g.at<float>(i, j), b.at<float>(i, j) * rbGain, alpha);
       }
     }
   }
@@ -1172,7 +1167,6 @@ class CameraIsp {
 
       // Filter including sharpnning in the DCT domain
       demosaicFrequencyFilter(r, g, b);
-
 #undef  DEBUG_DCT
 #ifndef DEBUG_DCT
       // Move back into the spatial domain
@@ -1205,6 +1199,9 @@ class CameraIsp {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
         Vec3f p =  demosaicedImage.at<Vec3f>(i, j);
+#ifdef DEBUG_DCT
+        Vec3f v(logf(square(p[0]) + 1.0f) * 255.0f, logf(square(p[1]) + 1.0f) * 255.0f, logf(square(p[2]) + 1.0f) * 255.0f);
+#else
         Vec3f v(
           toneCurveLut[
               clamp(
@@ -1221,6 +1218,7 @@ class CameraIsp {
                   compositeCCM.at<float>(2,0) * p[0] +
                   compositeCCM.at<float>(2,1) * p[1] +
                   compositeCCM.at<float>(2,2) * p[2], 0.0f, kToneCurveLutRange)][2]);
+#endif
         demosaicedImage.at<Vec3f>(i, j) = v;
       }
     }
@@ -1269,7 +1267,6 @@ class CameraIsp {
     for (int i = 0; i < height; ++i) {
       for (int j = 0; j < width; j++) {
         Vec3f& dp = demosaicedImage.at<Vec3f>(i, j);
-
         if (outputBpp == 8) {
           outputImage.at<Vec3b>(i, j)[c0] = dp[0];
           outputImage.at<Vec3b>(i, j)[c1] = dp[1];

@@ -72,9 +72,6 @@ void writeDng(
     Mat outputImage) {
   // Write out a dng if one was specified
   if (filename.size() > 0) {
-    // By the time we get here we should have 16 bit input.
-    assert(bitsPerPixel == kIspInputBitsPerPixel);
-
     LOG(INFO) << "Writing: " << filename << endl;
 
     FILE *fDng = fopen(filename.c_str(),"w");

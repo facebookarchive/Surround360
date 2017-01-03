@@ -212,7 +212,7 @@ int main(int argc, char** argv) {
     static const bool kFast = false;
     CameraIspPipe cameraIspTest(getJson(ispConfigPathOut), kFast, kOutputBpp);
   #else
-    CameraIspPipe cameraIspTest(getJson(ispConfigPathOut), kOutputBpp);
+    CameraIsp cameraIspTest(getJson(ispConfigPathOut), kOutputBpp);
   #endif
 
   cameraIspTest.setup();

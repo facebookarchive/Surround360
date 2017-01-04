@@ -137,20 +137,7 @@ void verifyImageDirFilenamesMatchCameraArray(
   }
 }
 
-void loadCameraImagePairs(
-    const vector<CameraMetadata>& cameraArray,
-    const string& imageDir,
-    vector< pair<CameraMetadata, Mat> >& camImagePairs) {
-
-  // build a map to lookup camera models by camera_id
-  map<string, CameraMetadata> camIdToModel;
-  map<string, int> camIdToIndex;
-  for (int i = 0; i < cameraArray.size(); ++i) {
-    const CameraMetadata& cam = cameraArray[i];
-    camIdToModel[cam.cameraId] = cam;
-    camIdToIndex[cam.cameraId] = i;
-  }
-
+string getImageFileExtension(const string& imageDir) {
   // figure out the file extension used by the images.. this is complicated but
   // its all so we can iterate over the images in the right order.
   // assumption: no weird mixtures of file extension
@@ -158,14 +145,21 @@ void loadCameraImagePairs(
   assert(imageFilenames.size() > 0);
   vector<string> firstFilenameParts = stringSplit(imageFilenames[0], '.');
   assert(firstFilenameParts.size() == 2);
-  const string imageFileExtension = firstFilenameParts[1];
+  return firstFilenameParts[1];
+}
+
+void loadCameraImagePairs(
+    const vector<CameraMetadata>& cameraArray,
+    const string& imageDir,
+    vector<pair<CameraMetadata, Mat>>& camImagePairs) {
 
   VLOG(1) << "loadCameraImagePairs spawning threads";
+  const string extension = getImageFileExtension(imageDir);
   vector<std::thread> threads;
   vector<Mat> images(cameraArray.size(), Mat());
   for (int i = 0; i < cameraArray.size(); ++i) {
     const CameraMetadata& cam = cameraArray[i];
-    const string imageFilename = cam.cameraId + "." + imageFileExtension;
+    const string imageFilename = cam.cameraId + "." + extension;
     const string imagePath = imageDir + "/" + imageFilename;
     VLOG(1) << "imagePath = " << imagePath;
     threads.push_back(std::thread(

@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 
+#include "Camera.h"
 #include "CameraMetadata.h"
 #include "ColorAdjustmentSampleLogger.h"
 #include "CvUtil.h"
@@ -75,14 +76,160 @@ DEFINE_string(cubemap_format,             "video",        "either video or photo
 DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
 DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
 DEFINE_bool(enable_render_coloradjust,    false,          "if true, color and brightness of images will be automatically adjusted to make smoother blends (in the renderer, not in the ISP step)");
+DEFINE_bool(new_rig_format,               false,          "use new rig and camera json format");
+DEFINE_double(pole_camera_fov_deg,        185,            "fov (degrees) to use for top/bottom cameras");
+DEFINE_double(pole_camera_crop_fov_deg,   140,            "fov (degrees) at which top/bottom cameras begin to feather");
+DEFINE_double(side_camera_h_fov_deg,      77.7769,        "horizontal fov (degrees) to use for side cameras");
+DEFINE_double(side_camera_v_fov_deg,      77.7769,        "vertical fov (degrees) to use for side cameras");
+
+const Camera::Vector3 kGlobalUp = Camera::Vector3::UnitZ();
+
+// represents either new or old rig format depending on FLAGS_new_rig_format
+struct RigDescription {
+  // new format fields
+  Camera::Rig rig;
+  Camera::Rig rigSideOnly;
+
+  // old format fields
+  float cameraRingRadius;
+  vector<CameraMetadata> camModelArrayWithTop;
+  vector<CameraMetadata> camModelArray;
+  vector<Mat> sideCamTransforms;
+
+  RigDescription(const string& filename, bool useNewFormat);
+
+  bool isNewFormat() const { return !rig.empty(); }
+
+  // find the camera that is closest to pointing in the provided direction
+  const Camera& findCameraByDirection(const Camera::Vector3& direction) const {
+    CHECK(isNewFormat());
+    const Camera* best = &rig.back();
+    for (auto& candidate : rig) {
+      if (candidate.forward().dot(direction) > best->forward().dot(direction)) {
+        best = &candidate;
+      }
+    }
+    return *best;
+  }
+
+  string getTopCameraId() const {
+    return isNewFormat()
+      ? findCameraByDirection(kGlobalUp).id
+      : getTopCamModel(camModelArrayWithTop).cameraId;
+  }
+
+  string getBottomCameraId() const {
+    return isNewFormat()
+      ? findCameraByDirection(-kGlobalUp).id
+      : getBottomCamModel(camModelArrayWithTop).cameraId;
+  }
+
+  int getSideCameraCount() const {
+    return isNewFormat() ? rigSideOnly.size() : camModelArray.size();
+  }
+
+  string getSideCameraId(const int idx) const {
+    return isNewFormat() ? rigSideOnly[idx].id : camModelArray[idx].cameraId;
+  }
+
+  float getRingRadius() const {
+    return isNewFormat() ? rigSideOnly[0].position.norm() : cameraRingRadius;
+  }
+
+  vector<Mat> loadSideCameraImages(const string& imageDir) const {
+    const string extension = getImageFileExtension(imageDir);
+
+    VLOG(1) << "loadSideCameraImages spawning threads";
+    vector<std::thread> threads;
+    vector<Mat> images(getSideCameraCount());
+    for (int i = 0; i < getSideCameraCount(); ++i) {
+      const string imageFilename = getSideCameraId(i) + "." + extension;
+      const string imagePath = imageDir + "/" + imageFilename;
+      VLOG(1) << "imagePath = " << imagePath;
+      threads.emplace_back(
+        imreadInStdThread,
+        imagePath,
+        CV_LOAD_IMAGE_COLOR,
+        &(images[i])
+      );
+    }
+    for (auto& thread : threads) {
+      thread.join();
+    }
+
+    return images;
+  }
+};
+
+RigDescription::RigDescription(const string& filename, const bool useNewFormat) {
+  if (useNewFormat) {
+    rig = Camera::loadRig(filename);
+    for (const Camera& camera : rig) {
+      if (camera.group.find("side") != string::npos) {
+        rigSideOnly.emplace_back(camera);
+      }
+    }
+  } else {
+    requireArg(FLAGS_src_intrinsic_param_file, "src_intrinsic_param_file");
+    // load camera meta data and source images
+    VLOG(1) << "Reading camera model json";
+    camModelArrayWithTop =
+      readCameraProjectionModelArrayFromJSON(
+        filename,
+        cameraRingRadius);
+
+    VLOG(1) << "Verifying image filenames";
+    verifyImageDirFilenamesMatchCameraArray(camModelArrayWithTop, FLAGS_imgs_dir);
+
+    VLOG(1) << "Removing top and bottom cameras";
+    camModelArray =
+      removeTopAndBottomFromCamArray(camModelArrayWithTop);
+
+    // read bundle adjustment for side cameras
+    if (FLAGS_ring_rectify_file == "NONE") {
+      LOG(WARNING) << "No ring rectification file specified";
+      for (int i = 0; i < camModelArray.size(); ++i) {
+        sideCamTransforms.push_back(Mat());
+      }
+    } else {
+      VLOG(1) << "Reading ring rectification file: " << FLAGS_ring_rectify_file;
+      FileStorage fileStorage(FLAGS_ring_rectify_file, FileStorage::READ);
+      if (!fileStorage.isOpened()) {
+        throw VrCamException("file read failed: " + FLAGS_ring_rectify_file);
+      }
+
+      for (int i = 0; i < camModelArray.size(); ++i) {
+        Mat transformForCamI;
+        fileStorage[camModelArray[i].cameraId] >> transformForCamI;
+        sideCamTransforms.push_back(transformForCamI);
+      }
+    }
+  }
+
+  // validation
+  CHECK_EQ(useNewFormat, isNewFormat());
+  CHECK_NE(getSideCameraCount(), 0);
+
+  if (FLAGS_eqr_width % getSideCameraCount() != 0) {
+    VLOG(1) << "Number of side cameras:" << getSideCameraCount();
+    VLOG(1) << "Suggested widths:";
+    for (int i = FLAGS_eqr_width * 0.9; i < FLAGS_eqr_width * 1.1; ++i) {
+      if (i % getSideCameraCount() == 0) {
+        VLOG(1) << i;
+      }
+    }
+    throw VrCamException("eqr_width must be evenly divisible by the number of cameras");
+  }
+
+}
 
 // project the image of a single camera into spherical coordinates
 void projectCamImageToSphericalThread(
     float brightnessAdjustment,
     Mat* intrinsic,
     Mat* distCoeffs,
-    CameraMetadata* cam,
-    Mat* perspectiveTransform,
+    const CameraMetadata* cam,
+    const Mat* perspectiveTransform,
     Mat* camImage,
     Mat* outProjectedImage) {
 
@@ -119,18 +266,58 @@ void projectCamImageToSphericalThread(
   *outProjectedImage = projectedImage;
 }
 
+void projectSideToSpherical(
+    Mat& dst,
+    const Mat& src,
+    const Camera& camera,
+    const float leftAngle,
+    const float rightAngle,
+    const float topAngle,
+    const float bottomAngle,
+    const float brightnessAdjust) {
+  // convert, clone or reference, as needed
+  Mat tmp = src;
+  if (src.channels() == 3) {
+    cvtColor(src, tmp, CV_BGR2BGRA);
+  } else if (FLAGS_side_alpha_feather_size) {
+    tmp = src.clone();
+  }
+  // feather
+  if (FLAGS_side_alpha_feather_size) {
+    for (int y = 0; y < FLAGS_side_alpha_feather_size; ++y) {
+      const uint8_t alpha =
+        255.0f * float(y + 0.5f) / float(FLAGS_side_alpha_feather_size);
+      for (int x = 0; x < tmp.cols; ++x) {
+        tmp.at<Vec4b>(y, x)[3] = alpha;
+        tmp.at<Vec4b>(tmp.rows - 1 - y, x)[3] = alpha;
+      }
+    }
+  }
+  // remap
+  bicubicRemapToSpherical(
+    dst,
+    tmp,
+    camera,
+    leftAngle,
+    rightAngle,
+    topAngle,
+    bottomAngle);
+  // adjust brightness
+  if (FLAGS_enable_render_coloradjust && brightnessAdjust != 0.0f) {
+    dst += Scalar(brightnessAdjust, brightnessAdjust, brightnessAdjust, 0);
+  }
+}
+
 // project all of the (side) cameras' images into spherical coordinates
 void projectSphericalCamImages(
-      const vector<CameraMetadata>& camModelArray,
-      vector<Mat>& sideCamTransforms,
+      const RigDescription& rig,
       const string& imagesDir,
       vector<Mat>& projectionImages) {
 
   VLOG(1) << "Projecting side camera images to spherical coordinates";
 
   const double startLoadCameraImagesTime = getCurrTimeSec();
-  vector< pair<CameraMetadata, Mat> > camImagePairs;
-  loadCameraImagePairs(camModelArray, imagesDir, camImagePairs);
+  vector<Mat> camImages = rig.loadSideCameraImages(imagesDir);
   const double endLoadCameraImagesTime = getCurrTimeSec();
   VLOG(1) << "Time to load images from file: "
     << endLoadCameraImagesTime - startLoadCameraImagesTime
@@ -150,8 +337,8 @@ void projectSphericalCamImages(
     }
   }
 
-  // if we gota  brightness adjustments file, read the values
-  vector<float> brightnessAdjustments(camModelArray.size(), 0.0f);
+  // if we got a brightness adjustments file, read the values
+  vector<float> brightnessAdjustments(rig.getSideCameraCount(), 0.0f);
   if (FLAGS_enable_render_coloradjust &&
       !FLAGS_brightness_adjustment_src.empty()){
     LOG(INFO) << "reading brightness adjustment file: "
@@ -165,10 +352,10 @@ void projectSphericalCamImages(
       (istreambuf_iterator<char>(brightnessAdjustFile)),
       istreambuf_iterator<char>());
     vector<string> brightnessStrs = stringSplit(strData , ',');
-    if (brightnessStrs.size() != camModelArray.size()) {
+    if (brightnessStrs.size() != rig.getSideCameraCount()) {
       throw VrCamException(
         "expected number of brightness adjustment values to match number of "
-        "side cameras. got # cameras = " + to_string(camModelArray.size()) +
+        "side cameras. got # cameras = " + to_string(rig.getSideCameraCount()) +
         " and # brightness adjustments = " +
         to_string(brightnessAdjustments.size()));
     }
@@ -177,37 +364,47 @@ void projectSphericalCamImages(
     }
   }
 
-  // to ensure thread safety, we need to make absolutely sure there is no monkey
-  // business with STL pair + cv::Mat going out of scope, so before spawning
-  // threads we unpack the pairs.
-  vector<CameraMetadata> camModels;
-  vector<Mat> camImages;
-  for (int camIdx = 0; camIdx < camImagePairs.size(); ++camIdx) {
-    const auto& camImagePair = camImagePairs[camIdx];
-    camModels.push_back(camImagePair.first);
-    camImages.push_back(camImagePair.second);
-  }
-
-  projectionImages = vector<Mat>(camImagePairs.size(), Mat());
+  projectionImages.resize(camImages.size());
   vector<std::thread> threads;
-  for (int camIdx = 0; camIdx < camImagePairs.size(); ++camIdx) {
-    threads.push_back(std::thread(
-      projectCamImageToSphericalThread,
-      brightnessAdjustments[camIdx],
-      &intrinsic,
-      &distCoeffs,
-      &camModels[camIdx],
-      &sideCamTransforms[camIdx],
-      &camImages[camIdx],
-      &projectionImages[camIdx]
-    ));
+  for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
+    if (rig.isNewFormat()) {
+      float hRadians = toRadians(FLAGS_side_camera_h_fov_deg);
+      float vRadians = toRadians(FLAGS_side_camera_v_fov_deg);
+      projectionImages[camIdx].create(
+        FLAGS_eqr_height * vRadians / M_PI,
+        FLAGS_eqr_width * hRadians / (2 * M_PI),
+        CV_8UC4);
+      // the negative sign here is so the camera array goes clockwise
+      float direction = -float(camIdx) / float(camImages.size()) * 2.0f * M_PI;
+      threads.emplace_back(
+        projectSideToSpherical,
+        ref(projectionImages[camIdx]),
+        cref(camImages[camIdx]),
+        cref(rig.rigSideOnly[camIdx]),
+        direction + hRadians / 2,
+        direction - hRadians / 2,
+        vRadians / 2,
+        -vRadians / 2,
+        brightnessAdjustments[camIdx]);
+    } else {
+      threads.emplace_back(
+        projectCamImageToSphericalThread,
+        brightnessAdjustments[camIdx],
+        &intrinsic,
+        &distCoeffs,
+        &rig.camModelArray[camIdx],
+        &rig.sideCamTransforms[camIdx],
+        &camImages[camIdx],
+        &projectionImages[camIdx]
+      );
+    }
   }
   for (std::thread& t : threads) { t.join(); }
 
   if (FLAGS_save_debug_images) {
-    for (int camIdx = 0; camIdx < camImagePairs.size(); ++camIdx) {
+    for (int camIdx = 0; camIdx < rig.getSideCameraCount(); ++camIdx) {
       const string cropImageFilename = FLAGS_output_data_dir +
-        "/projections/crop_" + camImagePairs[camIdx].first.cameraId + ".png";
+        "/projections/crop_" + rig.getSideCameraId(camIdx) + ".png";
       imwriteExceptionOnFail(cropImageFilename, projectionImages[camIdx]);
     }
   }
@@ -333,7 +530,7 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
     float(camImageWidth) * (overlapAngleDegrees / camFovHorizontalDegrees);
   const int numNovelViews = camImageWidth - overlapImageWidth; // per image pair
 
-  // setup paralllel optical flow
+  // setup parallel optical flow
   double startOpticalFlowTime = getCurrTimeSec();
   vector<NovelViewGenerator*> novelViewGenerators(projectionImages.size());
   vector<std::thread> threads;
@@ -405,8 +602,7 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
 // handles flow between the fisheye top or bottom with the left/right eye side panoramas
 void poleToSideFlowThread(
     string eyeName,
-    CameraMetadata anySideCamModel,
-    CameraMetadata fisheyeCamModel,
+    const RigDescription& rig,
     Mat* sideSphericalForEye,
     Mat* fisheyeSpherical,
     Mat* warpedSphericalForEye) {
@@ -463,20 +659,33 @@ void poleToSideFlowThread(
 
   // make a ramp for alpha/flow magnitude
   const float kRampFrac = 1.0f; // fraction of available overlap used for ramp
-  const float phiFromPole = fisheyeCamModel.fisheyeFovDegreesCrop / 2.0f;
-  const float phiFromSide =
-    90.0f - (anySideCamModel.fovHorizontal / anySideCamModel.aspectRatioWH) / 2.0f;
+  float poleCameraCropRadius = FLAGS_pole_camera_crop_fov_deg / 2.0f;
+  float poleCameraRadius = FLAGS_pole_camera_fov_deg / 2.0f;
+  float sideCameraRadius = FLAGS_side_camera_v_fov_deg / 2.0f;
+  if (!rig.isNewFormat()) {
+    CameraMetadata bottom = getBottomCamModel(rig.camModelArrayWithTop);
+    const CameraMetadata& side = rig.camModelArray[0];
+    poleCameraCropRadius = bottom.fisheyeFovDegreesCrop / 2.0f;
+    poleCameraRadius = bottom.fisheyeFovDegrees / 2.0f;
+    sideCameraRadius = (side.fovHorizontal / side.aspectRatioWH) / 2.0f;
+  }
+
+  const float phiFromPole = poleCameraCropRadius;
+  const float phiFromSide = 90.0f - sideCameraRadius;
   const float phiMid = (phiFromPole + phiFromSide) / 2.0f;
   const float phiDiff = fabsf(phiFromPole - phiFromSide);
   const float phiRampStart = phiMid - kRampFrac * phiDiff / 2.0f;
   const float phiRampEnd = phiMid + kRampFrac * phiDiff / 2.0f;
 
+  // ramp for flow magnitude
+  //    1               for phi from 0 to phiRampStart
+  //    linear drop-off for phi from phiRampStart to phiMid
+  //    0               for phi from phiMid to totalRadius
   Mat warp(extendedFisheyeSpherical.size(), CV_32FC2);
   for (int y = 0; y < warp.rows; ++y) {
+    const float phi = poleCameraRadius * float(y + 0.5f) / float(warp.rows);
+    const float alpha = 1.0f - rampf(phi, phiRampStart, phiMid);
     for (int x = 0; x < warp.cols; ++x) {
-      const float phi =
-        fisheyeCamModel.fisheyeFovDegrees * 0.5f * float(y) / float(warp.rows - 1);
-      const float alpha = 1.0f - rampf(phi, phiRampStart, phiMid);
       warp.at<Point2f>(y, x) = Point2f(x, y) + (1.0f - alpha) * flow.at<Point2f>(y, x);
     }
   }
@@ -512,11 +721,13 @@ void poleToSideFlowThread(
   }
 
   // make a ramp in the alpha channel for blending with the sides
+  //    1               for phi from 0 to phiMid
+  //    linear drop-off for phi from phiMid to phiRampEnd
+  //    0               for phi from phiRampEnd to totalRadius
   for (int y = 0; y < warp.rows; ++y) {
+    const float phi = poleCameraRadius * float(y + 0.5f) / float(warp.rows);
+    const float alpha = 1.0f - rampf(phi, phiMid, phiRampEnd);
     for (int x = 0; x < warp.cols; ++x) {
-      const float phi =
-        fisheyeCamModel.fisheyeFovDegrees * 0.5f * float(y) / float(warp.rows - 1);
-      const float alpha = 1.0f - rampf(phi, phiMid, phiRampEnd);
       (*warpedSphericalForEye).at<Vec4b>(y, x)[3] *= alpha;
     }
   }
@@ -546,14 +757,16 @@ void poleToSideFlowThread(
 
 // does pole removal from the two bottom cameras, and projects the result to equirect
 void prepareBottomImagesThread(
-    vector<CameraMetadata> camModelArrayWithTop,
-    CameraMetadata* bottomCamModel,
+    const RigDescription& rig,
     Mat* bottomSpherical) {
 
   Mat bottomImage;
   if (FLAGS_enable_pole_removal) {
+    CHECK(!rig.isNewFormat()) << "TODO: support pole removal";
     LOG(INFO) << "Using pole removal masks";
     requireArg(FLAGS_bottom_pole_masks_dir, "bottom_pole_masks_dir");
+
+    CameraMetadata dummy;
     combineBottomImagesWithPoleRemoval(
       FLAGS_imgs_dir,
       FLAGS_bottom_pole_masks_dir,
@@ -564,23 +777,39 @@ void prepareBottomImagesThread(
       FLAGS_poleremoval_flow_alg,
       FLAGS_std_alpha_feather_size,
       FLAGS_enable_render_coloradjust,
-      camModelArrayWithTop,
-      *bottomCamModel,
+      rig.camModelArrayWithTop,
+      dummy,
       bottomImage);
   } else {
     LOG(INFO) << "Using primary bottom camera";
-    *bottomCamModel = getBottomCamModel(camModelArrayWithTop);
-    const string bottomImageFilename = bottomCamModel->cameraId + ".png";
+    const string bottomImageFilename = rig.getBottomCameraId() + ".png";
     const string bottomImagePath = FLAGS_imgs_dir + "/" + bottomImageFilename;
     bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
   }
 
-  *bottomSpherical = bicubicRemapFisheyeToSpherical(
-    *bottomCamModel,
-    bottomImage,
-    Size(
+  if (rig.isNewFormat()) {
+    const double poleCameraFovRadians = toRadians(FLAGS_pole_camera_fov_deg);
+    bottomSpherical->create(
+      FLAGS_eqr_height * (poleCameraFovRadians / 2) / M_PI,
       FLAGS_eqr_width,
-      FLAGS_eqr_height * (bottomCamModel->fisheyeFovDegrees / 2.0f) / 180.0f));
+      CV_8UC3);
+    bicubicRemapToSpherical(
+      *bottomSpherical,
+      bottomImage,
+      rig.findCameraByDirection(-kGlobalUp),
+      0,
+      2.0f * M_PI,
+      -(M_PI / 2.0f),
+      -(M_PI / 2.0f - poleCameraFovRadians / 2.0f));
+  } else {
+    CameraMetadata bottom = getBottomCamModel(rig.camModelArrayWithTop);
+    *bottomSpherical = bicubicRemapFisheyeToSpherical(
+      bottom,
+      bottomImage,
+      Size(
+        FLAGS_eqr_width,
+        FLAGS_eqr_height * (bottom.fisheyeFovDegrees / 2.0f) / 180.0f));
+  }
 
   // if we skipped pole removal, there is no alpha channel and we need to add one.
   if (bottomSpherical->type() != CV_8UC4) {
@@ -608,18 +837,36 @@ void prepareBottomImagesThread(
 
 // similar to prepareBottomImagesThread but there is no pole removal
 void prepareTopImagesThread(
-    CameraMetadata topCamModel,
+    const RigDescription& rig,
     Mat* topSpherical) {
 
-  const string topImageFilename = topCamModel.cameraId + ".png";
+  const string topImageFilename = rig.getTopCameraId() + ".png";
   const string topImagePath = FLAGS_imgs_dir + "/" + topImageFilename;
   Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
-  *topSpherical = bicubicRemapFisheyeToSpherical(
-    topCamModel,
-    topImage,
-    Size(
+  if (rig.isNewFormat()) {
+    const double poleCameraFovRadians = toRadians(FLAGS_pole_camera_fov_deg);
+    topSpherical->create(
+      FLAGS_eqr_height * (poleCameraFovRadians / 2) / M_PI,
       FLAGS_eqr_width,
-      FLAGS_eqr_height * (topCamModel.fisheyeFovDegrees / 2.0f) / 180.0f));
+      CV_8UC3);
+    bicubicRemapToSpherical(
+      *topSpherical,
+      topImage,
+      rig.findCameraByDirection(kGlobalUp),
+      2.0f * M_PI,
+      0,
+      M_PI / 2.0f,
+      M_PI / 2.0f - poleCameraFovRadians / 2.0f);
+  } else {
+    CameraMetadata top = getTopCamModel(rig.camModelArrayWithTop);
+    *topSpherical = bicubicRemapFisheyeToSpherical(
+      top,
+      topImage,
+      Size(
+        FLAGS_eqr_width,
+        FLAGS_eqr_height * (top.fisheyeFovDegrees / 2.0f) / 180.0f));
+
+  }
 
   // alpha feather the top spherical image for flow purposes
   cvtColor(*topSpherical, *topSpherical, CV_BGR2BGRA);
@@ -667,7 +914,6 @@ void padToheight(Mat& unpaddedImage, const int targetHeight) {
 
 // run the whole stereo panorama rendering pipeline
 void renderStereoPanorama() {
-  requireArg(FLAGS_src_intrinsic_param_file, "src_intrinsic_param_file");
   requireArg(FLAGS_rig_json_file, "rig_json_file");
   requireArg(FLAGS_imgs_dir, "imgs_dir");
   requireArg(FLAGS_output_data_dir, "output_data_dir");
@@ -678,78 +924,29 @@ void renderStereoPanorama() {
   ColorAdjustmentSampleLogger::instance().enabled =
     FLAGS_enable_render_coloradjust;
 
-  // load camera meta data and source images
-  VLOG(1) << "Reading camera model json";
-  float cameraRingRadius;
-  vector<CameraMetadata> camModelArrayWithTop =
-    readCameraProjectionModelArrayFromJSON(
-      FLAGS_rig_json_file,
-      cameraRingRadius);
-
-  VLOG(1) << "Verifying image filenames";
-  verifyImageDirFilenamesMatchCameraArray(camModelArrayWithTop, FLAGS_imgs_dir);
-
-  VLOG(1) << "Removing top and bottom cameras";
-  vector<CameraMetadata> camModelArray =
-    removeTopAndBottomFromCamArray(camModelArrayWithTop);
-
-  if (FLAGS_eqr_width % camModelArray.size() != 0) {
-    VLOG(1) << "Number of side cameras:" << camModelArray.size();
-    VLOG(1) << "Suggested widths:";
-    for (int i = FLAGS_eqr_width * 0.9; i < FLAGS_eqr_width * 1.1; ++i) {
-      if (i % camModelArray.size() == 0) {
-        VLOG(1) << i;
-      }
-    }
-    throw VrCamException("eqr_width must be evenly divisible by the number of cameras");
-  }
-
+  RigDescription rig(FLAGS_rig_json_file, FLAGS_new_rig_format);
+  
   // prepare the bottom camera(s) by doing pole removal and projections in a thread.
   // will join that thread as late as possible.
-  CameraMetadata bottomCamModel;
-  Mat bottomImage, bottomSpherical;
+  Mat bottomSpherical;
   std::thread prepareBottomThread;
   if (FLAGS_enable_bottom) {
     VLOG(1) << "Bottom cameras enabled. Preparing bottom projections in a thread";
     prepareBottomThread = std::thread(
       prepareBottomImagesThread,
-      camModelArrayWithTop,
-      &bottomCamModel,
+      std::cref(rig),
       &bottomSpherical);
   }
 
   // top cameras are handled similar to bottom cameras- do anything we can in a thread
   // that is joined as late as possible.
-  CameraMetadata topCamModel;
   Mat topSpherical;
   std::thread prepareTopThread;
   if (FLAGS_enable_top) {
-    topCamModel = getTopCamModel(camModelArrayWithTop);
     prepareTopThread = std::thread(
       prepareTopImagesThread,
-      topCamModel,
+      cref(rig),
       &topSpherical);
-  }
-
-  // read bundle adjustment for side cameras
-  vector<Mat> sideCamTransforms;
-  if (FLAGS_ring_rectify_file == "NONE") {
-    LOG(WARNING) << "No ring rectification file specified";
-    for (int i = 0; i < camModelArray.size(); ++i) {
-      sideCamTransforms.push_back(Mat());
-    }
-  } else {
-    VLOG(1) << "Reading ring rectification file: " << FLAGS_ring_rectify_file;
-    FileStorage fileStorage(FLAGS_ring_rectify_file, FileStorage::READ);
-    if (!fileStorage.isOpened()) {
-      throw VrCamException("file read failed: " + FLAGS_ring_rectify_file);
-    }
-
-    for (int i = 0; i < camModelArray.size(); ++i) {
-      Mat transformForCamI;
-      fileStorage[camModelArray[i].cameraId] >> transformForCamI;
-      sideCamTransforms.push_back(transformForCamI);
-    }
   }
 
   // projection to spherical coordinates
@@ -761,20 +958,19 @@ void renderStereoPanorama() {
 
   const double startProjectSphericalTime = getCurrTimeSec();
   LOG(INFO) << "Projecting camera images to spherical";
-  projectSphericalCamImages(
-    camModelArray,
-    sideCamTransforms,
-    FLAGS_imgs_dir,
-    projectionImages);
+  projectSphericalCamImages(rig, FLAGS_imgs_dir, projectionImages);
   const double endProjectSphericalTime = getCurrTimeSec();
 
   // generate novel views and stereo spherical panoramas
   double opticalFlowRuntime, novelViewRuntime;
   Mat sphericalImageL, sphericalImageR;
   LOG(INFO) << "Rendering stereo panorama";
+  const double fovHorizontal = rig.isNewFormat()
+    ? FLAGS_side_camera_h_fov_deg
+    : rig.camModelArray[0].fovHorizontal;
   generateRingOfNovelViewsAndRenderStereoSpherical(
-    cameraRingRadius,
-    camModelArray[0].fovHorizontal,
+    rig.getRingRadius(),
+    fovHorizontal,
     projectionImages,
     sphericalImageL,
     sphericalImageR,
@@ -811,8 +1007,7 @@ void renderStereoPanorama() {
     topFlowThreadL = std::thread(
       poleToSideFlowThread,
       "top_left",
-      camModelArray[0],
-      topCamModel,
+      cref(rig),
       &sphericalImageL,
       &topSpherical,
       &topSphericalWarpedL);
@@ -820,8 +1015,7 @@ void renderStereoPanorama() {
     topFlowThreadR = std::thread(
       poleToSideFlowThread,
       "top_right",
-      camModelArray[0],
-      topCamModel,
+      cref(rig),
       &sphericalImageR,
       &topSpherical,
       &topSphericalWarpedR);
@@ -839,8 +1033,7 @@ void renderStereoPanorama() {
     bottomFlowThreadL = std::thread(
       poleToSideFlowThread,
       "bottom_left",
-      camModelArray[0],
-      bottomCamModel,
+      cref(rig),
       &flipSphericalImageL,
       &bottomSpherical,
       &bottomSphericalWarpedL);
@@ -848,8 +1041,7 @@ void renderStereoPanorama() {
     bottomFlowThreadR = std::thread(
       poleToSideFlowThread,
       "bottom_right",
-      camModelArray[0],
-      bottomCamModel,
+      cref(rig),
       &flipSphericalImageR,
       &bottomSpherical,
       &bottomSphericalWarpedR);
@@ -981,7 +1173,7 @@ void renderStereoPanorama() {
 
     vector<double> sideCamBrightnessAdjustments =
       computeBrightnessAdjustmentsForSideCameras(
-        camModelArray.size(), colorSampleLogger.samples);
+        rig.getSideCameraCount(), colorSampleLogger.samples);
 
     LOG(INFO) << "writing brightness adjustments to file: "
       << FLAGS_brightness_adjustment_dest;

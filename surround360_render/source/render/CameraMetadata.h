@@ -62,6 +62,8 @@ static void imreadInStdThread(string path, int flags, Mat* dest) {
   *dest = imreadExceptionOnFail(path, flags);
 }
 
+string getImageFileExtension(const string& imageDir);
+
 // takes a camera projection model array and a path to a folder containing
 // images. loads the images and matches them up with cameras by filename.
 // returns an array of pairs of camera model and image. this function assumes

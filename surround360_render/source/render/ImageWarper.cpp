@@ -233,5 +233,38 @@ Mat sideFisheyeToSpherical(
   return eqrImage;
 }
 
+void bicubicRemapToSpherical(
+    Mat& dst,
+    const Mat& src,
+    const Camera& camera,
+    const float leftAngle,
+    const float rightAngle,
+    const float topAngle,
+    const float bottomAngle) {
+  Mat warp(dst.size(), CV_32FC2);
+  for (int x = 0; x < warp.cols; ++x) {
+    // sweep xAngle from leftAngle to rightAngle
+    const float xFrac = (x + 0.5f) / warp.cols;
+    const float xAngle = (1 - xFrac) * leftAngle + xFrac * rightAngle;
+    for (int y = 0; y < warp.rows; ++y) {
+      // sweep yAngle from topAngle to bottomAngle
+      const float yFrac = (y + 0.5f) / warp.rows;
+      float yAngle = (1 - yFrac) * topAngle + yFrac * bottomAngle;
+      const Camera::Vector3 unit(
+        cos(yAngle) * cos(xAngle),
+        cos(yAngle) * sin(xAngle),
+        sin(yAngle));
+      const Camera::Vector2 pixel =
+        camera.pixel(unit * int(Camera::kNearInfinity));
+      warp.at<Point2f>(y, x) = Point2f(pixel.x() - 0.5, pixel.y() - 0.5);
+    }
+  }
+  Mat tmp = src;
+  if (src.channels() == 3 && dst.channels() == 4) {
+    cvtColor(src, tmp, CV_BGR2BGRA);
+  }
+  remap(tmp, dst, warp, Mat(), CV_INTER_CUBIC, BORDER_CONSTANT);
+}
+
 } // namespace warper
 } // namespace surround360

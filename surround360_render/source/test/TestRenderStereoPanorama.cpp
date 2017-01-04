@@ -150,7 +150,7 @@ void projectSphericalCamImages(
     }
   }
 
-  // if we gota  brightness adjustments file, read the values
+  // if we got a brightness adjustments file, read the values
   vector<float> brightnessAdjustments(camModelArray.size(), 0.0f);
   if (FLAGS_enable_render_coloradjust &&
       !FLAGS_brightness_adjustment_src.empty()){

@@ -119,7 +119,7 @@ struct IspFunctor {
       residuals[i] = labRef[i] - lab[i];
     }
 
-    CHECK(isfinite(*residuals));
+    CHECK(std::isfinite(*residuals));
     return true;
   }
 

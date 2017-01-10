@@ -196,7 +196,7 @@ Camera::Vector3 midpoint(
   Camera::Real tb = cross2(fa, fc) / det;
 
   // check for parallel lines
-  if (!isfinite(ta) || !isfinite(tb)) {
+  if (!std::isfinite(ta) || !std::isfinite(tb)) {
     ta = tb = Camera::kNearInfinity;
   }
 

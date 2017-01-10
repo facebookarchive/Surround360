@@ -81,7 +81,7 @@ struct BezierFunctor {
     const double vy = bezierY(y);
 
     *residuals = vx * vy - intensity;
-    CHECK(isfinite(*residuals));
+    CHECK(std::isfinite(*residuals));
     return true;
   }
 

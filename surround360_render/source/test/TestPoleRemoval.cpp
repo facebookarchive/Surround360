@@ -52,7 +52,8 @@ int main(int argc, char** argv) {
       FLAGS_rig_json_file,
       cameraRingRadius);
 
-  CameraMetadata bottomCamModel;
+  const CameraMetadata& cam = getBottomCamModel(camModelArrayWithTop);
+  const CameraMetadata& cam2 = getBottomCamModel2(camModelArrayWithTop);
   Mat bottomImage;
   combineBottomImagesWithPoleRemoval(
     FLAGS_src_images_dir,
@@ -64,8 +65,11 @@ int main(int argc, char** argv) {
     FLAGS_flow_alg,
     FLAGS_alpha_feather_size,
     FLAGS_enable_render_coloradjust,
-    camModelArrayWithTop,
-    bottomCamModel,
+    cam.cameraId,
+    cam2.cameraId,
+    cam.usablePixelsRadius,
+    cam2.usablePixelsRadius,
+    cam2.flip180,
     bottomImage);
 
   return EXIT_SUCCESS;

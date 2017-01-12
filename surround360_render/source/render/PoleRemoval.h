@@ -32,8 +32,11 @@ void combineBottomImagesWithPoleRemoval(
   const string& flowAlgName,
   const int alphaFeatherSize,
   const bool enableAutoColorAdjust,
-  const vector<CameraMetadata>& camModelArrayWithTop,
-  CameraMetadata& bottomCamModel,
+  const string& bottomCamId, 
+  const string& bottomCam2Id,
+  const float bottomCamUsablePixelsRadius,
+  const float bottomCam2UsablePixelsRadius,
+  const bool flip180,
   Mat& bottomImage);
 
 } // namespace surround360

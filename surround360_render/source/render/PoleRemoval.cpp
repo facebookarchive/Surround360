@@ -39,20 +39,21 @@ void combineBottomImagesWithPoleRemoval(
     const string& flowAlgName,
     const int alphaFeatherSize,
     const bool enableAutoColorAdjust,
-    const vector<CameraMetadata>& camModelArrayWithTop,
-    CameraMetadata& bottomCamModel,
+    const string& bottomCamId,
+    const string& bottomCam2Id,
+    const float bottomCamUsablePixelsRadius,
+    const float bottomCam2UsablePixelsRadius,
+    const bool flip180,
     Mat& bottomImage) {
 
-  bottomCamModel = getBottomCamModel(camModelArrayWithTop);
-  CameraMetadata bottomCamModel2 = getBottomCamModel2(camModelArrayWithTop);
-  const string bottomImageFilename = bottomCamModel.cameraId + ".png";
+  const string bottomImageFilename = bottomCamId + ".png";
   const string bottomImagePath = imagesDir + "/" + bottomImageFilename;
-  const string bottomImageFilename2 = bottomCamModel2.cameraId + ".png";
+  const string bottomImageFilename2 = bottomCam2Id + ".png";
   const string bottomImagePath2 = imagesDir + "/" + bottomImageFilename2;
   bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
   Mat bottomImage2 = imreadExceptionOnFail(bottomImagePath2, CV_LOAD_IMAGE_COLOR);
-  const string poleMaskPath = poleMaskDir + "/" + bottomCamModel.cameraId + ".png";
-  const string poleMaskPath2 = poleMaskDir + "/" + bottomCamModel2.cameraId + ".png";
+  const string poleMaskPath = poleMaskDir + "/" + bottomCamId + ".png";
+  const string poleMaskPath2 = poleMaskDir + "/" + bottomCam2Id + ".png";
   Mat bottomRedMask = imreadExceptionOnFail(poleMaskPath, 1);
   Mat bottomRedMask2 = imreadExceptionOnFail(poleMaskPath2, 1);
   if (bottomRedMask.rows == 0 ||
@@ -66,8 +67,8 @@ void combineBottomImagesWithPoleRemoval(
   // make alpha channels from usable radius
   cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
   cvtColor(bottomImage2, bottomImage2, CV_BGR2BGRA);
-  circleAlphaCut(bottomImage, bottomCamModel.usablePixelsRadius);
-  circleAlphaCut(bottomImage2, bottomCamModel2.usablePixelsRadius);
+  circleAlphaCut(bottomImage, bottomCamUsablePixelsRadius);
+  circleAlphaCut(bottomImage2, bottomCam2UsablePixelsRadius);
 
   // cut out red masks from alpha channel
   cutRedMaskOutOfAlphaChannel(bottomImage, bottomRedMask);
@@ -78,7 +79,7 @@ void combineBottomImagesWithPoleRemoval(
   bottomImage2 = featherAlphaChannel(bottomImage2, alphaFeatherSize);
 
   // rotate the second bottom camera's image 180 degree
-  if (bottomCamModel2.flip180) {
+  if (flip180) {
     flip(bottomImage2, bottomImage2, -1);
   }
 
@@ -178,7 +179,7 @@ void combineBottomImagesWithPoleRemoval(
   }
   // redo the alpha channel.. this is to remove an alpha-channel hole where
   // pole masks overlap at the very bottom.
-  circleAlphaCut(bottomImage, bottomCamModel.usablePixelsRadius);
+  circleAlphaCut(bottomImage, bottomCamUsablePixelsRadius);
   bottomImage = featherAlphaChannel(bottomImage, alphaFeatherSize);
 
   if (saveDebugImages) {

@@ -495,3 +495,21 @@ ELSE()
     ${PLATFORM_SPECIFIC_LIBS}
   )
 ENDIF()
+
+### TestVignettingDataAcquisition ###
+
+ADD_EXECUTABLE(
+  TestVignettingDataAcquisition
+  source/test/TestVignettingDataAcquisition.cpp)
+TARGET_COMPILE_FEATURES(TestVignettingDataAcquisition PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
+  TestVignettingDataAcquisition
+  LibVrCamera
+  LibJSON
+  gflags
+  glog
+  folly
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  ${PLATFORM_SPECIFIC_LIBS}
+)

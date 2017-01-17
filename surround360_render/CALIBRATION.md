@@ -157,29 +157,26 @@ When converting RAW images to RGB we use the files cmosis_sunex.json and cmosis_
 
 Even though all the sensors from the same camera model should behave the same way, in practice there are subtle differences that can cause two images from two sensors to look different under the same illuminant (light source).
 
-This calibration process lets us create an ISP config json file for a specific camera/lens combination, which can be then used by referencing it in cam_to_isp_config.json.
-
-Note that the ISP config file will only be valid for the illuminant the calibration was run against. However, there are certain known illuminants that work fairly well in multiple light scenarios. For this example we used D50 in a controlled environment, which approximates noon sky daylight.
+This calibration process lets us create ISP config json files for a set of cameras, which can be then used by referencing them in cam_to_isp_config.json.
 
 To calibrate against a known illuminant, we need something on the scene for which we know its ground truth RGB values. We use a MacBeth ColorChecker, which contains 24 square color patches. We also use a SpyderCUBE device, which allows us to find the darkest point on the image for black level adjustment.
 
-The steps below describe the process for a single camera. This must be done for all the cameras on the same rig, under the same illuminant (light source).
+The steps below describe the color calibration process for a set of cameras from the same rig.
 
-* Under the known illuminant, place the MacBeth chart and the SpyderCUBE in front of the camera and take a picture. An example image can found in /surround360_render/res/example_data/color_calibration_input.png.
+* Under the known illuminant, place the MacBeth chart and the SpyderCUBE in front of a camera and take a picture using our camera control software. An example image can found in /surround360_render/res/example_data/color_calibration_input.png. Repeat for each camera.
 
-* Assuming the image was saved at ~/Desktop/color_calibration/cam1.png, cd to /surround360_render and run the following command::
+* Save the images inside a directory called "charts". For this example, we are assuming they are under ~/Desktop/color_calibration/charts/cam[0-16].tiff. Go to /surround360_render and run the following command:
 <pre>
-./bin/TestColorCalibration \
---logbuflevel -1 --stderrthreshold 0 --v 0 \
---image_path ~/Desktop/color_calibration/cam1.png  \
---isp_passthrough_path ./res/config/isp/passthrough.json \
---save_debug_images \
---output_data_dir ~/Desktop/color_calibration/cam1
+python scripts/color_calibrate_all.py \
+--data_dir ~/Desktop/color_calibration \
+--black_level_hole
 </pre>
 
-* This creates the file ~/Desktop/color_calibration/cam1/isp_out.json, which can be renamed to to cam1.json.and. It also generates several debug images of each step of the detection process. /surround360_render/res/example_data/color_calibration_output.png is an example of the ouput of the last step (gamma correction) on the input image mentioned above.
+* This generates a directory called "isp", with all the ISP json config files. It also generates an output directory with several debug images of each step of the detection process, for all the cameras. /surround360_render/res/example_data/color_calibration_output.png is an example of the output of the last step (gamma correction) on the input image mentioned above.
 
-After doing this for all the side and top/bottom cameras, we will have N ISP config json files. which we can put on the same directory, say ~/Desktop/color_calibration/isp. Then, if we want to run the pipeline with these config files we just modify /surround360_render/res/config/isp/cam_to_isp_config.json so that it looks like:
+* Check the file scripts/color_calibrate_all.py for more options. Use the attributes min_area_chart_perc and max_area_chart_perc to set a range for the expected size of the color chart; this is useful when pictures are taken at different distances. Use the attribute black_level_adjust to set the black level of each camera to the median of all the cameras; this is useful when we expect the black level to be the same in all the cameras (note that this is not true for all the sensors.)
+
+To run the pipeline with these new ISP config files we just modify /surround360_render/res/config/isp/cam_to_isp_config.json so that it looks like:
 
 <pre>
 {
@@ -204,3 +201,27 @@ After doing this for all the side and top/bottom cameras, we will have N ISP con
 </pre>
 
 and then run run_all.py as usual.
+
+## Optical Vignetting Calibration
+
+All lenses create a type of vignetting called optical vignetting, which results in a fall-off in brightness as we move away from the center of the image and towards the edges. This effect is especially undesirable in overlapping camera scenarios, since we expect overlapping areas to have the same color and brightness.
+
+This calibration process lets us model the vignetting fall-off and update the camera ISP json config file accordingly. This is done by taking a picture of a gray chart while rotating the camera along its exit pupil (or as close as possible) so that we get samples of the chart across the entire image region.
+
+The steps below describe the calibration process for a set of cameras.
+
+* Under a uniform and constant illuminant, place the grayscale chart in front of a camera and take as many pictures as desired (recommended more than 20) using our camera control software so as to cover the entire image region with samples of the chart in all positions. An example image can found in /surround360_render/res/example_data/vignetting_calibration_sample.tiff. Repeat for each camera.
+
+* Save the set of images for each camera inside a directory called "charts". For this example, we acquired 100 images per camera, for 17 cameras, and we placed them under ~/Desktop/vignetting_calibration/cam[0-16]/charts/[0-99].tiff. Note the file structure, where each camera has its own directory. We also assume that color calibration has been run on these cameras, and we already have a directory ~/Desktop/vignetting_calibration/isp with each camera's ISP json config file. Go to /surround360_render and run the following command:
+<pre>
+python scripts/vignetting_calibrate.py \
+--data_dir ~/Desktop/vignetting_calibration \
+--num_cams 17 \
+--save_debug_images
+</pre>
+
+* This generates a directory called isp_new with all the updates ISP config files. Also, each camera directory has two new directories. 1) acquisition: contains a mask image with all the detected charts, a data file called data.json, containing location and color intensity values for each patch, and other debugging data. 2) calibration: contains plots of the vignetting models for each channel, an updated ISP json config file, and other debugging data. /surround360_render/res/example_data/vignetting_calibration_fit.png is an example of a surface fit that models the vignetting of the red channel of the camera used in this example. It shows the center of the image and the point of minimum vignetting, as well as the Bezier control points on the top left.
+
+* Check the file scripts/vignetting_calibrate.py for more options. Use the attributes image_width and image_height if using non-default image size. Use the attribute load_data to load the location and color intensity data, skip the acquisition step and go straight to the calibration step.
+
+To run the pipeline with these new ISP config files, just replace the original ones with the ones created by the script.

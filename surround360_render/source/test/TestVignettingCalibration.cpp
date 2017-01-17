@@ -34,6 +34,7 @@ using namespace surround360::util;
 using namespace surround360::color_calibration;
 
 DEFINE_string(data_path,            "",     "path to json file with locations and RGB medians");
+DEFINE_string(output_dir,           "",     "path to write data for debugging");
 DEFINE_int32(image_width,           2048,   "image width");
 DEFINE_int32(image_height,          2048,   "image height");
 DEFINE_string(test_image_path,      "",     "path to test image");
@@ -133,7 +134,8 @@ int main(int argc, char** argv) {
   }
 
   string dataDir = FLAGS_data_path.substr(0, FLAGS_data_path.find_last_of('/'));
-  string outputDir = dataDir + "/output";
+  const string outputDir =
+    FLAGS_output_dir.empty() ? dataDir + "/output" : FLAGS_output_dir;
   system(string("mkdir -p " + outputDir).c_str());
 
   LOG(INFO) << "Loading data...";
@@ -339,7 +341,6 @@ int main(int argc, char** argv) {
     }
   }
 
-  string imagePath;
   if (FLAGS_test_image_path == "") {
     return EXIT_SUCCESS;
   }

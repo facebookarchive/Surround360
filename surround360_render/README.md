@@ -122,7 +122,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 
 * Install Ceres (method 2 - OSX only)
 <pre>
-  brew install ceres-solver
+  brew install --build-from-source ceres-solver
 </pre>
 
 * Install OpenCV:
@@ -130,7 +130,6 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   cd ~
   git clone https://github.com/Itseez/opencv.git
   cd opencv
-  git checkout tags/3.1.0
   cmake -DWITH_IPP=OFF
   make
   sudo make install
@@ -179,7 +178,7 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   cd ~
   git clone https://github.com/halide/Halide.git
 ```
-  see README file inside Halide directory for installation instructions, including LLVM dependency
+  see README file inside Halide directory for installation instructions, including LLVM dependency. If the make step throws errors about unused variables, add the option ```-DWARNINGS_AS_ERRORS=OFF``` to the cmake command
 
 ## Compiling the Surround 360 Rendering Software
 

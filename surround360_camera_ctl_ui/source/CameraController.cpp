@@ -258,7 +258,6 @@ void CameraController::cameraProducer(const unsigned int id) {
 
     // single shot frame grab
     if (m_oneshot) {
-      writeCameraNames(m_dirname[id] + "/cameranames.txt");
 
       // in one shot mode, we publish 1 frame from each camera and stop recording
       for (auto i = cameraOffset; i < lastCamera; ++i) {
@@ -296,7 +295,6 @@ void CameraController::cameraProducer(const unsigned int id) {
       if (i == 0 && m_startRecording) {
         m_startRecording = false;
         m_recording = true;
-        writeCameraNames(m_dirname[id] + "/cameranames.txt");
       }
 
       if (i == 0 && m_stopRecording) {
@@ -522,12 +520,4 @@ CameraController::~CameraController() {
     cam->stopCapture();
     cam->detach();
   }
-}
-
-void CameraController::writeCameraNames(const string& path) {
-  ofstream cameraNamesFile(path);
-  for (auto& cam : m_camera) {
-    cameraNamesFile << to_string(cam->getSerialNumber()) << "\n";
-  }
-  cameraNamesFile.close();
 }

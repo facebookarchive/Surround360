@@ -174,31 +174,12 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   brew link wxmac
 ```
 
-* (if using accelerated ISP) Install LLVM
-```
-  cd ~
-  svn co https://llvm.org/svn/llvm-project/llvm/branches/release_37 llvm3.7
-  svn co https://llvm.org/svn/llvm-project/cfe/branches/release_37 llvm3.7/tools/clang
-  cd llvm3.7
-  mkdir build
-  cd build
-  cmake -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_TARGETS_TO_BUILD="X86;ARM;NVPTX;AArch64;Mips;PowerPC" -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release ..
-  make
-  export LLVM_CONFIG=$HOME/llvm3.7/build/bin/llvm-config
-  export CLANG=$HOME/llvm3.7/build/bin/clang
-```
-
 * (to use accelerated ISP) Install Halide
 ```
   cd ~
   git clone https://github.com/halide/Halide.git
-  cd Halide
-  mkdir cmake_build
-  cd cmake_build
-  export LLVM_ROOT=$HOME/llvm3.7/build
-  cmake -DLLVM_BIN=${LLVM_ROOT}/bin -DLLVM_INCLUDE="${LLVM_ROOT}/../include;${LLVM_ROOT}/include" -DLLVM_LIB=${LLVM_ROOT}/lib -DLLVM_VERSION=37 ..
-  make
 ```
+  see README file inside Halide directory for installation instructions, including LLVM dependency
 
 ## Compiling the Surround 360 Rendering Software
 

@@ -104,6 +104,9 @@ namespace surround360 {
     unsigned int m_width {2448};
     unsigned int m_height {2048};
 
+    const uint32_t kDataFlashCtrl = 0x1240;
+    const uint32_t kDataFlashData = 0x1244;
+
   private:
     static fc::BusManager& getBusManager();
 
@@ -163,6 +166,14 @@ namespace surround360 {
     void setPixelFormat(fc::PixelFormat pf);
 
     void getPixelFormatFromBitDepth(fc::PixelFormat* pf, unsigned int nBits);
+
+    uint32_t readRegister(uint32_t address);
+    void writeRegister(uint32_t address, uint32_t value);
+    bool isDataFlashSupported();
+    uint32_t getDataFlashSize();
+    uint64_t getDataFlashOffset();
+    void commitPageToDataFlash();
+    void throwError(const fc::Error& error);
 
     friend std::ostream& operator<<(
       std::ostream& stream,

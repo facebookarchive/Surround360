@@ -699,3 +699,69 @@ int PointGreyCamera::getSerialNumber() const {
   }
   return serial_;
 }
+
+
+uint32_t PointGreyCamera::readRegister(uint32_t address) {
+    uint32_t value;
+    fc::Error error = m_camera->ReadRegister(address, &value);
+    if (error != fc::PGRERROR_OK) {
+        throwError(error);
+    }
+
+    return value;
+}
+
+void PointGreyCamera::writeRegister(uint32_t address, uint32_t value) {
+    fc::Error error = m_camera->WriteRegister(address, value);
+    if (error != fc::PGRERROR_OK) {
+        throwError(error);
+    }
+}
+
+bool PointGreyCamera::isDataFlashSupported() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 0 https://www.ptgrey.com/tan/10370
+    const uint32_t Presence_Inc = 0x80000000;
+    return value & Presence_Inc ? true : false;
+}
+
+uint32_t PointGreyCamera::getDataFlashSize() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 8-19 https://www.ptgrey.com/tan/10370
+    const uint32_t Page_Size = 0x00FFF000;
+    const uint32_t pageSizeExponent = (value & Page_Size) >> 12;
+
+    // bit 20-31 https://www.ptgrey.com/tan/10370
+    const uint32_t Num_Pages = 0x00000FFF;
+    const uint32_t numPagesExponent = (value & Num_Pages) >> 0;
+
+    return uint32_t(1) << (pageSizeExponent + numPagesExponent);
+}
+
+uint64_t PointGreyCamera::getDataFlashOffset() {
+    uint32_t value = readRegister(kDataFlashData);
+
+    // from looking at point grey sample code, value appears to be measured in
+    // 'quartets'
+    // Also: 'Addresses are offsets from the IEEE-1394 base address', see
+    // https://www.ptgrey.com/tan/10370
+    const uint64_t IEEE_1394_base_address = 0xFFFFF0000000;
+    return IEEE_1394_base_address + value * sizeof(uint32_t);
+}
+
+void PointGreyCamera::commitPageToDataFlash() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 6 https://www.ptgrey.com/tan/10370
+    const uint32_t Clean_Page = 0x02000000;
+    value |= Clean_Page;
+
+    writeRegister(kDataFlashCtrl, value);
+}
+
+void PointGreyCamera::throwError(const fc::Error& error) {
+    error.PrintErrorTrace();
+    throw std::runtime_error(error.GetDescription());
+}

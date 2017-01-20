@@ -432,11 +432,6 @@ void CameraView::convertPreviewFrame(const unsigned int bpp) {
   p = 0;
   for (y = 0; y < m_height; ++y) {
     for (x = 0; x < m_width; ++x, vaddrBuf += 2) {
-#ifdef __AVX2__
-      if ((vaddrRaw & 31) == 0 && bpp == 8) {
-        break;
-      }
-#endif
       if (bpp == 12) {
         uint16_t lo = raw[p];
         uint16_t hi = raw[p + 1];
@@ -475,27 +470,4 @@ void CameraView::convertPreviewFrame(const unsigned int bpp) {
   for (auto k = 0; k < m_normalized.size(); ++k) {
     m_normalized[k] = float(m_histogram[k]) / float(sum);
   }
-
-#ifdef __AVX2__
-  assert((vaddrBuf & 31) == 0);
-  assert((vaddrRaw & 31) == 0);
-
-  if (bpp == 8) {
-    for (; (p + 16) < m_width * m_height; p += 16) {
-      __m128i pix  = _mm_load_si128((__m128i*)vaddrRaw);
-      __m256i cvt = _mm256_cvtepi8_epi16(pix);
-      __m256i hcvt = _mm256_slli_epi16(cvt, 8);
-
-      __m256i rep = _mm256_add_epi16(cvt, hcvt);
-      _mm256_stream_si256((__m256i*)vaddrBuf, rep);
-
-      vaddrRaw += 16;
-      vaddrBuf += 32;
-    }
-    for (; p < m_width * m_height; ++p) {
-      buf[p * 2] = raw[p];
-      buf[p * 2] = raw[p];
-    }
-  }
-#endif
 }

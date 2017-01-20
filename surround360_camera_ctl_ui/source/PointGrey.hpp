@@ -46,7 +46,7 @@ namespace surround360 {
     int startCapture();
     int setMaster();
 
-    void* getFrame();
+    void* getFrame(void* opaque);
     unsigned int getDroppedFramesCounter() const;
     int getSerialNumber() const;
     int getInterfaceSpeed() const;
@@ -174,6 +174,8 @@ namespace surround360 {
     uint64_t getDataFlashOffset();
     void commitPageToDataFlash();
     void throwError(const fc::Error& error);
+
+    void readFileAtIndex(uint32_t idx);
 
     friend std::ostream& operator<<(
       std::ostream& stream,

@@ -53,8 +53,6 @@ public:
 
   void startProducer(const unsigned int count);
   void startConsumers(const unsigned int count);
-  void startSlaveCapture();
-  void startMasterCapture();
   void setPreviewCamera(unsigned int i);
   void setPaths(const string path[2]);
   void startRecording(const bool oneshot = false);
@@ -104,12 +102,6 @@ private:
 
   const int m_pinStrobe;
   const int m_pinTrigger;
-  std::vector<std::mutex> m_mutex;
-  std::vector<std::mutex> m_slaveMutex;
-
-  std::vector<std::condition_variable> m_cond;
-  std::vector<std::condition_variable> m_slaveCond;
-
   CameraView& m_cameraView;
 
   std::atomic<size_t> m_previewIndex;

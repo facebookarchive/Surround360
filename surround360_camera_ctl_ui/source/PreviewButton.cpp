@@ -31,8 +31,6 @@ void PreviewButton::on_clicked() {
     controller.configureCameras(cfg.shutter, cfg.fps, cfg.gain, cfg.bits);
     controller.startProducer(1);
     controller.startConsumers(2);
-    controller.startSlaveCapture();
-    controller.startMasterCapture();
     m_previewing = true;
   }
 }

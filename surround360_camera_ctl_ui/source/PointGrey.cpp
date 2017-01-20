@@ -88,19 +88,17 @@ shared_ptr<PointGreyCamera> PointGreyCamera::getCamera(
   return pgcam;
 }
 
-void* PointGreyCamera::getFrame() {
-  Image rawImage;
-  ImageMetadata metadata;
+void* PointGreyCamera::getFrame(void* opaque) {
+  fc::Image* img = reinterpret_cast<fc::Image*>(opaque);
 
-  Error error = m_camera->RetrieveBuffer(&rawImage);
+  Error error = m_camera->RetrieveBuffer(img);
   if (error != PGRERROR_OK) {
     throw "Error retrieving frame buffer.";
   }
 
-  metadata = rawImage.GetMetadata();
-  m_droppedFrames = metadata.embeddedFrameCounter;
+  m_droppedFrames = img->GetMetadata().embeddedFrameCounter;
 
-  return rawImage.GetData();
+  return img->GetData();
 }
 
 int PointGreyCamera::toggleStrobeOut(int pin, bool onOff) {
@@ -362,8 +360,9 @@ void PointGreyCamera::embedImageInfo() {
   EmbeddedImageInfo embeddedInfo;
   m_camera->GetEmbeddedImageInfo(&embeddedInfo);
   embeddedInfo.frameCounter.onOff = true;
-  embeddedInfo.shutter.onOff = false;
-  embeddedInfo.gain.onOff = false;
+  embeddedInfo.shutter.onOff = true;
+  embeddedInfo.gain.onOff = true;
+  embeddedInfo.timestamp.onOff = true;
   m_camera->SetEmbeddedImageInfo(&embeddedInfo);
 }
 
@@ -591,6 +590,7 @@ void PointGreyCamera::setCameraGrabMode(int timeoutBuffer) {
   // BUFFER_FRAMES uses the camera buffer to store some frames so we don't drop
   // them
   config.grabMode = BUFFER_FRAMES;
+  config.grabTimeout = timeoutBuffer;
 
   // Setting a large number of buffers for each camera may cause the program to
   // hang trying to allocate resources. Try less than 10
@@ -764,4 +764,46 @@ void PointGreyCamera::commitPageToDataFlash() {
 void PointGreyCamera::throwError(const fc::Error& error) {
     error.PrintErrorTrace();
     throw std::runtime_error(error.GetDescription());
+}
+
+void PointGreyCamera::readFileAtIndex(uint32_t fileIdx) {
+  const uint64_t kFlashOffset = getDataFlashOffset();
+
+  uint64_t offset = kFlashOffset;
+  uint32_t recordSize = 0;
+  const uint32_t flashSize = getDataFlashSize();
+
+  for (uint32_t currIdx = 0; currIdx != fileIdx && offset < flashSize; ++currIdx) {
+    uint32_t currRecordSize = 0;
+    auto err = m_camera->ReadRegisterBlock(
+      static_cast<uint32_t>(offset >> 32),
+      static_cast<uint32_t>(offset),
+      &currRecordSize,
+      1);
+
+    if (err != fc::PGRERROR_OK) {
+      throwError(err);
+    }
+
+    offset += currRecordSize + 1;
+  }
+
+  uint32_t recSize = 0;
+  auto err = m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(offset >> 32),
+    static_cast<uint32_t>(offset),
+    &recSize,
+    1);
+
+  vector<uint32_t> data(recSize, 0);
+  err = m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(offset >> 32),
+    static_cast<uint32_t>(offset),
+    &data[0],
+    data.size());
+
+  if (err != fc::PGRERROR_OK) {
+    throwError(err);
+  }
+
 }

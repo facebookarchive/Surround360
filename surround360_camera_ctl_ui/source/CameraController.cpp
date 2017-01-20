@@ -27,6 +27,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "Config.hpp"
 
@@ -34,6 +35,7 @@ using namespace surround360;
 using namespace std;
 
 static shared_ptr<CameraController> globalController;
+static pthread_barrier_t startBarrier;
 
 CameraController::CameraController(
   CameraView& camview,
@@ -48,10 +50,6 @@ CameraController::CameraController(
     m_stopRecording(false),
     m_pinStrobe(2),
     m_pinTrigger(3),
-    m_mutex(nproducers),
-    m_slaveMutex(nconsumers),
-    m_cond(nproducers),
-    m_slaveCond(nconsumers),
     m_cameraView(camview),
     m_previewIndex(-1),
     m_paramUpdatePending(false),
@@ -175,6 +173,7 @@ bool CameraController::updateCameraParams(
 }
 
 void CameraController::startProducer(const unsigned int count) {
+  pthread_barrier_init(&startBarrier, nullptr, m_producerCount + m_consumerCount);
   for (int pid = 0; pid < count; ++pid) {
     m_prodThread.emplace_back(&CameraController::cameraProducer, this, pid);
   }
@@ -192,6 +191,7 @@ void CameraController::cameraProducer(const unsigned int id) {
   const int lastCamera = std::min(cameraOffset + camerasPerProducer, m_camera.size());
   unsigned int frameCount = 0;
   unsigned int frameNumber = 0;
+  vector<fc::Image> frame(m_camera.size());
 
   const size_t maxRes = 4096;
   vector<uint8_t, aligned_allocator<uint8_t, 64>> tmpFrameBuf(maxRes * maxRes);
@@ -205,8 +205,9 @@ void CameraController::cameraProducer(const unsigned int id) {
   sparam.sched_priority = 99;
   sched_setscheduler(0, SCHED_RR, &sparam);
 
-  unique_lock<mutex> lock(m_mutex[id]);
-  m_cond[id].wait(lock);
+  m_camera[m_masterCameraIndex]->toggleStrobeOut(m_pinStrobe, true);
+  pthread_barrier_wait(&startBarrier);
+  m_camera[m_masterCameraIndex]->startCapture();
 
   m_running = true;
 
@@ -261,7 +262,8 @@ void CameraController::cameraProducer(const unsigned int id) {
 
       // in one shot mode, we publish 1 frame from each camera and stop recording
       for (auto i = cameraOffset; i < lastCamera; ++i) {
-        void* bytes = m_camera[i]->getFrame();
+        void* bytes = m_camera[i]->getFrame(&frame[i]);
+
 
         // populate indices of cameras that the single frame is coming from
         // in camera iteration order (this will be the disk order)
@@ -309,7 +311,7 @@ void CameraController::cameraProducer(const unsigned int id) {
       FramePacket* nextFrame = nullptr;
 
       try {
-        void* bytes = m_camera[i]->getFrame();
+        void* bytes = m_camera[i]->getFrame(&frame[i]);
         // loop invariant; if this fails, it means the program is not written correctly
         assert(bytes != nullptr);
 
@@ -321,18 +323,14 @@ void CameraController::cameraProducer(const unsigned int id) {
           nextFrame->frameSize = frameSize();
           nextFrame->cameraSerial = m_camera[i]->getSerialNumber();
           nextFrame->cameraNumber = i;
+
           memcpy(nextFrame->imageBytes, bytes, frameSize());
           m_consumerBuf[cid].advanceHead();
           ++frameNumber;
         }
 
         if (i == m_previewIndex) {
-          if (!m_recording) {
-            memcpy(tmpFrameBuf.data(), bytes, frameSize());
-            m_cameraView.updatePreviewFrame(tmpFrameBuf.data());
-          } else {
-            m_cameraView.updatePreviewFrame(nextFrame->imageBytes);
-          }
+          m_cameraView.updatePreviewFrame(frame[i].GetData());
           m_cameraView.update();
         }
       } catch (...) {
@@ -379,10 +377,18 @@ void CameraController::cameraConsumer(const unsigned int id) {
   auto rec = false;
   int fd;
   ssize_t total = 0;
-  unique_lock<mutex> lock(m_slaveMutex[id]);
   uint64_t nimg = 0;
 
-  m_slaveCond[id].wait(lock);
+  for (auto k = id; k < m_camera.size(); k += m_consumerCount) {
+    m_camera[k]->toggleStrobeOut(1, false);
+    if (k == m_masterCameraIndex)
+      continue;
+
+    m_camera[k]->toggleStrobeOut(3, false);
+    m_camera[k]->startCapture();
+  }
+
+  pthread_barrier_wait(&startBarrier);
 
   while (m_keepRunning) {
     // for one shot count only, we read pre-specified number of frames,
@@ -434,6 +440,7 @@ void CameraController::cameraConsumer(const unsigned int id) {
 
     if (rec) {
       FramePacket* next;
+
       while ((next = m_consumerBuf[id].getTail()) != nullptr) {
         auto ptr = reinterpret_cast<uint32_t*>(next->imageBytes);
         ptr[0] = next->frameSize;
@@ -450,32 +457,6 @@ void CameraController::cameraConsumer(const unsigned int id) {
         m_consumerBuf[id].advanceTail();
       }
     }
-  }
-}
-
-void CameraController::startSlaveCapture() {
-  for (auto k = 0; k < m_camera.size(); ++k) {
-    m_camera[k]->toggleStrobeOut(1, false);
-
-    if (k == m_masterCameraIndex) {
-      continue;
-    }
-
-    m_camera[k]->toggleStrobeOut(3, false);
-    m_camera[k]->startCapture();
-  }
-
-  for (auto& cond : m_slaveCond) {
-    cond.notify_one();
-  }
-}
-
-void CameraController::startMasterCapture() {
-  m_camera[m_masterCameraIndex]->toggleStrobeOut(m_pinStrobe, true);
-  m_camera[m_masterCameraIndex]->startCapture();
-
-  for (auto& cond : m_cond) {
-    cond.notify_one();
   }
 }
 

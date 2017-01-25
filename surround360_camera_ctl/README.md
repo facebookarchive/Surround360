@@ -103,10 +103,12 @@ After installing all of the dependencies as described above, run:
   make
 ```
 
-To test that compilation is successful, run:
+Before testing if the compilation is successful, please make sure you have write permission to "/media/snoraid" directory.
+
+Then run:
 
 ```
-  sudo ./bin/CameraControl -numcams 17 -raw -nbits 8 -shutter 20 -gain 0 -debug
+  ./bin/CameraControl -numcams 17 -raw -nbits 8 -shutter 20 -gain 0 -debug
 ```
 
 We recommend configuring CMake to compile in Release mode because the code will execute faster. However, you can also set it up for debug mode with:

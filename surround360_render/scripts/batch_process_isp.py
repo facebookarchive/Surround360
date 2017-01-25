@@ -25,6 +25,7 @@ RAW2RGB_COMMAND_TEMPLATE = """
 --isp_config_path {ISP_CONFIG_PATH}
 --black_level_offset {BLACK_LEVEL_OFFSET}
 --output_image_path {OUTPUT_IMAGE_PATH}
+--output_bpp 16
 --accelerate
 {FLAGS_RAW2RGB_EXTRA}
 """

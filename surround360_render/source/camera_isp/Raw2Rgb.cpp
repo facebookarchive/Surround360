@@ -42,6 +42,7 @@ DEFINE_int32(output_bpp,            8,                      "output image bits p
 DEFINE_bool(accelerate,             false,                  "Use halide accelerated version");
 DEFINE_bool(fast,                   false,                  "Use fastest halide for realtime apps or previews");
 #endif
+DEFINE_bool(disable_tone_curve,     false,                  "By default tone curve is enabled");
 
 // We really want all ISP input bits to fill 16 bits
 const int kIspInputBitsPerPixel = 16;
@@ -364,6 +365,13 @@ void runPipeline(
     Mat& inputImage,
     Mat& outputImage,
     string outputImagePath) {
+
+  if (FLAGS_disable_tone_curve) {
+    cameraIsp->disableToneMap();
+  } else {
+    cameraIsp->enableToneMap();
+  }
+
   cameraIsp->addBlackLevelOffset(FLAGS_black_level_offset);
   cameraIsp->loadImage(inputImage);
 

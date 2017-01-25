@@ -74,6 +74,7 @@ class CameraIsp {
   uint32_t filters;
   DemosaicFilter demosaicFilter;
   int resize;
+  bool disableToneCurve;
   vector<Vec3f> toneCurveLut;
   BezierCurve<float, Vec3f> vignetteCurveH;
   BezierCurve<float, Vec3f> vignetteCurveV;
@@ -398,24 +399,29 @@ class CameraIsp {
 
     for (int i = 0; i < kToneCurveLutSize; ++i) {
       const float x = dx * i;
+      if (disableToneCurve) {
+        // Just a linear ramp ==> no-op
+        const float y = x * range;
+        toneCurveLut.push_back(Vec3f(y, y, y));
+      } else {
+        // Apply gamma correction
+        float r = powf(x, gamma.x);
+        float g = powf(x, gamma.y);
+        float b = powf(x, gamma.z);
 
-      // Apply gamma correction
-      float r = powf(x, gamma.x);
-      float g = powf(x, gamma.y);
-      float b = powf(x, gamma.z);
+        // Then low/high key boost
+        r = lowKey(lowKeyBoost.x, r) + highKey(highKeyBoost.x, r);
+        g = lowKey(lowKeyBoost.y, g) + highKey(highKeyBoost.y, g);
+        b = lowKey(lowKeyBoost.z, b) + highKey(highKeyBoost.z, b);
 
-      // Then low/high key boost
-      r = lowKey(lowKeyBoost.x, r) + highKey(highKeyBoost.x, r);
-      g = lowKey(lowKeyBoost.y, g) + highKey(highKeyBoost.y, g);
-      b = lowKey(lowKeyBoost.z, b) + highKey(highKeyBoost.z, b);
+        // Then contrast
+        r = clamp((slope * r + bias) * range, 0.0f, range);
+        g = clamp((slope * g + bias) * range, 0.0f, range);
+        b = clamp((slope * b + bias) * range, 0.0f, range);
 
-      // Then contrast
-      r = clamp((slope * r + bias) * range, 0.0f, range);
-      g = clamp((slope * g + bias) * range, 0.0f, range);
-      b = clamp((slope * b + bias) * range, 0.0f, range);
-
-      // Place it in the table.
-      toneCurveLut.push_back(Vec3f(r, g, b));
+        // Place it in the table.
+        toneCurveLut.push_back(Vec3f(r, g, b));
+      }
     }
   }
 
@@ -423,6 +429,7 @@ class CameraIsp {
   CameraIsp(const string jsonInput, const int outputBpp) :
       demosaicFilter(EDGE_AWARE_DM_FILTER),
       resize(1),
+      disableToneCurve(false),
       outputBpp(outputBpp),
       width(0),
       height(0),
@@ -946,6 +953,16 @@ class CameraIsp {
 
   Point3f getGamma() const {
     return gamma;
+  }
+
+  void enableToneMap() {
+    disableToneCurve = false;
+    buildToneCurveLut();
+  }
+
+  void disableToneMap() {
+    disableToneCurve = true;
+    buildToneCurveLut();
   }
 
   void setDemosaicFilter(const int demosaicFilter) {

@@ -4,6 +4,7 @@ PROJECT(Surround360Render CXX)
 
 FIND_PACKAGE(OpenCV)
 FIND_PACKAGE(Ceres REQUIRED)
+FIND_PACKAGE(boost COMPONENTS filesystem system)
 
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
@@ -512,4 +513,24 @@ TARGET_LINK_LIBRARIES(
   ${OpenCV_LIBS}
   ${CERES_LIBRARIES}
   ${PLATFORM_SPECIFIC_LIBS}
+)
+
+### GeoemtricCalibration ###
+
+ADD_EXECUTABLE(
+  GeometricCalibration
+  source/calibration/GeometricCalibration.cpp
+)
+TARGET_LINK_LIBRARIES(
+  GeometricCalibration
+  LibVrCamera
+  LibJSON
+  gflags
+  glog
+  folly
+  boost_filesystem
+  boost_system
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
+  ${CERES_LIBRARIES}
 )

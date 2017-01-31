@@ -106,7 +106,8 @@ namespace surround360 {
 
     const uint32_t kDataFlashCtrl = 0x1240;
     const uint32_t kDataFlashData = 0x1244;
-
+    char *cameraBuffers;
+    
   private:
     static fc::BusManager& getBusManager();
 

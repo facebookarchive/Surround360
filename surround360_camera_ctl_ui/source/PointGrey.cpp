@@ -92,6 +92,7 @@ void* PointGreyCamera::getFrame(void* opaque) {
   fc::Image* img = reinterpret_cast<fc::Image*>(opaque);
 
   Error error = m_camera->RetrieveBuffer(img);
+
   if (error != PGRERROR_OK) {
     throw "Error retrieving frame buffer.";
   }
@@ -157,6 +158,9 @@ int PointGreyCamera::stopCapture() {
 }
 
 int PointGreyCamera::detach() {
+  toggleStrobeOut(2, false);
+  toggleStrobeOut(3, false);
+  m_camera->StopCapture();
   fc::Error error = m_camera->Disconnect();
   return error.GetType();
 }
@@ -348,10 +352,17 @@ int PointGreyCamera::init(
   // Set grabbing mode and buffer retrieval timeout
   setCameraGrabMode(timeoutBuffer);
 
-  // unsigned long long sz = (7ull << 20) * 100ull;
-  // auto ptr = (unsigned char*)memalign(4096, sz);
-  // assert(ptr != nullptr);
-  // m_camera->SetUserBuffers(ptr, 7ull << 20, 100);
+  const size_t kPageSize = 4096;
+  const size_t kHorizRes = 2048;
+  const size_t kNumBuffers = 7;
+  const int kSingleCameraBufferSize = kPageSize * kHorizRes * kNumBuffers;
+  cameraBuffers = reinterpret_cast<char*>(memalign(kPageSize, kSingleCameraBufferSize));
+
+  if (cameraBuffers == nullptr) {
+    throw "Not enough memory to allocate camera buffers";
+  }
+  m_camera->SetUserBuffers(
+    reinterpret_cast<unsigned char*>(cameraBuffers), 4096 * 4096, 7);
 
   return 0;
 }
@@ -390,16 +401,6 @@ void PointGreyCamera::setCameraTrigger(bool isMaster) {
   // Set external trigger params
   // If single image all cameras set to external trigger
   const bool isExternalTrigger = !isMaster;
-
-  // Check if trigger is already set
-  if ((triggerMode.onOff == isExternalTrigger && isExternalTrigger == false)
-      ||
-      (triggerMode.onOff == isExternalTrigger &&
-       triggerMode.mode == CameraConfig::get().triggerMode &&
-       triggerMode.parameter == 0 &&
-       triggerMode.source == 3)) {
-    return;
-  }
 
   triggerMode.onOff = isExternalTrigger;
 
@@ -669,6 +670,8 @@ void PointGreyCamera::setPixelFormat(PixelFormat pf) {
 
 PointGreyCamera::~PointGreyCamera() {
   detach();
+
+  free(cameraBuffers);
 }
 
 ostream& surround360::operator<<(ostream& stream, const PointGreyCamera& c) {
@@ -805,5 +808,4 @@ void PointGreyCamera::readFileAtIndex(uint32_t fileIdx) {
   if (err != fc::PGRERROR_OK) {
     throwError(err);
   }
-
 }

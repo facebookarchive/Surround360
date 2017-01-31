@@ -161,11 +161,10 @@ void MainWindow::updatePreviewParams() {
   ctl.updateCameraParams(cfg.shutter, cfg.fps, cfg.gain, cfg.bits);
 }
 
-
 void MainWindow::takeNameDialog() {
   if (m_recordBtn.get_active()) {
-    string dirnames[2];
-    for (auto k = 0; k < 2; ++k) {
+    vector<string> dirnames(2);
+    for (auto k = 0; k < dirnames.size(); ++k) {
       string title = "Select a destination folder " + to_string(k + 1);
       Gtk::FileChooserDialog dlg(title, Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER);
 
@@ -189,7 +188,9 @@ void MainWindow::takeNameDialog() {
       }
     }
 
-    if (dirnames[0].size() > 0 && dirnames[1].size() > 0) {
+    if (all_of(dirnames.cbegin(), dirnames.cend(),
+	       [](const string& filepath) { return filepath.size() > 0; })) {
+
       auto& ctl = CameraController::get();
       ctl.setPaths(dirnames);
       ctl.startRecording();
@@ -230,7 +231,7 @@ void MainWindow::singleTakeDialog() {
     dirname = dlg.get_filename();
     if (dirname.size() > 0) {
       auto& ctl = CameraController::get();
-      string paths[2] = { dirname, dirname };
+      vector<string> paths { dirname, dirname };
       ctl.setPaths(paths);
       ctl.startRecording(true);
     }

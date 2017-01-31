@@ -58,14 +58,6 @@ namespace surround360 {
       : head(0), tail(0), count(0), fini(false)
     {
       memset(items, 0, LENGTH * sizeof(T));
-
-      for (auto k = 0; k < LENGTH; ++k) {
-        const unsigned int kAlignment = 4096;
-        const unsigned int kMaxRes = 4096;
-        items[k].imageBytes = memalign(kAlignment, kMaxRes * kMaxRes);
-        memset(items[k].imageBytes, 0, kMaxRes * kMaxRes);
-        mlock(items[k].imageBytes, kMaxRes * kMaxRes);
-      }
     }
 
     /// Signal the consuemr that producer is done producing.
@@ -77,6 +69,21 @@ namespace surround360 {
       fini = true;
       lk.unlock();
       dataAvailable.notify_one();
+    }
+
+    void reset() {
+      fini = false;
+      head = 0;
+      tail = 0;
+      count = 0;
+    }
+
+    bool isDone() {
+      return fini;
+    }
+
+    bool isEmpty() {
+      return count == 0;
     }
 
     /// Access the head of the message queue.

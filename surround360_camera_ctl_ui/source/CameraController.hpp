@@ -28,7 +28,7 @@ struct FramePacket{
   void* imageBytes;
 };
 
-typedef ProducerConsumer<FramePacket, 100ULL> ConsumerBuffer;
+typedef ProducerConsumer<FramePacket, 250ULL> ConsumerBuffer;
 
 class CameraController {
 public:
@@ -54,7 +54,7 @@ public:
   void startProducer(const unsigned int count);
   void startConsumers(const unsigned int count);
   void setPreviewCamera(unsigned int i);
-  void setPaths(const string path[2]);
+  void setPaths(const vector<string>& paths);
   void startRecording(const bool oneshot = false);
   void stopRecording();
 
@@ -72,6 +72,13 @@ private:
   }
   void ispThread();
   void writeHeader(const int fd, const uint32_t id);
+
+  void setThreadPriority(const uint32_t cpuNumber);
+  void startMainCamera();
+  void startOtherCameras();
+  void stopMainCamera();
+  void stopOtherCameras();
+  void updateCameraParameters();
 
 private:
   std::vector<PointGreyCameraPtr> m_camera;
@@ -97,11 +104,10 @@ private:
   std::atomic<bool>   m_startRecording;
   std::atomic<bool>   m_stopRecording;
   std::atomic<bool>   m_oneshot;
-  std::vector<int8_t> m_oneshotCount;
-  std::unique_ptr<std::vector<int>[]>    m_oneshotIdx;
 
   const int m_pinStrobe;
   const int m_pinTrigger;
+
   CameraView& m_cameraView;
 
   std::atomic<size_t> m_previewIndex;
@@ -109,13 +115,11 @@ private:
   unsigned int m_width;
   unsigned int m_height;
 
-  std::vector<std::size_t> m_sample;
+  std::atomic<bool> m_paramUpdatePending;
 
   bool m_running;
-  bool m_paramUpdatePending;
 
   enum param { paramShutter = 0, paramFramerate, paramGain, paramBits };
-  std::vector<bool> update;
-  string m_dirname[2];
+  vector<string> m_dirname;
 };
 }

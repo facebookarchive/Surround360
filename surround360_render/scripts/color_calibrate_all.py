@@ -26,6 +26,7 @@ TITLE = "Surround 360 - Color Calibration"
 COLOR_CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestColorCalibration
 --image_path {IMAGE_PATH}
+--illuminant {ILLUMINANT}
 --isp_passthrough_path {ISP_JSON}
 --num_squares_w {NUM_SQUARES_W}
 --num_squares_h {NUM_SQUARES_H}
@@ -38,6 +39,8 @@ COLOR_CALIBRATION_COMMAND_TEMPLATE = """
 {FLAGS_EXTRA}
 """
 
+ILLUMINANTS = ["D50", "D65"]
+
 def list_tiff(src_dir): return [os.path.join(src_dir, fn) for fn in next(os.walk(src_dir))[2] if fn.endswith('.tiff')]
 
 def parse_args():
@@ -45,7 +48,9 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                 help='directory containing raw calibration images', required=True)
   parser.add_argument('--output_dir',               help='output directory', required=False)
+  parser.add_argument('--illuminant',               help='illuminant', required=False, choices=ILLUMINANTS, default=ILLUMINANTS[0])
   parser.add_argument('--black_level_hole',         help='if true, get black from black hole in image', action='store_true')
+  parser.add_argument('--black_level_hole_pixels',  help='estimated size of black hole (pixels)', required=False, default=500)
   parser.add_argument('--black_level_y_intercept',  help='if true, get black level from Y-intercept of RGB response', action='store_true')
   parser.add_argument('--black_level_adjust',       help='if true, sets each channel black level to median of all cameras', action='store_true')
   parser.add_argument('--black_level',              help='manual black level', required=False, default='NONE')
@@ -93,19 +98,25 @@ def median(list):
 
 if __name__ == "__main__":
   args = parse_args()
-  data_dir = args["data_dir"]
-  black_level_hole = args["black_level_hole"]
+  data_dir                = args["data_dir"]
+  illuminant              = args["illuminant"]
+  black_level_hole        = args["black_level_hole"]
+  black_level_hole_pixels = args["black_level_hole_pixels"]
   black_level_y_intercept = args["black_level_y_intercept"]
-  black_level_adjust = args["black_level_adjust"]
-  black_level = args["black_level"]
-  num_squares_w = int(args["num_squares_w"])
-  num_squares_h = int(args["num_squares_h"])
-  min_area_chart_perc = float(args["min_area_chart_perc"])
-  max_area_chart_perc = float(args["max_area_chart_perc"])
+  black_level_adjust      = args["black_level_adjust"]
+  black_level             = args["black_level"]
+  num_squares_w           = int(args["num_squares_w"])
+  num_squares_h           = int(args["num_squares_h"])
+  min_area_chart_perc     = float(args["min_area_chart_perc"])
+  max_area_chart_perc     = float(args["max_area_chart_perc"])
 
   print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
 
   os.chdir(surround360_render_dir)
+
+  if illuminant not in ILLUMINANTS:
+    sys.stderr.write("Unrecognized illuminant setting: " + illuminant + "\n")
+    exit(1)
 
   if args["output_dir"] is not None:
     out_dir = args["output_dir"]
@@ -124,7 +135,7 @@ if __name__ == "__main__":
 
   flags_extra = ""
   if black_level_hole:
-    flags_extra += " --black_level_hole"
+    flags_extra += " --black_level_hole --black_level_hole_pixels " + black_level_hole_pixels
   elif black_level_y_intercept:
     flags_extra += " --black_level_y_intercept"
   elif black_level != 'NONE':
@@ -141,6 +152,7 @@ if __name__ == "__main__":
     color_calibrate_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "IMAGE_PATH": raw_charts[i],
+      "ILLUMINANT": illuminant,
       "ISP_JSON": isp_passthrough_json,
       "NUM_SQUARES_W": num_squares_w,
       "NUM_SQUARES_H": num_squares_h,
@@ -183,6 +195,7 @@ if __name__ == "__main__":
       color_calibrate_params = {
         "SURROUND360_RENDER_DIR": surround360_render_dir,
         "IMAGE_PATH": raw_charts[i],
+        "ILLUMINANT": illuminant,
         "ISP_JSON": isp_passthrough_json,
         "NUM_SQUARES_W": num_squares_w,
         "NUM_SQUARES_H": num_squares_h,
@@ -227,6 +240,7 @@ if __name__ == "__main__":
     color_calibrate_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "IMAGE_PATH": raw_charts[i],
+      "ILLUMINANT": illuminant,
       "ISP_JSON": isp_dst,
       "NUM_SQUARES_W": num_squares_w,
       "NUM_SQUARES_H": num_squares_h,

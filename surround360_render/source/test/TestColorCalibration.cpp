@@ -30,25 +30,32 @@ using namespace surround360;
 using namespace surround360::util;
 using namespace surround360::color_calibration;
 
-DEFINE_string(image_path,             "",     "path to RAW image containing color chart");
-DEFINE_string(isp_passthrough_path,   "",     "passthrough ISP configuration file path");
-DEFINE_int32(num_squares_w,           6,      "number of squares horizontally");
-DEFINE_int32(num_squares_h,           4,      "number of squares vertically");
-DEFINE_double(min_area_chart_perc,    0.5,    "expected min chart area (% of entire image)");
-DEFINE_double(max_area_chart_perc,    40.0,   "expected max chart area (% of entire image)");
-DEFINE_string(output_data_dir,        ".",    "path to write data for debugging");
-DEFINE_bool(update_clamps,            false,  "just update passthrough ISP with given clamps");
-DEFINE_double(clamp_min,              0.0,    "min clamping threshold");
-DEFINE_double(clamp_max,              1.0,    "max clamping threshold");
-DEFINE_string(black_level,            "",     "space-separated manual black level (values in range [0, 1])");
-DEFINE_bool(black_level_hole,         false,  "if true, get black from black hole in image");
-DEFINE_bool(black_level_y_intercept,  false,  "if true, get black level from Y-intercept of RGB response");
-DEFINE_bool(save_debug_images,        false,  "save intermediate images");
+DEFINE_string(image_path,             "",       "path to RAW image containing color chart");
+DEFINE_string(illuminant,             "D65",    "illuminant (D50 or D65)");
+DEFINE_string(isp_passthrough_path,   "",       "passthrough ISP configuration file path");
+DEFINE_int32(num_squares_w,           6,        "number of squares horizontally");
+DEFINE_int32(num_squares_h,           4,        "number of squares vertically");
+DEFINE_double(min_area_chart_perc,    0.5,      "expected min chart area (% of entire image)");
+DEFINE_double(max_area_chart_perc,    40.0,     "expected max chart area (% of entire image)");
+DEFINE_string(output_data_dir,        ".",      "path to write data for debugging");
+DEFINE_bool(update_clamps,            false,    "just update passthrough ISP with given clamps");
+DEFINE_double(clamp_min,              0.0,      "min clamping threshold");
+DEFINE_double(clamp_max,              1.0,      "max clamping threshold");
+DEFINE_string(black_level,            "",       "space-separated manual black level (values in range [0, 1])");
+DEFINE_bool(black_level_hole,         false,    "if true, get black from black hole in image");
+DEFINE_int32(black_level_hole_pixels, 500,      "estimated size of black hole (pixels)");
+DEFINE_bool(black_level_y_intercept,  false,    "if true, get black level from Y-intercept of RGB response");
+DEFINE_bool(save_debug_images,        false,    "save intermediate images");
 
 int main(int argc, char** argv) {
   initSurround360(argc, argv);
   requireArg(FLAGS_image_path, "image_path");
   requireArg(FLAGS_isp_passthrough_path, "isp_passthrough_path");
+
+  if (labMacbeth.find(FLAGS_illuminant) == labMacbeth.end()) {
+    LOG(ERROR) << "Illuminant " << FLAGS_illuminant << " not supported";
+    return EXIT_FAILURE;
+  }
 
   if (FLAGS_num_squares_w < FLAGS_num_squares_h) {
     LOG(ERROR) << "Only supporting num_squares_w > num_squares_h";
@@ -93,7 +100,8 @@ int main(int argc, char** argv) {
 
   if (FLAGS_save_debug_images) {
     const string rawImageFilename =
-      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) + "_raw.png";
+      FLAGS_output_data_dir + "/" + to_string(++stepDebugImages) + "_" +
+        FLAGS_illuminant + "_raw.png";
     imwriteExceptionOnFail(rawImageFilename, raw16);
   }
 
@@ -160,6 +168,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Finding black hole...";
     blackLevel = findBlackLevel(
       raw16,
+      FLAGS_black_level_hole_pixels,
       FLAGS_isp_passthrough_path,
       FLAGS_save_debug_images,
       FLAGS_output_data_dir,
@@ -177,6 +186,7 @@ int main(int argc, char** argv) {
   Mat ccm;
   obtainIspParams(
     colorPatches,
+    FLAGS_illuminant,
     raw16.size(),
     isBlackLevelSet,
     FLAGS_save_debug_images,

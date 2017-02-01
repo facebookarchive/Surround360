@@ -31,6 +31,7 @@ using namespace util;
 
 vector<double> applyColorParams(
     const vector<double>& rgb,
+    const string& illuminant,
     const double illumScale,
     const double* const bl,
     const double* const wbAndCcm) {
@@ -53,7 +54,14 @@ vector<double> applyColorParams(
   }
 
   vector<double> lab(numChannels, 0.0);
-  toLab(rgbWbAndCcm[0], rgbWbAndCcm[1], rgbWbAndCcm[2], lab[0], lab[1], lab[2]);
+  toLab(
+    illuminant,
+    rgbWbAndCcm[0],
+    rgbWbAndCcm[1],
+    rgbWbAndCcm[2],
+    lab[0],
+    lab[1],
+    lab[2]);
   return lab;
 }
 
@@ -79,12 +87,13 @@ struct IspFunctor {
       const double x,
       const double y,
       const vector<double> rgb,
+      const string illuminant,
       const vector<double> labRef) {
 
     CHECK_EQ(TBezierX + 1, bezierX.size());
     CHECK_EQ(TBezierY + 1, bezierY.size());
 
-    auto* cost = new CostFunction(new IspFunctor(x, y, rgb, labRef));
+    auto* cost = new CostFunction(new IspFunctor(x, y, rgb, illuminant, labRef));
     problem.AddResidualBlock(
       cost,
       nullptr,  // loss
@@ -113,7 +122,8 @@ struct IspFunctor {
     }
 
     const double illumScale = bX(x) * bY(y);
-    vector<double> lab = applyColorParams(rgb, illumScale, bl, wbAndCcm);
+    const vector<double> lab =
+      applyColorParams(rgb, illuminant, illumScale, bl, wbAndCcm);
 
     for (int i = 0; i < lab.size(); ++i) {
       residuals[i] = labRef[i] - lab[i];
@@ -137,17 +147,20 @@ struct IspFunctor {
       const double x,
       const double y,
       const vector<double> rgb,
+      const string& illuminant,
       const vector<double> labRef) :
 
     x(x),
     y(y),
     rgb(rgb),
+    illuminant(illuminant),
     labRef(labRef) {
   }
 
   const double x;
   const double y;
   const vector<double> rgb;
+  const string illuminant;
   const vector<double> labRef;
 };
 
@@ -308,6 +321,7 @@ void updateIspWithClamps(
 
 Vec3f findBlackLevel(
     const Mat& raw16,
+    const int minNumPixels,
     const string& ispConfigFile,
     const bool saveDebugImages,
     const string& outputDir,
@@ -335,21 +349,23 @@ Vec3f findBlackLevel(
 
   // Calculate per channel histograms
   Mat blackHoleMask = Mat::zeros(raw16.size(), CV_8UC1);
-  static const int kNumPixelsMin = 50;
+  static const int kNumPixelsMin = minNumPixels / kNumChannels;
   double blackLevelThreshold = 0.0;
   for (int i = 0; i < kNumChannels; ++i) {
     // Black level threshold is the lowest non-zero value with enough pixel
     // count (to avoid noise and dead pixels)
     Mat hist = computeHistogram(RGBs[i], Mat());
-    for (int h = 1; h < maxPixelValue; h++) {
-      if (hist.at<float>(h) > kNumPixelsMin) {
+    int countChannel = 0;
+    for (int h = 1; h < maxPixelValue; ++h) {
+      countChannel += hist.at<float>(h);
+      if (countChannel > kNumPixelsMin) {
         blackLevelThreshold = h;
         break;
       }
     }
 
     // Create mask with all pixels below threshold
-    Mat mask;
+    Mat mask(RGBs[i].size(), RGBs[i].type(), Scalar::all(0));
     inRange(RGBs[i], 0.0f, blackLevelThreshold, mask);
     blackHoleMask = (blackHoleMask | mask);
   }
@@ -1181,6 +1197,7 @@ Vec3f plotGrayPatchResponse(
 
 void obtainIspParams(
     vector<ColorPatch>& colorPatches,
+    const string& illuminant,
     const Size& imageSize,
     const bool isBlackLevelSet,
     const bool saveDebugImages,
@@ -1189,6 +1206,8 @@ void obtainIspParams(
     Vec3f& blackLevel,
     Vec3f& whiteBalance,
     Mat& ccm) {
+
+  LOG(INFO) << "Illuminant: " << illuminant;
 
   ceres::Problem problem;
 
@@ -1232,7 +1251,7 @@ void obtainIspParams(
   for (int i = 0; i < colorPatches.size(); ++i) {
     Vec3f patchRGB = colorPatches[i].rgbMedian;
     rgbsRef[i] = {patchRGB[0], patchRGB[1], patchRGB[2]};
-    const vector<double> labRef(labMacbeth[i].begin(), labMacbeth[i].end());
+    const vector<double> labRef(labMacbeth.at(illuminant)[i].begin(), labMacbeth.at(illuminant)[i].end());
     const Point2f centroid = colorPatches[i].centroid - bezierTL;
     IspFunctor<kBezierOrderX, kBezierOrderY>::addResidual(
       problem,
@@ -1243,6 +1262,7 @@ void obtainIspParams(
       centroid.x / width,
       centroid.y / height,
       rgbsRef[i],
+      illuminant,
       labRef);
   }
 
@@ -1378,22 +1398,24 @@ void obtainIspParams(
   for (int i = 0; i < colorPatches.size(); ++i) {
     vector<double> labOut = applyColorParams(
       rgbsRef[i],
+      illuminant,
       illuminationScales[i],
       bl.data(),
       wbAndCcm.data());
     colorPatches[i].labMedian = Vec3f(labOut[0], labOut[1], labOut[2]);
   }
-  computeColorPatchErrors(colorPatches, outputDir, "ceres");
+  computeColorPatchErrors(colorPatches, illuminant, outputDir, "ceres");
 }
 
 void computeColorPatchErrors(
     const vector<ColorPatch>& colorPatches,
+    const string& illuminant,
     const string& outputDir,
     const string& titleExtra) {
 
   vector<float> deltaE(colorPatches.size(), 0.0f);
   for (int i = 0; i < colorPatches.size(); ++i) {
-    vector<double> labRef(labMacbeth[i].begin(), labMacbeth[i].end());
+    vector<double> labRef(labMacbeth.at(illuminant)[i].begin(), labMacbeth.at(illuminant)[i].end());
     Vec3f labOut3f = colorPatches[i].labMedian;
     const vector<double> labOut = {labOut3f[0], labOut3f[1], labOut3f[2]};
 

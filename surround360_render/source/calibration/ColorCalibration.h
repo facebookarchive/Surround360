@@ -37,33 +37,60 @@ struct ColorResponse {
 // Reference grayscale values for plotting purposes
 const vector<int> rgbGrayLinearMacbeth = {6, 21, 49, 92, 150, 233};
 
-// MacBeth patches from X-Rite website
-// http://xritephoto.com/ph_product_overview.aspx?ID=938&Action=Support&SupportID=5884
-const vector<vector<float>> labMacbeth = {
-  {37.54, 14.37, 14.92},
-  {64.66, 19.27, 17.5},
-  {49.32, -3.82, -22.54},
-  {43.46, -12.74, 22.72},
-  {54.94, 9.61, -24.79},
-  {70.48, -32.26, -0.37},
-  {62.73, 35.83, 56.5},
-  {39.43, 10.75, -45.17},
-  {50.57, 48.64, 16.67},
-  {30.1, 22.54, -20.87},
-  {71.77, -24.13, 58.19},
-  {71.51, 18.24, 67.37},
-  {28.37, 15.42, -49.8},
-  {54.38, -39.72, 32.27},
-  {42.43, 51.05, 28.62},
-  {81.8, 2.67, 80.41},
-  {50.63, 51.28, -14.12},
-  {49.57, -29.71, -28.32},
-  {95.19, -1.03, 2.93},
-  {81.29, -0.57, 0.44},
-  {66.89, -0.75, -0.06},
-  {50.76, -0.13, 0.14},
-  {35.63, -0.46, -0.48},
-  {20.64, 0.07, -0.46}
+// MacBeth patches from
+// Danny Pascale, "RGB coordinates of the Macbeth ColorChecker", The BabelColor Company, June 2006
+map<string, vector<vector<float> > > const labMacbeth {
+  {"D50", {
+    {37.99, 13.56, 14.06},
+    {65.71, 18.13, 17.81},
+    {49.93, -4.88, -21.93},
+    {43.14, -13.10, 21.91},
+    {55.11, 8.84, -25.40},
+    {70.72, -33.40, -0.199},
+    {62.66, 36.07, 57.10},
+    {40.02, 10.41, -45.96},
+    {51.12, 48.24, 16.25},
+    {30.33, 22.98, -21.59},
+    {72.53, -23.71, 57.26},
+    {71.94, 19.36, 67.86},
+    {28.78, 14.18, -50.30},
+    {55.26, -38.34, 31.37},
+    {42.10, 53.38, 28.19},
+    {81.73, 4.04, 79.82},
+    {51.94, 49.99, -14.57},
+    {51.04, -28.63, -28.64},
+    {96.54, -0.425, 1.186},
+    {81.26, -0.638, -0.335},
+    {66.77, -0.734, -0.504},
+    {50.87, -0.153, -0.270},
+    {35.66, -0.421, -1.231},
+    {20.46, -0.079, -0.973}}},
+  {"D65", {
+    {37.85, 12.72, 14.07},
+    {65.43, 17.18, 17.21},
+    {50.15, -1.91, -21.79},
+    {43.17, -15.08, 22.44},
+    {55.40, 11.58, -25.06},
+    {70.92, -33.22, 0.29},
+    {62.06, 33.37, 56.24},
+    {40.59, 16.15, -45.14},
+    {50.58, 47.55, 15.17},
+    {30.51, 25.11, -21.74},
+    {72.31, -27.84, 57.83},
+    {71.43, 15.50, 67.80},
+    {29.46, 20.74, -49.34},
+    {55.26, -41.23, 32.03},
+    {41.53, 52.67, 26.92},
+    {81.08, -0.33, 80.10},
+    {51.74, 51.26, -15.48},
+    {52.41, -18.46, -26.64},
+    {96.49, -0.35, 0.96},
+    {81.17, -0.69, -0.24},
+    {66.84, -0.71, -0.25},
+    {50.86, 0.20, -0.55},
+    {35.61, -0.36, -1.44},
+    {20.40, 0.47, -1.27}}
+  }
 };
 
 // Get image bit depth
@@ -117,6 +144,7 @@ void updateIspWithClamps(
 // Finds black level. Assumes there's a black hole in the input image
 Vec3f findBlackLevel(
   const Mat& raw16,
+  const int minNumPixels,
   const string& ispConfigFile,
   const bool saveDebugImages,
   const string& outputDir,
@@ -225,6 +253,7 @@ Vec3f plotGrayPatchResponse(
 // Calculates black level, white balance and CCM from given color patches
 void obtainIspParams(
   vector<ColorPatch>& colorPatches,
+  const string& illuminant,
   const Size& imageSize,
   const bool isBlackLevelSet,
   const bool saveDebugImages,
@@ -238,6 +267,7 @@ void obtainIspParams(
 // truth (Lab)
 void computeColorPatchErrors(
   const vector<ColorPatch>& colorPatches,
+  const string& illuminant,
   const string& outputDir,
   const string& titleExtra);
 

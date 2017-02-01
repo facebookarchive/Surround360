@@ -121,9 +121,9 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 ```
 
 * Install Ceres (method 2 - OSX only)
-<pre>
+```
   brew install --build-from-source ceres-solver
-</pre>
+```
 
 * Install OpenCV:
 ```
@@ -134,6 +134,9 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   make
   sudo make install
 ```
+
+* Install COLMAP
+  see https://colmap.github.io/install.html
 
 * Install ffmpeg (method 1):
   see https://trac.ffmpeg.org/wiki/CompilationGuide
@@ -162,7 +165,6 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   sudo rm /etc/apt/sources.list.d/wily-copies.list
   sudo apt update
 ```
-
 
 * Install Gooey (method 3 - OS X only):
 ```

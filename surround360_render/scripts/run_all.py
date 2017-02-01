@@ -167,6 +167,7 @@ def parse_args():
   parser.add_argument('--src_intrinsic_param_file',   metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)
   parser.add_argument('--rectify_file',               metavar='Rectification File', help='rectification file [or NONE]', required=False, default=create_default_path(rectify_file, "NONE"), **file_chooser)
   parser.add_argument('--rig_json_file',              metavar='Rig Geometry File', help='json file with rig geometry info', required=False, default=create_default_path(rig_json_file, ""), **file_chooser)
+  parser.add_argument('--new_rig_format',             help='Using new rig JSON format?', action='store_true', required=False)
   parser.add_argument('--verbose',                    help='increase output verbosity', action='store_true')
 
   return vars(parser.parse_args())
@@ -260,6 +261,7 @@ if __name__ == "__main__":
   src_intrinsic_param_file  = args["src_intrinsic_param_file"]
   rectify_file              = args["rectify_file"]
   rig_json_file             = args["rig_json_file"]
+  new_rig_format            = args["new_rig_format"]
   verbose                   = args["verbose"]
 
   print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
@@ -421,6 +423,9 @@ if __name__ == "__main__":
 
       if enable_pole_removal:
         render_extra_params += " --enable_pole_removal"
+
+    if new_rig_format:
+      render_extra_params += " --new_rig_format"
 
     if enable_render_coloradjust:
       render_extra_params += " --enable_render_coloradjust"

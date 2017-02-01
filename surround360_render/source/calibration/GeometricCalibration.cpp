@@ -39,6 +39,7 @@ DEFINE_double(perturb_rotations,      0,        "perturb rotations (radians)");
 DEFINE_double(perturb_principals,     0,        "pertub principals (pixels)");
 DEFINE_int64(experiments,             1,        "calibrate multiple times");
 DEFINE_bool(discard_outside_fov,      true,     "discard matches outside fov");
+DEFINE_bool(save_debug_images,        false,  "save intermediate images");
 
 std::unordered_map<std::string, int> cameraIdToIndex;
 std::unordered_map<std::string, int> cameraGroupToIndex;
@@ -709,15 +710,26 @@ void showMatches(
     const KeypointMap& keypointMap,
     const std::vector<Overlap>& overlaps,
     const std::vector<Trace>& traces,
-    const Camera::Real threshold) {
+    const std::string& debugDir,
+    const int pass) {
   // visualization for debugging
   for (const auto& overlap : overlaps) {
-    if (cameras[getCameraIndex(overlap.images[0])].overlap(
-        cameras[getCameraIndex(overlap.images[1])]) > threshold) {
+    const int idx0 = getCameraIndex(overlap.images[0]);
+    const int idx1 = getCameraIndex(overlap.images[1]);
+    if (cameras[idx0].overlap(cameras[idx1]) > FLAGS_debug_matches_overlap) {
       cv::Mat image = renderOverlap(overlap, keypointMap, traces, cameras);
       cv::resize(image, image, cv::Size(), 0.5, 0.5);
-      cv::imshow("overlap", image);
-      cv::waitKey();
+
+      if (FLAGS_save_debug_images) {
+        std::string filename = debugDir + "/" +
+          "pass" + std::to_string(pass) + "_" +
+          "cam" + getCameraIdFromPath(overlap.images[0]) +
+          "-cam" + getCameraIdFromPath(overlap.images[1]) + ".png";
+        imwrite(filename, image);
+      } else {
+        cv::imshow("overlap", image);
+        cv::waitKey();
+      }
     }
   }
 }
@@ -763,7 +775,8 @@ void refine(
     std::vector<Camera>& cameras,
     KeypointMap keypointMap,
     std::vector<Overlap> overlaps,
-    const int pass) {
+    const int pass,
+    const std::string& debugDir) {
 
   // remove outlier matches
   std::vector<Trace> traces = disconnectedTraces(keypointMap, overlaps);
@@ -785,7 +798,8 @@ void refine(
     keypointMap,
     overlaps,
     traces,
-    FLAGS_debug_matches_overlap);
+    debugDir,
+    pass);
 
   // read camera parameters from cameras
   std::vector<Camera::Vector3> positions;
@@ -862,6 +876,18 @@ void refine(
 
 int main(int argc, char* argv[]) {
   util::initSurround360(argc, argv);
+  util::requireArg(FLAGS_json, "json");
+  util::requireArg(FLAGS_output_json, "output_json");
+
+  std::string outputDir =
+    FLAGS_output_json.substr(0, FLAGS_output_json.find_last_of('/'));
+  system(std::string("mkdir -p " + outputDir).c_str());
+
+  std::string debugDir = "";
+  if (FLAGS_save_debug_images) {
+    debugDir = outputDir + "/debug";
+    system(std::string("mkdir -p " + debugDir).c_str());
+  }
 
   if (FLAGS_unit_test) {
     Camera::unitTest();
@@ -900,15 +926,13 @@ int main(int argc, char* argv[]) {
 
     LOG(INFO) << getCameraRmseReport(cameras, groundTruth) << std::endl;
     for (int pass = 0; pass < FLAGS_pass_count; ++pass) {
-      refine(cameras, keypointMap, overlaps, pass);
+      refine(cameras, keypointMap, overlaps, pass, debugDir);
       std::cout
         << "pass " << pass << ": "
         << getCameraRmseReport(cameras, groundTruth) << std::endl;
     }
 
-    if (!FLAGS_output_json.empty()) {
-      Camera::saveRig(FLAGS_output_json, cameras);
-    }
+    Camera::saveRig(FLAGS_output_json, cameras);
   }
 
   return 0;

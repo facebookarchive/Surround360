@@ -82,6 +82,7 @@ if __name__ == "__main__":
   parser.add_argument('--enable_render_coloradjust', dest='enable_render_coloradjust', action='store_true')
   parser.add_argument('--resume', dest='resume', action='store_true', help='looks for a previous frame optical flow instead of starting fresh')
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
+  parser.add_argument('--new_rig_format', dest='new_rig_format', action='store_true')
   parser.add_argument('--rectify_file', help='path to rectification param file', required=False, default="NONE")
   parser.add_argument('--src_intrinsic_param_file', help='path to camera instrinsic param file', required=True)
   parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
@@ -111,6 +112,7 @@ if __name__ == "__main__":
   enable_render_coloradjust = args["enable_render_coloradjust"]
   resume                    = args["resume"]
   rig_json_file             = args["rig_json_file"]
+  new_rig_format            = args["new_rig_format"]
   rectify_file              = args["rectify_file"]
   src_intrinsic_param_file  = args["src_intrinsic_param_file"]
   flow_alg                  = args["flow_alg"]
@@ -178,6 +180,9 @@ if __name__ == "__main__":
       if enable_pole_removal:
         render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
         render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
+
+    if new_rig_format:
+      render_params["EXTRA_FLAGS"] += " --new_rig_format"
 
     if quality == "3k":
       render_params["SHARPENNING"]                  = 0.25

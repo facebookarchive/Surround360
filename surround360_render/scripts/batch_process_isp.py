@@ -25,7 +25,7 @@ RAW2RGB_COMMAND_TEMPLATE = """
 --isp_config_path {ISP_CONFIG_PATH}
 --black_level_offset {BLACK_LEVEL_OFFSET}
 --output_image_path {OUTPUT_IMAGE_PATH}
---output_bpp 16
+--output_bpp {NBITS}
 --accelerate
 {FLAGS_RAW2RGB_EXTRA}
 """
@@ -57,6 +57,7 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(description='batch process ISP')
   parser.add_argument('--root_dir', help='path to frame container dir', required=True)
   parser.add_argument('--surround360_render_dir', help='project root path, containing bin and scripts dirs', required=False, default='.')
+  parser.add_argument('--nbits', help='bits per pixel', required=True)
   parser.add_argument('--start_frame', help='first frame index', required=True)
   parser.add_argument('--end_frame', help='last frame index', required=True)
   parser.add_argument('--delete_raws', dest='delete_raws', action='store_true')
@@ -67,6 +68,7 @@ if __name__ == "__main__":
 
   root_dir                = args["root_dir"]
   surround360_render_dir  = args["surround360_render_dir"]
+  nbits                   = args["nbits"]
   min_frame               = int(args["start_frame"])
   max_frame               = int(args["end_frame"])
   delete_raws             = args["delete_raws"]
@@ -105,6 +107,7 @@ if __name__ == "__main__":
         "ISP_CONFIG_PATH": cam_to_isp_config[filename_prefix],
         "BLACK_LEVEL_OFFSET": str(CAM_TO_BLACKLEVEL[filename_prefix]),
         "OUTPUT_IMAGE_PATH": dest_rgb_path,
+        "NBITS": nbits,
         "FLAGS_RAW2RGB_EXTRA": raw2rgb_extra_params,
       }
       raw2rgb_command = RAW2RGB_COMMAND_TEMPLATE.replace("\n", " ").format(**raw2rgb_params)

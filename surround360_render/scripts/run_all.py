@@ -14,6 +14,10 @@ import subprocess
 import sys
 import time
 import types
+
+from os import listdir
+from os.path import isfile, join
+from PIL import Image
 from timeit import default_timer as timer
 
 current_process = None
@@ -65,6 +69,7 @@ python {SURROUND360_RENDER_DIR}/scripts/batch_process_isp.py
 --start_frame {START_FRAME}
 --end_frame {END_FRAME}
 --cam_to_isp_config_file {CAM_TO_ISP_CONFIG_FILE}
+--nbits {NBITS}
 {FLAGS_ISP_EXTRA}
 """
 
@@ -228,6 +233,8 @@ def update_isp_mappings(cam_to_isp_config_file, config_isp_path):
   with open(cam_to_isp_config_file, "w") as json_file:
     json.dump(cam_json_map, json_file, indent=4, sort_keys=True)
 
+def list_only_files(src_dir): return filter(lambda f: f[0] != ".", [f for f in listdir(src_dir) if isfile(join(src_dir, f))])
+
 if __name__ == "__main__":
   signal.signal(signal.SIGTERM, signal_term_handler)
 
@@ -369,6 +376,12 @@ if __name__ == "__main__":
     if verbose:
       isp_extra_params += " --verbose"
 
+    # Force 16-bit output if input is 16-bit. Else use nbits flag
+    image_dir = dest_dir + "/vid/" + str(start_frame).zfill(6) + "/raw"
+    image_path = image_dir + "/" + list_only_files(image_dir)[0]
+    image = Image.open(image_path)
+    nbits_isp = 16 if (image.mode == "I;16" or int(nbits) == 12) else 8;
+
     isp_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "ROOT_DIR": dest_dir,
@@ -376,6 +389,7 @@ if __name__ == "__main__":
       "END_FRAME": end_frame,
       "CAM_TO_ISP_CONFIG_FILE": cam_to_isp_config_file,
       "FLAGS_ISP_EXTRA": isp_extra_params,
+      "NBITS": nbits_isp,
     }
     isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
     run_step("isp", isp_command, verbose, dryrun, file_runtimes, num_steps)

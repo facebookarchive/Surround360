@@ -175,6 +175,16 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   brew link wxmac
 ```
 
+* Install PIL (method 1 - Linux only)
+```
+  sudo pip install PIL
+```
+
+* Install PIL (method 2 - OSX only)
+```
+  pip install pillow
+```
+
 * (to use accelerated ISP) Install Halide
 ```
   cd ~

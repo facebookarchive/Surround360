@@ -460,7 +460,6 @@ IF (DEFINED HALIDE_DIR)
     source/test/TestVignettingCalibration.cpp
     "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
   )
-  ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
   TARGET_COMPILE_FEATURES(TestVignettingCalibration PRIVATE cxx_range_for)
   TARGET_LINK_LIBRARIES(
     TestVignettingCalibration

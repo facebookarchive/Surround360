@@ -177,7 +177,7 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
 
 * Install PIL (method 1 - Linux only)
 ```
-  sudo pip install PIL
+  sudo apt-get install python-pil
 ```
 
 * Install PIL (method 2 - OSX only)

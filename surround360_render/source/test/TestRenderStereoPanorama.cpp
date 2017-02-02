@@ -278,6 +278,15 @@ float approximateFov(const Camera& camera, const bool vertical) {
     camera.rig(b).direction().dot(camera.forward())));
 }
 
+// measured in radians from forward
+float approximateFov(const Camera::Rig& rig, const bool vertical) {
+  float result = 0;
+  for (const auto& camera : rig) {
+    result = std::max(result, approximateFov(camera, vertical));
+  }
+  return result;
+}
+
 // project the image of a single camera into spherical coordinates
 void projectCamImageToSphericalThread(
     float brightnessAdjustment,
@@ -421,11 +430,11 @@ void projectSphericalCamImages(
 
   projectionImages.resize(camImages.size());
   vector<std::thread> threads;
-  for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
-    if (rig.isNewFormat()) {
+  if (rig.isNewFormat()) {
+    const float hRadians = 2 * approximateFov(rig.rigSideOnly, false);
+    const float vRadians = 2 * approximateFov(rig.rigSideOnly, true);
+    for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
       const Camera& camera = rig.rigSideOnly[camIdx];
-      const float hRadians = 2 * approximateFov(camera, false);
-      const float vRadians = 2 * approximateFov(camera, true);
       projectionImages[camIdx].create(
         FLAGS_eqr_height * vRadians / M_PI,
         FLAGS_eqr_width * hRadians / (2 * M_PI),
@@ -442,7 +451,9 @@ void projectSphericalCamImages(
         vRadians / 2,
         -vRadians / 2,
         brightnessAdjustments[camIdx]);
-    } else {
+    }
+  } else {
+    for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
       threads.emplace_back(
         projectCamImageToSphericalThread,
         brightnessAdjustments[camIdx],
@@ -722,7 +733,7 @@ void poleToSideFlowThread(
     // use fov from bottom camera
     poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
     // use fov from first side camera
-    sideCameraRadius = approximateFov(rig.rigSideOnly.front(), true);
+    sideCameraRadius = approximateFov(rig.rigSideOnly, true);
     // crop is average of side and pole cameras
     poleCameraCropRadius =
       0.5f * (M_PI / 2 - sideCameraRadius) +
@@ -1052,7 +1063,7 @@ void renderStereoPanorama() {
   Mat sphericalImageL, sphericalImageR;
   LOG(INFO) << "Rendering stereo panorama";
   const double fovHorizontal = rig.isNewFormat()
-    ? 2 * approximateFov(rig.rigSideOnly[0], false) * (180 / M_PI)
+    ? 2 * approximateFov(rig.rigSideOnly, false) * (180 / M_PI)
     : rig.camModelArray[0].fovHorizontal;
   generateRingOfNovelViewsAndRenderStereoSpherical(
     rig.getRingRadius(),

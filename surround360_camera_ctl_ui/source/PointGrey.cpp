@@ -364,7 +364,7 @@ int PointGreyCamera::init(
     throw "Not enough memory to allocate camera buffers";
   }
   m_camera->SetUserBuffers(
-    reinterpret_cast<unsigned char*>(cameraBuffers), 4096 * 4096, 7);
+    reinterpret_cast<unsigned char*>(cameraBuffers), kPageSize * kHorizRes, kNumBuffers);
 
   return 0;
 }

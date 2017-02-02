@@ -28,7 +28,9 @@ PointGreyCamera::PointGreyCamera(
   : m_camera(camera),
     m_guid(guid),
     m_master(false),
-    m_ifaceType(iftype) {
+    m_ifaceType(iftype),
+    cameraBuffers(nullptr)
+{
 }
 
 BusManager& PointGreyCamera::getBusManager() {
@@ -671,7 +673,9 @@ void PointGreyCamera::setPixelFormat(PixelFormat pf) {
 PointGreyCamera::~PointGreyCamera() {
   detach();
 
-  free(cameraBuffers);
+  if (cameraBuffers != nullptr) {
+    free(cameraBuffers);
+  }
 }
 
 ostream& surround360::operator<<(ostream& stream, const PointGreyCamera& c) {

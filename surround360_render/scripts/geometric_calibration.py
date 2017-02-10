@@ -80,7 +80,7 @@ def features_db_to_json(features_database, matches_json):
   cursorImage.close()
 
   data["all_matches"] = []
-  cursor.execute("SELECT pair_id, data FROM matches;")
+  cursor.execute("SELECT pair_id, data FROM matches WHERE data IS NOT NULL;")
   for row in cursor:
     image_pair = {}
     pair_id = row[0]

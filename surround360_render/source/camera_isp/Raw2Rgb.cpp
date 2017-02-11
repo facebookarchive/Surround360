@@ -366,15 +366,6 @@ void runPipeline(
     Mat& outputImage,
     string outputImagePath) {
 
-  if (FLAGS_disable_tone_curve) {
-    cameraIsp->disableToneMap();
-  } else {
-    cameraIsp->enableToneMap();
-  }
-
-  cameraIsp->addBlackLevelOffset(FLAGS_black_level_offset);
-  cameraIsp->loadImage(inputImage);
-
   double startTime = getCurrTimeSec();
   cameraIsp->getImage(outputImage);
   double endTime = getCurrTimeSec();
@@ -436,6 +427,16 @@ int main(int argc, char* argv[]) {
     if (FLAGS_accelerate) {
       CameraIspPipe cameraIsp(json, FLAGS_fast, FLAGS_output_bpp);
       cameraIsp.setBitsPerPixel(kIspInputBitsPerPixel);
+      if (FLAGS_disable_tone_curve) {
+        cameraIsp.disableToneMap();
+      } else {
+        cameraIsp.enableToneMap();
+      }
+
+      cameraIsp.addBlackLevelOffset(FLAGS_black_level_offset);
+      cameraIsp.loadImage(inputImage16);
+      cameraIsp.setup();
+      cameraIsp.initPipe();
       runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
       writeDng(cameraIsp, FLAGS_output_dng_path, inputImage16, outputImage);
     } else {
@@ -446,6 +447,14 @@ int main(int argc, char* argv[]) {
         cameraIsp.setBitsPerPixel(16);
         cameraIsp.setDemosaicFilter(FLAGS_demosaic_filter);
         cameraIsp.setResize(FLAGS_resize);
+        if (FLAGS_disable_tone_curve) {
+          cameraIsp.disableToneMap();
+        } else {
+          cameraIsp.enableToneMap();
+        }
+        cameraIsp.addBlackLevelOffset(FLAGS_black_level_offset);
+        cameraIsp.loadImage(inputImage16);
+        cameraIsp.setup();
         runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
         writeDng(cameraIsp, FLAGS_output_dng_path, inputImage16, outputImage);
       }

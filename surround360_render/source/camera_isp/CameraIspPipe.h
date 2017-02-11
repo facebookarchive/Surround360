@@ -177,10 +177,7 @@ class CameraIspPipe : public CameraIsp {
   // Called once to initialize the input image size and data pointer.
   void loadImage(const Mat& inputImage) {
     this->inputImage = inputImage;
-    loadImage(
-        reinterpret_cast<uint8_t*>(inputImage.data),
-        inputImage.cols,
-        inputImage.rows);
+    loadImage(inputImage.data, inputImage.cols, inputImage.rows);
   }
 
   void loadImage(uint8_t* inputImageData, const int xRes, const int yRes) {
@@ -189,7 +186,7 @@ class CameraIspPipe : public CameraIsp {
     *const_cast<int*>(&maxDimension) = std::max(width, height);
     *const_cast<float*>(&maxD) = square(width) + square(width);
     *const_cast<float*>(&sqrtMaxD) = sqrt(maxD);
-    inputBufferBp.host = reinterpret_cast<uint8_t*>(inputImageData);
+    inputBufferBp.host = inputImageData;
     inputBufferBp.extent[0] = width;
     inputBufferBp.extent[1] = height;
     inputBufferBp.stride[0] = 1;
@@ -200,7 +197,7 @@ class CameraIspPipe : public CameraIsp {
   // Called at least one to setup the output image size and process
   // the first input image.
   void getImage(uint8_t* outputImageData, const bool swizzle = true) {
-    outputBufferBp.host = reinterpret_cast<uint8_t*>(outputImageData);
+    outputBufferBp.host = outputImageData;
     outputBufferBp.elem_size = outputBpp / 8;
     outputBufferBp.extent[0] = width;
     outputBufferBp.extent[1] = height;

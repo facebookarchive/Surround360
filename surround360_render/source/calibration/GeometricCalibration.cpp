@@ -72,7 +72,7 @@ int getCameraIndex(const boost::filesystem::path& image) {
 
 // create a string that adheres to the format of an image path
 std::string makeArtificialPath(int frame, const std::string id) {
-  return std::to_string(frame) + "/cam" + id;
+  return std::to_string(frame) + "/" + id;
 }
 
 cv::Mat loadImage(const boost::filesystem::path& path) {
@@ -723,8 +723,8 @@ void showMatches(
       if (FLAGS_save_debug_images) {
         std::string filename = debugDir + "/" +
           "pass" + std::to_string(pass) + "_" +
-          "cam" + getCameraIdFromPath(overlap.images[0]) +
-          "-cam" + getCameraIdFromPath(overlap.images[1]) + ".png";
+          getCameraIdFromPath(overlap.images[0]) + "-" +
+          getCameraIdFromPath(overlap.images[1]) + ".png";
         imwrite(filename, image);
       } else {
         cv::imshow("overlap", image);

@@ -31,11 +31,11 @@ IF(NOT IS_DIRECTORY CMAKE_BUILD_TYPE)
 ENDIF()
 
 IF(NOT ${CMAKE_BUILD_TYPE} MATCHES Debug)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -Ofast")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64 -O3 -mmmx -mavx -msse -msse3 -funroll-loops -pipe")
 ENDIF()
 
 IF (NOT MSVC)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 ENDIF()
 
 IF(NOT APPLE AND NOT MSVC)
@@ -280,6 +280,35 @@ TARGET_LINK_LIBRARIES(
   LibJSON
   glog
   gflags
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
+)
+
+### NewUnpacker ###
+
+ADD_EXECUTABLE(
+  NewUnpacker
+  source/camera_isp/BinaryFootageFile.cpp
+  source/camera_isp/NewUnpacker.cpp
+  source/camera_isp/Raw12Converter.cpp
+)
+
+TARGET_COMPILE_FEATURES(UnpackImageBundle PRIVATE cxx_range_for)
+TARGET_LINK_LIBRARIES(
+  NewUnpacker
+  LibVrCamera
+  LibJSON
+  glog
+  gflags
+  ${OpenCV_LIBS}
+  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  Halide
+  dl
+  tinfo
+  z
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )

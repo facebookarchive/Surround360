@@ -261,43 +261,36 @@ class CameraIspGen
 
     gV.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     gH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     dV.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     dH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     g.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     r.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     b.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
   }
@@ -466,9 +459,7 @@ class CameraIspGen
     transpose
       .compute_root()
       .tile(x, y, xo, yo, x, y, 8, 8)
-      .vectorize(x, kVec)
-      .parallel(yo)
-      .parallel(c);
+      .vectorize(x, kVec);
 
     blur.
       compute_at(transpose, yo);
@@ -534,9 +525,7 @@ class CameraIspGen
     sharpened
       .compute_root()
       .split(y, yo, yi, kStripSize)
-      .vectorize(yi, kVec)
-      .parallel(yo)
-      .parallel(c);
+      .vectorize(yi, kVec);
 
     return sharpened;
   }
@@ -619,8 +608,7 @@ class CameraIspGen
       .split(yi, yi, yii, 2)
       .split(x, x, xi, 2*kVec, TailStrategy::RoundUp)
       .reorder(xi, c, yii, x, yi, yo)
-      .vectorize(xi, 2 * kVec)
-      .parallel(yo);
+      .vectorize(xi, 2 * kVec);
 
     ispOutput
       .output_buffer()

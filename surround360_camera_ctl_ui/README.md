@@ -49,7 +49,7 @@ To install extra dependencies when prompted:
 ```
 with
 ```
-    GRUB_CMDLINE_LINUX_DEFAULT="quiet splash usbcore.usbfs_memory_mb=2000"
+    GRUB_CMDLINE_LINUX_DEFAULT="quiet splash usbcore.usbfs_memory_mb=8000 transparent_hugepage=never"
 ```
 Then update grub:
 ```

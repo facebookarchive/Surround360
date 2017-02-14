@@ -26,6 +26,7 @@ using namespace surround360;
 using namespace surround360::util;
 
 DEFINE_string(src_images_dir,           "",       "path to folder containing camera images");
+DEFINE_string(frame_number,             "",       "frame number (6-digit zero-padded)");
 DEFINE_string(pole_masks_dir,           "",       "path to folder containing pole masks");
 DEFINE_string(output_dir,               "",       "path to write results");
 DEFINE_string(rig_json_file,            "",       "path to json file drescribing camera array");
@@ -41,6 +42,7 @@ DEFINE_bool(enable_render_coloradjust,  false,    "if true, color and brightness
 int main(int argc, char** argv) {
   initSurround360(argc, argv);
   requireArg(FLAGS_src_images_dir, "src_images_dir");
+  requireArg(FLAGS_frame_number, "frame_number");
   requireArg(FLAGS_pole_masks_dir, "pole_masks_dir");
   requireArg(FLAGS_output_dir, "output_dir");
   requireArg(FLAGS_rig_json_file, "rig_json_file");
@@ -57,6 +59,7 @@ int main(int argc, char** argv) {
   Mat bottomImage;
   combineBottomImagesWithPoleRemoval(
     FLAGS_src_images_dir,
+    FLAGS_frame_number,
     FLAGS_pole_masks_dir,
     "NONE",
     FLAGS_output_dir,

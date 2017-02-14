@@ -66,14 +66,15 @@ static double getCurrTimeSec() {
 // paths if fullPath is true)
 static vector<string> getFilesInDir(
     const string& srcDir,
-    const bool fullPath) {
+    const bool fullPath,
+    int numFilesToReturn = -1) {
 
   DIR* dir = opendir(srcDir.c_str());
   if (!dir) { return vector<string>(); }
 
   vector<string> out_file_names;
   dirent* dent;
-  while(true) {
+  while (true) {
     dent = readdir(dir);
     if (!dent) break;
     // skip hidden files and/or links to parent dir
@@ -82,6 +83,9 @@ static vector<string> getFilesInDir(
       out_file_names.push_back(srcDir + "/" + string(dent->d_name));
     } else {
       out_file_names.push_back(string(dent->d_name));
+    }
+    if (--numFilesToReturn == 0) {
+      break;
     }
   }
   return out_file_names;

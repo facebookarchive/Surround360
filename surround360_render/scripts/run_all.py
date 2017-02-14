@@ -16,7 +16,7 @@ import time
 import types
 
 from os import listdir
-from os.path import isfile, join
+from os.path import isdir, isfile, join
 from PIL import Image
 from timeit import default_timer as timer
 
@@ -49,17 +49,11 @@ UNPACK_COMMAND_TEMPLATE = """
 --stderrthreshold 0
 --v {VERBOSE_LEVEL}
 --binary_prefix {BINARY_PREFIX}
---dest_path {ROOT_DIR}/raw
+--dest_path {ROOT_DIR}
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --file_count {DISK_COUNT}
 {FLAGS_UNPACK_EXTRA}
-"""
-
-ARRANGE_COMMAND_TEMPLATE = """
-python {SURROUND360_RENDER_DIR}/scripts/arrange_dataset.py
---root_dir {ROOT_DIR}
-{FLAGS_ARRANGE_EXTRA}
 """
 
 ISP_COMMAND_TEMPLATE = """
@@ -68,20 +62,9 @@ python {SURROUND360_RENDER_DIR}/scripts/batch_process_isp.py
 --root_dir {ROOT_DIR}
 --start_frame {START_FRAME}
 --end_frame {END_FRAME}
---cam_to_isp_config_file {CAM_TO_ISP_CONFIG_FILE}
+--isp_dir {ISP_DIR}
 --nbits {NBITS}
 {FLAGS_ISP_EXTRA}
-"""
-
-RECTIFY_COMMAND_TEMPLATE = """
-{SURROUND360_RENDER_DIR}/bin/TestRingRectification
---logbuflevel -1 --stderrthreshold 0 --v 0 \
---rig_json_file {RIG_JSON_FILE} \
---src_intrinsic_param_file {SRC_INSTRINSIC_PARAM_FILE} \
---output_transforms_file {RECTIFY_FILE} \
---root_dir {ROOT_DIR} \
---frames_list {FRAME_LIST} \
---visualization_dir {ROOT_DIR}/rectify_vis
 """
 
 RENDER_COMMAND_TEMPLATE = """
@@ -95,8 +78,6 @@ python {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
 --cubemap_width {CUBEMAP_WIDTH}
 --cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
---src_intrinsic_param_file {SRC_INSTRINSIC_PARAM_FILE}
---rectify_file {RECTIFY_FILE}
 --rig_json_file {RIG_JSON_FILE}
 {FLAGS_RENDER_EXTRA}
 """
@@ -117,37 +98,17 @@ ffmpeg
 {FLAGS_FFMPEG_EXTRA}
 """
 
-def create_default_path(path, default_str):
-  return path if os.path.exists(path) else default_str
-
 @conditional_decorator(USE_GOOEY, Gooey(program_name=TITLE, image_dir=os.path.dirname(script_dir) + "/res/img"))
 def parse_args():
-  res_path = surround360_render_dir + "/res"
   dir_chooser = {"widget": "DirChooser"} if USE_GOOEY else {}
   file_chooser = {"widget": "FileChooser"} if USE_GOOEY else {}
-
-  # Create default paths (if they exist)
-  cam_to_isp_config_file = res_path + "/config/isp/cam_to_isp_config.json"
-  pole_masks_dir = res_path + "/pole_masks"
-  src_intrinsic_param_file = res_path + "/config/sunex_intrinsic.xml"
-  rectify_file = res_path + "/config/rectify.yml"
-  rig_json_file = res_path + "/config/17cmosis_default.json"
-
-  # Make sure we have per camera color adjustment files. If not, copy from template
-  config_isp_path = res_path + "/config/isp"
-  if not os.path.isfile(cam_to_isp_config_file):
-    print "WARNING: Color adjustment files not found. Using default files.\n"
-    sys.stdout.flush()
-    duplicate_isp_files(config_isp_path)
-    update_isp_mappings(cam_to_isp_config_file, config_isp_path)
-
   parse_type = GooeyParser if USE_GOOEY else argparse.ArgumentParser
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
   parser.add_argument('--image_width',                metavar='Image Width', help='image width (ignore if no cameranames.txt)', required=False, default='2048')
   parser.add_argument('--image_height',               metavar='Image Height', help='image height (ignore if no cameranames.txt)', required=False, default='2048')
-  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth (ignore if no cameranames.txt)', required=False, choices=['8', '12'], default='8')
+  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth (ignore if no cameranames.txt)', required=False, choices=['8', '12'], default='12')
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
@@ -156,7 +117,6 @@ def parse_args():
   parser.add_argument('--cubemap_height',             metavar='Cubemap Face Height', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
   parser.add_argument('--steps_unpack',               help='Step 1: convert data in .bin files to RAW .tiff files', action='store_true', required=False)
-  parser.add_argument('--steps_arrange',              help='Step 2: arrange .tiff files for further processing', action='store_true', required=False)
   parser.add_argument('--steps_isp',                  help='Step 3: convert RAW frames to RGB', action='store_true', required=False)
   parser.add_argument('--steps_rectify',              help='Step 4: use/create rectification file', action='store_true', required=False)
   parser.add_argument('--steps_render',               help='Step 5: render PNG stereo panoramas', action='store_true', required=False)
@@ -166,13 +126,6 @@ def parse_args():
   parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
   parser.add_argument('--enable_render_coloradjust',  help='modify color/brightness in the renderer to improve blending (increases runtime)', action='store_true')
   parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
-  parser.add_argument('--flow_alg',                   metavar='Flow Algorithm', help='optical flow algorithm', required=False, choices=['pixflow_low', 'pixflow_search_20'], default='pixflow_low')
-  parser.add_argument('--cam_to_isp_config_file',     metavar='Camera to ISP Mappings File', help='camera to ISP config file mappings', required=False, default=create_default_path(cam_to_isp_config_file, ""), **file_chooser)
-  parser.add_argument('--pole_masks_dir',             metavar='Pole Masks Directory', help='directory containing pole masks', required=False, default=create_default_path(pole_masks_dir, ""), **dir_chooser)
-  parser.add_argument('--src_intrinsic_param_file',   metavar='Intrinsic Parameters File', help='intrinsic parameters file', required=False, default=create_default_path(src_intrinsic_param_file, ""), **file_chooser)
-  parser.add_argument('--rectify_file',               metavar='Rectification File', help='rectification file [or NONE]', required=False, default=create_default_path(rectify_file, "NONE"), **file_chooser)
-  parser.add_argument('--rig_json_file',              metavar='Rig Geometry File', help='json file with rig geometry info', required=False, default=create_default_path(rig_json_file, ""), **file_chooser)
-  parser.add_argument('--new_rig_format',             help='Using new rig JSON format?', action='store_true', required=False)
   parser.add_argument('--verbose',                    help='increase output verbosity', action='store_true')
 
   return vars(parser.parse_args())
@@ -217,21 +170,13 @@ def run_step(step, cmd, verbose, dryrun, file_runtimes, num_steps, step_count=[0
 
   save_step_runtime(file_runtimes, step, timer() - start_time)
 
-def duplicate_isp_files(config_isp_path):
+def duplicate_isp_files(config_isp_path, dest_isp_path):
   cmosis_fujinon_path = config_isp_path + "/cmosis_fujinon.json"
   cmosis_sunex_path = config_isp_path + "/cmosis_sunex.json"
 
   for i in range(0, 17):
     cmosis_path = cmosis_fujinon_path if i in [0, 15, 16] else cmosis_sunex_path
-    os.system("cp " + cmosis_path + " " + config_isp_path + "/isp" + str(i) + ".json")
-
-def update_isp_mappings(cam_to_isp_config_file, config_isp_path):
-  cam_json_map = {}
-  for i in range(0, NUM_CAMS):
-    cam_json_map["cam" + str(i)] = config_isp_path + "/isp" + str(i) + ".json"
-
-  with open(cam_to_isp_config_file, "w") as json_file:
-    json.dump(cam_json_map, json_file, indent=4, sort_keys=True)
+    os.system("cp " + cmosis_path + " " + dest_isp_path + "/cam" + str(i) + ".json")
 
 def list_only_files(src_dir): return filter(lambda f: f[0] != ".", [f for f in listdir(src_dir) if isfile(join(src_dir, f))])
 
@@ -257,18 +202,9 @@ if __name__ == "__main__":
   save_debug_images         = args["save_debug_images"]
   dryrun                    = args["dryrun"];
   steps_unpack              = args["steps_unpack"]
-  steps_arrange             = args["steps_arrange"]
   steps_isp                 = args["steps_isp"]
-  steps_rectify             = args["steps_rectify"]
   steps_render              = args["steps_render"]
   steps_ffmpeg              = args["steps_ffmpeg"]
-  flow_alg                  = args["flow_alg"]
-  cam_to_isp_config_file    = args["cam_to_isp_config_file"]
-  pole_masks_dir            = args["pole_masks_dir"]
-  src_intrinsic_param_file  = args["src_intrinsic_param_file"]
-  rectify_file              = args["rectify_file"]
-  rig_json_file             = args["rig_json_file"]
-  new_rig_format            = args["new_rig_format"]
   verbose                   = args["verbose"]
 
   print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
@@ -283,16 +219,6 @@ if __name__ == "__main__":
   binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
   disk_count = len(binary_files)
 
-  # We want to be able to map a file path to its flag/variable name, so we keep
-  # a dictionary of mappings between them
-  paths_map = dict((eval(name), name) for name in ['cam_to_isp_config_file', 'src_intrinsic_param_file', 'rectify_file', 'rig_json_file'])
-  for path, name in paths_map.iteritems():
-    if not os.path.isfile(path):
-      # rectify_file can be set to NONE
-      if (path != rectify_file or path != "NONE") and not steps_rectify:
-        sys.stderr.write("Given --" + name + " (" + path + ") does not exist\n")
-        exit(1)
-
   if quality not in ["3k", "4k", "6k", "8k"]:
     sys.stderr.write("Unrecognized quality setting: " + quality)
     exit(1)
@@ -303,6 +229,53 @@ if __name__ == "__main__":
 
   os.system("mkdir -p " + dest_dir + "/logs")
 
+  print "Checking required files..."
+
+  dir_res_default = surround360_render_dir + "/res"
+  dir_config = dest_dir + "/config"
+  os.system("mkdir -p " + dir_config)
+
+  dir_isp = dir_config + "/isp"
+  if not os.path.isdir(dir_isp):
+    print "WARNING: Color adjustment files not found. Using default files.\n"
+    sys.stdout.flush()
+    os.system("mkdir -p " + dir_isp)
+    dir_isp_default = dir_res_default + "/config/isp"
+    duplicate_isp_files(dir_isp_default, dir_isp)
+
+  new_rig_format = True
+  file_camera_rig = "camera_rig.json"
+  path_file_camera_rig = dir_config + "/" + file_camera_rig
+  if not os.path.isfile(path_file_camera_rig):
+    print "WARNING: Calibration file not found. Using default file.\n"
+    sys.stdout.flush()
+    path_file_camera_rig_default = dir_res_default + "/config/" + file_camera_rig
+    os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
+  else:
+    json_camera_rig = json.load(open(path_file_camera_rig))
+    if "camera_ring_radius" in json_camera_rig:
+      # If using old format, we also need rectification and intrinsics files
+      new_rig_format = False
+      path_file_rectify = dir_config + "/rectify.yml"
+      if not os.path.isfile(path_file_rectify):
+        print "ERROR: Rectification file (" + path_file_rectify + ") not found.\n"
+        sys.stdout.flush()
+        exit(1)
+      file_intrinsics = "intrinsics.xml"
+      path_file_instrinsics = dir_config + "/" + file_intrinsics
+      if not os.path.isfile(path_file_instrinsics):
+        print "WARNING: Instrinsics file not found. Using default file.\n"
+        sys.stdout.flush()
+        path_file_instrinsics_default = dir_res_default + "/config/" + file_intrinsics
+        os.system("cp " + path_file_instrinsics_default + " " + path_file_instrinsics)
+
+  dir_pole_masks = dest_dir + "/pole_masks"
+  if not os.path.isdir(dir_pole_masks):
+    print "WARNING: Pole masks not found. Using default files.\n"
+    sys.stdout.flush()
+    dir_pole_masks_default = dir_res_default + "/pole_masks"
+    os.system("cp -R " + dir_pole_masks_default + " " + dir_pole_masks)
+
   # Open file (unbuffered)
   file_runtimes = open(dest_dir + "/runtimes.txt", 'w', 0)
 
@@ -310,11 +283,17 @@ if __name__ == "__main__":
 
   os.chdir(surround360_render_dir)
 
-  num_steps = sum([steps_unpack, steps_arrange, steps_isp, steps_rectify, steps_render, steps_ffmpeg])
+  num_steps = sum([steps_unpack, steps_isp, steps_render, steps_ffmpeg])
 
   ### unpack step ###
 
   if steps_unpack:
+    dir_raw = dest_dir + "/raw"
+    if os.path.isdir(dir_raw) and len([f for f in os.listdir(dir_raw) if not f.startswith('.')]) > 0:
+      print "ERROR: raw directory not empty!\n"
+      sys.stdout.flush()
+      exit(1)
+
     # If there is no cameranames we assume binaries are tagged with metadata
     unpack_extra_params = ""
     if not os.path.isfile(binary_prefix + "/cameranames.txt"):
@@ -327,7 +306,7 @@ if __name__ == "__main__":
     unpack_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "BINARY_PREFIX": binary_prefix,
-      "ROOT_DIR": dest_dir,
+      "ROOT_DIR": dir_raw,
       "VERBOSE_LEVEL": 1 if verbose else 0,
       "START_FRAME": start_frame,
       "FRAME_COUNT": frame_count,
@@ -337,38 +316,20 @@ if __name__ == "__main__":
     unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
     run_step("unpack", unpack_command, verbose, dryrun, file_runtimes, num_steps)
 
-  if int(frame_count) == 0 and os.path.isdir(dest_dir + "/vid"):
-    frame_count = len(os.listdir(dest_dir + "/vid"))
-
-  ### arrange step ###
-
-  if steps_arrange:
-    arrange_extra_params = ""
-
-    if enable_pole_removal:
-      arrange_extra_params += " --pole_masks_dir " + pole_masks_dir
-
-    if verbose:
-      arrange_extra_params += " --verbose"
-
-    arrange_params = {
-      "SURROUND360_RENDER_DIR": surround360_render_dir,
-      "ROOT_DIR": dest_dir,
-      "FLAGS_ARRANGE_EXTRA": arrange_extra_params,
-    }
-    arrange_command = ARRANGE_COMMAND_TEMPLATE.replace("\n", " ").format(**arrange_params)
-    run_step("arrange", arrange_command, verbose, dryrun, file_runtimes, num_steps)
-
-  # If unpack not in list of steps, we get frame count from vid directory
+  # If unpack not in list of steps, we get frame count from raw directory
+  cam0_image_dir = dest_dir + "/raw/cam0"
   if int(frame_count) == 0:
-    dir_vid = dest_dir + "/vid"
-    frame_count = len(os.listdir(dest_dir + "/vid")) if os.path.isdir(dir_vid) else 0
+    if os.path.isdir(cam0_image_dir):
+      frame_count = len(os.listdir(cam0_image_dir))
+    else:
+      print "No raw images in " + cam0_image_dir
+      exit(1)
 
   file_runtimes.write("total frames: " + str(frame_count) + "\n")
 
   end_frame = int(start_frame) + int(frame_count) - 1
 
-  ### isp step ###
+  ### ISP step ###
 
   if steps_isp:
     isp_extra_params = ""
@@ -377,9 +338,8 @@ if __name__ == "__main__":
       isp_extra_params += " --verbose"
 
     # Force 16-bit output if input is 16-bit. Else use nbits flag
-    image_dir = dest_dir + "/vid/" + str(start_frame).zfill(6) + "/raw"
-    image_path = image_dir + "/" + list_only_files(image_dir)[0]
-    image = Image.open(image_path)
+    image_path = list_only_files(cam0_image_dir)[0]
+    image = Image.open(cam0_image_dir + "/" + image_path)
     nbits_isp = 16 if (image.mode == "I;16" or int(nbits) == 12) else 8;
 
     isp_params = {
@@ -387,42 +347,12 @@ if __name__ == "__main__":
       "ROOT_DIR": dest_dir,
       "START_FRAME": start_frame,
       "END_FRAME": end_frame,
-      "CAM_TO_ISP_CONFIG_FILE": cam_to_isp_config_file,
+      "ISP_DIR": dir_isp,
       "FLAGS_ISP_EXTRA": isp_extra_params,
       "NBITS": nbits_isp,
     }
     isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
     run_step("isp", isp_command, verbose, dryrun, file_runtimes, num_steps)
-
-  ### rectify step ###
-
-  if steps_rectify and rectify_file == "NONE":
-    print """
-    The 'rectify' step is enabled. The 'rectification file' parameter must not
-    be NONE. Please supply a destination path to write the rectification file.
-    A good path to use is your destination directory /rectify.yml.
-    """
-    exit(1)
-
-  if rectify_file != "NONE" and os.path.isdir(rectify_file):
-    print "The 'rectification file' parameter should be a path to a file, not a directory"
-    exit(1)
-
-  if rectify_file != "NONE" and not rectify_file.endswith(".yml"):
-    print "The 'rectification file' parameter must end with .yml"
-    exit(1)
-
-  if steps_rectify:
-    rectify_params = {
-      "SURROUND360_RENDER_DIR": surround360_render_dir,
-      "ROOT_DIR": dest_dir,
-      "RIG_JSON_FILE": rig_json_file,
-      "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
-      "RECTIFY_FILE": rectify_file,
-      "FRAME_LIST": str(start_frame).zfill(FRAME_NUM_DIGITS),
-    }
-    rectify_command = RECTIFY_COMMAND_TEMPLATE.replace("\n", " ").format(**rectify_params)
-    run_step("rectify", rectify_command, verbose, dryrun, file_runtimes, num_steps)
 
   ### render step ###
 
@@ -440,6 +370,9 @@ if __name__ == "__main__":
 
     if new_rig_format:
       render_extra_params += " --new_rig_format"
+    else:
+      render_extra_params += " --rectify_file " + path_file_rectify
+      render_extra_params += " --src_intrinsic_param_file " + path_file_instrinsics
 
     if enable_render_coloradjust:
       render_extra_params += " --enable_render_coloradjust"
@@ -452,7 +385,7 @@ if __name__ == "__main__":
 
     render_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
-      "FLOW_ALG": flow_alg,
+      "FLOW_ALG": "pixflow_low",
       "ROOT_DIR": dest_dir,
       "QUALITY": quality,
       "START_FRAME": start_frame,
@@ -460,9 +393,7 @@ if __name__ == "__main__":
       "CUBEMAP_WIDTH": cubemap_width,
       "CUBEMAP_HEIGHT": cubemap_height,
       "CUBEMAP_FORMAT": cubemap_format,
-      "SRC_INSTRINSIC_PARAM_FILE": src_intrinsic_param_file,
-      "RECTIFY_FILE": rectify_file,
-      "RIG_JSON_FILE": rig_json_file,
+      "RIG_JSON_FILE": path_file_camera_rig,
       "FLAGS_RENDER_EXTRA": render_extra_params,
     }
     render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
@@ -491,4 +422,3 @@ if __name__ == "__main__":
 
   save_step_runtime(file_runtimes, "TOTAL", timer() - start_time)
   file_runtimes.close()
-

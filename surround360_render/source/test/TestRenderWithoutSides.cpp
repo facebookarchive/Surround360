@@ -39,6 +39,7 @@ using namespace surround360::warper;
 
 DEFINE_string(rig_json_file,          "",       "path to json file drescribing camera array");
 DEFINE_string(imgs_dir,               "",       "path to folder of images with names matching cameras in the rig file");
+DEFINE_string(frame_number,           "",       "frame number (6-digit zero-padded)");
 DEFINE_string(output_data_dir,        "",       "path to write spherical projections for debugging");
 DEFINE_string(output_equirect_path,   "",       "path to write output oculus 360 cubemap");
 DEFINE_bool(enable_top,               false,    "is there a top camera?");
@@ -56,6 +57,7 @@ int main(int argc, char** argv) {
   initSurround360(argc, argv);
   requireArg(FLAGS_rig_json_file, "rig_json_file");
   requireArg(FLAGS_imgs_dir, "imgs_dir");
+  requireArg(FLAGS_frame_number, "frame_number");
   requireArg(FLAGS_output_data_dir, "output_data_dir");
   requireArg(FLAGS_output_equirect_path, "output_equirect_path");
 
@@ -70,7 +72,8 @@ int main(int argc, char** argv) {
       cameraRingRadius);
 
   LOG(INFO) << "verifying image filenames";
-  verifyImageDirFilenamesMatchCameraArray(camModelArrayWithTop, FLAGS_imgs_dir);
+  verifyImageDirFilenamesMatchCameraArray(
+    camModelArrayWithTop, FLAGS_imgs_dir, FLAGS_frame_number);
 
   Mat equirectImage(FLAGS_eqr_height, FLAGS_eqr_width, CV_8UC4);
 

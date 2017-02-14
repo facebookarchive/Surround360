@@ -108,21 +108,29 @@ vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
 
 void verifyImageDirFilenamesMatchCameraArray(
     const vector<CameraMetadata>& cameraArray,
-    const string& imageDir) {
+    const string& imageDir,
+    const string& frameNumber) {
 
   map<string, bool> cameraNameToFileOK;
   for (const CameraMetadata& cam : cameraArray) {
     cameraNameToFileOK[cam.cameraId] =  false;
   }
 
-  vector<string> imageFilenames = getFilesInDir(imageDir, false);
-  for (const string& imageFilename : imageFilenames) {
-    vector<string> parts = stringSplit(imageFilename, '.');
-    if (parts.size() != 2) {
+  string extension;
+  for (int i = 0; i < cameraArray.size(); ++i) {
+    const CameraMetadata& cam = cameraArray[i];
+    const string cameraDir = imageDir + "/" + cam.cameraId;
+    if (i == 0) {
+      extension = getImageFileExtension(cameraDir);
+    }
+    const string imageFilename =
+      cameraDir + "/" + frameNumber + "." + extension;
+    vector<string> partsDir = stringSplit(imageFilename, '/');
+    vector<string> partsFile = stringSplit(imageFilename, '.');
+    if (partsFile.size() != 2) {
       throw VrCamException("expected exactly one . in filename:" + imageFilename);
     }
-    const string prefix = parts[0];
-
+    const string prefix = partsDir[partsDir.size() - 2];
     if (cameraNameToFileOK.find(prefix) == cameraNameToFileOK.end()) {
       throw VrCamException("image doesn't match any camera in json: " + imageFilename);
     }
@@ -138,10 +146,10 @@ void verifyImageDirFilenamesMatchCameraArray(
 }
 
 string getImageFileExtension(const string& imageDir) {
-  // figure out the file extension used by the images.. this is complicated but
-  // its all so we can iterate over the images in the right order.
+  // figure out the file extension used by the images. This is complicated but
+  // it's all so we can iterate over the images in the right order.
   // assumption: no weird mixtures of file extension
-  vector<string> imageFilenames = getFilesInDir(imageDir, false);
+  vector<string> imageFilenames = getFilesInDir(imageDir, false, 1);
   assert(imageFilenames.size() > 0);
   vector<string> firstFilenameParts = stringSplit(imageFilenames[0], '.');
   assert(firstFilenameParts.size() == 2);

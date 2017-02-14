@@ -55,7 +55,8 @@ vector<CameraMetadata> readCameraProjectionModelArrayFromJSON(
 // names.
 void verifyImageDirFilenamesMatchCameraArray(
   const vector<CameraMetadata>& cameraArray,
-  const string& imageDir);
+  const string& imageDir,
+  const string& frameNumber);
 
 // wrapper for imreadExceptionOnFail( for use in std::threads
 static void imreadInStdThread(string path, int flags, Mat* dest) {

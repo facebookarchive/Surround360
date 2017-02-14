@@ -213,6 +213,8 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   ./bin/TestRenderStereoPanorama --help
 ```
 
+* Follow the steps in CALIBRATION.md and RENDER.md to know how to get the best results when using the Surround360 software
+
 * We recommend configuring CMake to compile in Release mode because the code will execute faster. However, you can also set it up for debug mode with:
 ```
   cmake -DCMAKE_BUILD_TYPE=Debug

@@ -31,31 +31,7 @@ python scripts/color_calibrate_all.py \
 
 * Check the file scripts/color_calibrate_all.py for more options. Use the attributes min_area_chart_perc and max_area_chart_perc to set a range for the expected size of the color chart; this is useful when pictures are taken at different distances. Use the attribute black_level_adjust to set the black level of each camera to the median of all the cameras; this is useful when we expect the black level to be the same in all the cameras (note that this is not true for all the sensors.)
 
-To run the pipeline with these new ISP config files we just modify /surround360_render/res/config/isp/cam_to_isp_config.json so that it looks like:
-
-<pre>
-{
-    "cam0": "~/Desktop/color_calibration/isp/isp0.json",
-    "cam1": "~/Desktop/color_calibration/isp/isp1.json",
-    "cam10": "~/Desktop/color_calibration/isp/isp10.json",
-    "cam11": "~/Desktop/color_calibration/isp/isp11.json",
-    "cam12": "~/Desktop/color_calibration/isp/isp12.json",
-    "cam13": "~/Desktop/color_calibration/isp/isp13.json",
-    "cam14": "~/Desktop/color_calibration/isp/isp14.json",
-    "cam15": "~/Desktop/color_calibration/isp/isp15.json",
-    "cam16": "~/Desktop/color_calibration/isp/isp16.json",
-    "cam2": "~/Desktop/color_calibration/isp/isp2.json",
-    "cam3": "~/Desktop/color_calibration/isp/isp3.json",
-    "cam4": "~/Desktop/color_calibration/isp/isp4.json",
-    "cam5": "~/Desktop/color_calibration/isp/isp5.json",
-    "cam6": "~/Desktop/color_calibration/isp/isp6.json",
-    "cam7": "~/Desktop/color_calibration/isp/isp7.json",
-    "cam8": "~/Desktop/color_calibration/isp/isp8.json",
-    "cam9": "~/Desktop/color_calibration/isp/isp9.json"
-}
-</pre>
-
-and then run run_all.py as usual.
+To run the pipeline with these new ISP config files we just need to copy the generated ISP config files to the output directory, e.g. ~/Desktop/render/config/isp/isp[0-16].json, and then run run_all.py as usual.
 
 ## Optical Vignetting Calibration
 
@@ -95,9 +71,9 @@ The steps below describe the geometric calibration process for a camera rig.
 <pre>
 python scripts/geometric_calibration.py \
 --data_dir  ~/Desktop/geometric_calibration \
---rig_json ./res/config/17cmosis_rig.json \
---output_json ~/Desktop/geometric_calibration/17cmosis_calibrated_rig.json \
+--rig_json ./res/config/camera_rig.json \
+--output_json ~/Desktop/geometric_calibration/camera_rig.json \
 --save_debug_images
 <pre>
 
-* This generates a new JSON file, 17cmosis_calibrated_rig.json, to be used in the Rig Geometry File field (rig_json_file flag) when rendering. It also generates debug images under ~/Desktop/geometric_calibration showing the accuracy of the calibration process. NOTE: use the new_rig_format flag to render using this new JSOn file.
+* This generates a new JSON file, camera_rig.json, to be used when rendering by just copying it to the output directory, e.g. ~/Desktop/render/config/camera_rig.json. It also generates debug images under ~/Desktop/geometric_calibration showing the accuracy of the calibration process.

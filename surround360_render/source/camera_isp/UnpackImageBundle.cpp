@@ -8,6 +8,7 @@
 */
 
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
@@ -15,6 +16,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -216,6 +218,7 @@ int main(int argc, char** argv) {
 
   bool isDone = false;
   int percentDonePrev = 0;
+  std::set<std::string> serialNumbers;
   for (int frameNumber = FLAGS_start_frame; frameNumber < FLAGS_start_frame + totalFrameCount / cameraCount; ++frameNumber) {
     for (unsigned int cameraNumber = 0; cameraNumber < cameraCount; ++cameraNumber) {
       const int frameIndex = frameNumber * cameraCount + cameraNumber;
@@ -270,23 +273,43 @@ int main(int argc, char** argv) {
         percentDonePrev = percentDoneCurr;
       }
 
-      string file_tag;
+      std::string serialNumber;
       if (FLAGS_tagged) {
         auto tag = reinterpret_cast<uint32_t*>(&imgbuf[0]);
-        file_tag = to_string(tag[1]);
+        serialNumber = to_string(tag[1]);
       } else {
-        file_tag = cameraNames[cameraNumber];
+        serialNumber = cameraNames[cameraNumber];
       }
+
+      struct stat st = {0};
+      std::string destPathSerialNumber(FLAGS_dest_path + "/" + serialNumber);
+      if (stat(destPathSerialNumber.c_str(), &st) == -1) {
+        mkdir(destPathSerialNumber.c_str(), 0755);
+        serialNumbers.insert(serialNumber);
+      }
+
+      // Prefix zeros to have a 6 digit number
+      static const int kNumDigits = 6;
+      std::string frameNumberStr = to_string(frameNumber);
+      frameNumberStr =
+        std::string(kNumDigits - frameNumberStr.length(), '0') + frameNumberStr;
+
       string outFilename =
-        FLAGS_dest_path + "/img_" +
-        to_string(frameNumber) + "_cam_" +
-        file_tag + "_raw" + to_string(nBits) + ".tiff";
+        destPathSerialNumber + "/" + frameNumberStr + ".tiff";
       imwriteExceptionOnFail(outFilename, outImage, tiffParams);
     }
 
     if (isDone) {
       break;
     }
+  }
+
+  // Rename directories
+  int camIndex = 0;
+  for (std::string sn : serialNumbers) {
+    std::string dirOld(FLAGS_dest_path + "/" + sn);
+    std::string dirNew(FLAGS_dest_path + "/cam" + std::to_string(camIndex++));
+    rename(dirOld.c_str(), dirNew.c_str());
   }
 
   LOG(INFO) << "Closing binary files...";

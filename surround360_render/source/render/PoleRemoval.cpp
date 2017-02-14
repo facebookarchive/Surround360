@@ -31,6 +31,7 @@ using namespace surround360::optical_flow;
 
 void combineBottomImagesWithPoleRemoval(
     const string& imagesDir,
+    const string& frameNumber,
     const string& poleMaskDir,
     const string& prevFrameDataDir,
     const string& outputDataDir,
@@ -46,10 +47,11 @@ void combineBottomImagesWithPoleRemoval(
     const bool flip180,
     Mat& bottomImage) {
 
-  const string bottomImageFilename = bottomCamId + ".png";
-  const string bottomImagePath = imagesDir + "/" + bottomImageFilename;
-  const string bottomImageFilename2 = bottomCam2Id + ".png";
-  const string bottomImagePath2 = imagesDir + "/" + bottomImageFilename2;
+  const string cameraDir = imagesDir + "/" + bottomCamId;
+  const string camera2Dir = imagesDir + "/" + bottomCam2Id;
+  const string bottomImageFilename = frameNumber + ".png";
+  const string bottomImagePath = cameraDir + "/" + bottomImageFilename;
+  const string bottomImagePath2 = camera2Dir + "/" + bottomImageFilename;
   bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
   Mat bottomImage2 = imreadExceptionOnFail(bottomImagePath2, CV_LOAD_IMAGE_COLOR);
   const string poleMaskPath = poleMaskDir + "/" + bottomCamId + ".png";
@@ -91,12 +93,17 @@ void combineBottomImagesWithPoleRemoval(
   if (prevFrameDataDir != "NONE") {
     VLOG(1) << "Reading previous frame flow for bottom-secondary camera: "
       << prevFrameDataDir;
+
+    const string flowPrevDir = outputDataDir + "/flow/" + prevFrameDataDir;
+    const string flowImagesPrevDir =
+      outputDataDir + "/debug/" + prevFrameDataDir + "/flow_images";
+
     prevFrameBottomPoleRemovalFlow = readFlowFromFile(
-      prevFrameDataDir + "/flow/flow_bottom_secondary.bin");
+      flowPrevDir + "/flow_bottom_secondary.bin");
     prevBottomImage = imreadExceptionOnFail(
-      prevFrameDataDir + "/flow_images/bottomImage.png", -1);
+      flowImagesPrevDir + "/bottomImage.png", -1);
     prevBottomImage2 = imreadExceptionOnFail(
-      prevFrameDataDir + "/flow_images/bottomImage2.png", -1);
+      flowImagesPrevDir + "/bottomImage2.png", -1);
   }
 
   OpticalFlowInterface* flowAlg = makeOpticalFlowByName(flowAlgName);
@@ -111,11 +118,14 @@ void combineBottomImagesWithPoleRemoval(
     OpticalFlowInterface::DirectionHint::DOWN);
   delete flowAlg;
 
+  const string flowDir = outputDataDir + "/flow/" + frameNumber;
+  const string flowImagesDir =
+    outputDataDir + "/debug/" + frameNumber + "/flow_images";
   if (saveFlowDataForNextFrame) {
     VLOG(1) << "Serializing bottom-secondary flow and images";
-    saveFlowToFile(flow, outputDataDir + "/flow/flow_bottom_secondary.bin");
-    imwriteExceptionOnFail(outputDataDir + "/flow_images/bottomImage.png", bottomImage);
-    imwriteExceptionOnFail(outputDataDir + "/flow_images/bottomImage2.png", bottomImage2);
+    saveFlowToFile(flow, flowDir + "/flow_bottom_secondary.bin");
+    imwriteExceptionOnFail(flowImagesDir + "/bottomImage.png", bottomImage);
+    imwriteExceptionOnFail(flowImagesDir + "/bottomImage2.png", bottomImage2);
   }
 
   VLOG(1) << "Warping secondary bottom camera to align with primary bottom camera";
@@ -136,10 +146,11 @@ void combineBottomImagesWithPoleRemoval(
     CV_INTER_CUBIC,
     BORDER_CONSTANT);
 
+  const string debugDir = outputDataDir + "/debug/" + frameNumber;
   if (saveDebugImages) {
-    imwriteExceptionOnFail(outputDataDir + "/bottomImage.png", bottomImage);
-    imwriteExceptionOnFail(outputDataDir + "/bottomImage2.png", bottomImage2);
-    imwriteExceptionOnFail(outputDataDir + "/bottomWarp2.png", warpedBottomImage2);
+    imwriteExceptionOnFail(debugDir + "/bottomImage.png", bottomImage);
+    imwriteExceptionOnFail(debugDir + "/bottomImage2.png", bottomImage2);
+    imwriteExceptionOnFail(debugDir + "/bottomWarp2.png", warpedBottomImage2);
   }
 
   Mat adjustedBottomImage2;
@@ -183,7 +194,7 @@ void combineBottomImagesWithPoleRemoval(
   bottomImage = featherAlphaChannel(bottomImage, alphaFeatherSize);
 
   if (saveDebugImages) {
-    imwriteExceptionOnFail(outputDataDir + "/_bottomCombined.png", bottomImage);
+    imwriteExceptionOnFail(debugDir + "/_bottomCombined.png", bottomImage);
   }
 }
 

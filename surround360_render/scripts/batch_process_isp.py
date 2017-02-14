@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 from os import listdir, system
-from os.path import isfile, join
+from os.path import isdir, isfile, join
 from timeit import default_timer as timer
 
 RAW2RGB_COMMAND_TEMPLATE = """
@@ -51,6 +51,7 @@ CAM_TO_BLACKLEVEL = {
 }
 
 def list_only_files(src_dir): return filter(lambda f: f[0] != ".", [f for f in listdir(src_dir) if isfile(join(src_dir, f))])
+def list_only_dirs(src_dir): return filter(lambda d: d[0] != ".", [d for d in listdir(src_dir) if isdir(join(src_dir, d))])
 def run_shell(cmd): return subprocess.call(cmd, shell=True)
 
 if __name__ == "__main__":
@@ -61,7 +62,7 @@ if __name__ == "__main__":
   parser.add_argument('--start_frame', help='first frame index', required=True)
   parser.add_argument('--end_frame', help='last frame index', required=True)
   parser.add_argument('--delete_raws', dest='delete_raws', action='store_true')
-  parser.add_argument('--cam_to_isp_config_file', help='file with mappings cam: isp file', required=True)
+  parser.add_argument('--isp_dir', help='directory containing ISP config files', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
   parser.set_defaults(delete_raws=False)
   args = vars(parser.parse_args())
@@ -72,7 +73,7 @@ if __name__ == "__main__":
   min_frame               = int(args["start_frame"])
   max_frame               = int(args["end_frame"])
   delete_raws             = args["delete_raws"]
-  cam_to_isp_config_file  = args["cam_to_isp_config_file"]
+  isp_dir                 = args["isp_dir"]
   verbose                 = args["verbose"]
   log_dir                 = root_dir + "/logs"
 
@@ -80,7 +81,16 @@ if __name__ == "__main__":
   num_cpus = multiprocessing.cpu_count()
   pool = multiprocessing.Pool(processes=num_cpus)
 
-  cam_to_isp_config = json.load(open(cam_to_isp_config_file))
+  raw_dir = root_dir + "/raw"
+  rgb_dir = root_dir + "/rgb"
+  system("mkdir -p " + rgb_dir)
+
+  cameras_dirs = list_only_dirs(raw_dir)
+  for camera_dir in cameras_dirs:
+    system("mkdir -p " + rgb_dir + "/" + camera_dir)
+
+  # Get file extension from any file
+  raw_extension = os.walk(raw_dir + "/" + cameras_dirs[0]).next()[2][0].split(".")[1]
 
   for i in range(min_frame, max_frame + 1):
     frame_to_process = format(i, "06d")
@@ -88,25 +98,25 @@ if __name__ == "__main__":
     sys.stdout.flush()
 
     start_frame_time = timer()
-    frame_dir = root_dir + "/vid/" + frame_to_process
-    raw_filenames = list_only_files(frame_dir + "/raw")
     isp_commands = []
-    for f in raw_filenames:
-      filename_prefix = f.split(".")[0]
-      raw_img_path = frame_dir + "/raw/" + f
-      dest_rgb_path = frame_dir + "/isp_out/" + filename_prefix + ".png"
+    for camera_dir in cameras_dirs:
+      frame_semi_path = camera_dir + "/" + frame_to_process
+      raw_img_path = raw_dir + "/" + frame_semi_path + "." + raw_extension
+      rgb_img_path = rgb_dir + "/" + frame_semi_path + ".png"
+      isp_config_path = isp_dir + "/" + camera_dir + ".json"
 
       raw2rgb_extra_params = ""
 
-      if delete_raws: raw2rgb_extra_params += " && rm " + raw_img_path
+      if delete_raws:
+        raw2rgb_extra_params += " && rm " + raw_img_path
 
       raw2rgb_params = {
         "SURROUND360_RENDER_DIR": surround360_render_dir,
         "LOG_DIR": log_dir,
         "INPUT_IMAGE_PATH": raw_img_path,
-        "ISP_CONFIG_PATH": cam_to_isp_config[filename_prefix],
-        "BLACK_LEVEL_OFFSET": str(CAM_TO_BLACKLEVEL[filename_prefix]),
-        "OUTPUT_IMAGE_PATH": dest_rgb_path,
+        "ISP_CONFIG_PATH": isp_config_path,
+        "BLACK_LEVEL_OFFSET": str(CAM_TO_BLACKLEVEL[camera_dir]),
+        "OUTPUT_IMAGE_PATH": rgb_img_path,
         "NBITS": nbits,
         "FLAGS_RAW2RGB_EXTRA": raw2rgb_extra_params,
       }

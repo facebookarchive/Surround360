@@ -5,6 +5,7 @@
 #include <future>
 #include <functional>
 #include <unordered_map>
+#include <set>
 #include <queue>
 
 extern "C" {
@@ -24,6 +25,8 @@ int main(int argc, const char *argv[]) {
     footageFiles.emplace_back(argv[k]);
   }
 
+  set<uint32_t> serialNumbers;
+
   for (auto& footageFile : footageFiles) {
     footageFile.open();
 
@@ -37,15 +40,16 @@ int main(int argc, const char *argv[]) {
     for (auto cameraIndex = 0; cameraIndex < footageFile.getNumberOfCameras(); ++cameraIndex) {
       auto taskHandle = std::async(
         std::launch::async,
-        [=, &footageFile] {
+        [=, &footageFile, &serialNumbers] {
           string json;
           for (auto frameIndex = 0; frameIndex < footageFile.getNumberOfFrames(); ++frameIndex) {
             auto frame = footageFile.getFrame(frameIndex, cameraIndex);
             const auto serial = reinterpret_cast<const uint32_t*>(frame)[1];
 
             if (frameIndex == 0) {
+              serialNumbers.insert(serial);
               ostringstream dirStream;
-              dirStream << argv[4] << "/" << serial;
+              dirStream << destinationDir << "/" << serial;
               mkdir(dirStream.str().c_str(), 0755);
               const string fname(jsonConfigDir + "/" + to_string(serial) + ".json");
               ifstream ifs(fname, std::ios::in);
@@ -55,9 +59,9 @@ int main(int argc, const char *argv[]) {
                 (std::istreambuf_iterator<char>()));
             }
 
-	    const auto width = footageFile.getMetadata().width;
-	    const auto height = footageFile.getMetadata().height;
-	    
+            const auto width = footageFile.getMetadata().width;
+            const auto height = footageFile.getMetadata().height;
+
             auto upscaled = Raw12Converter::convertFrame(frame, width, height);
             auto coloredImage = make_unique<vector<uint8_t>>(width * height * 3 * sizeof(uint16_t));
             CameraIspPipe isp(json, true, 16);
@@ -67,10 +71,10 @@ int main(int argc, const char *argv[]) {
 
             Mat outputImage(height, width, CV_16UC3, coloredImage->data());
             ostringstream filenameStream;
-            filenameStream << argv[4] << "/" << serial << "/"
+            filenameStream << destinationDir << "/" << serial << "/"
                            << frameIndex << "-"
-			   << footageFile.getMetadata().bitsPerPixel
-			   << "bpp.png";
+                           << footageFile.getMetadata().bitsPerPixel
+                           << "bpp.png";
 
             imwriteExceptionOnFail(filenameStream.str(), outputImage);
           }});
@@ -80,5 +84,18 @@ int main(int argc, const char *argv[]) {
     for (auto handleIdx = 0; handleIdx < taskHandles.size(); ++handleIdx) {
       taskHandles[handleIdx].get();
     }
+  }
+
+  size_t ordinal = 0;
+  for (auto& serial : serialNumbers) {
+    ostringstream oldDir, newDir;
+    oldDir << destinationDir << "/" << serial;
+    newDir << destinationDir << "/cam" << ordinal;
+
+    const string oldDirname(oldDir.str());
+    const string newDirname(newDir.str());
+
+    rename(oldDirname.c_str(), newDirname.c_str());
+    ++ordinal;
   }
 }

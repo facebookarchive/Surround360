@@ -82,8 +82,8 @@ class CameraIspPipe : public CameraIsp {
     }
 
     // Convert the vignetting curves into tables
-    Mat vignetteCurveTableH = Mat(width, 3, CV_32F);
-    Mat vignetteCurveTableV = Mat(height, 3, CV_32F);
+    vignetteCurveTableH = Mat(width, 3, CV_32F);
+    vignetteCurveTableV = Mat(height, 3, CV_32F);
 
     for (int j = 0;  j < width; ++j) {
       const Vec3f v = curveHAtPixel(j);

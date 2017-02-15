@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <set>
 #include <queue>
+#include <iomanip>
 
 extern "C" {
 #include <sys/stat.h>
@@ -70,12 +71,9 @@ int main(int argc, const char *argv[]) {
             isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()), true);
 
             Mat outputImage(height, width, CV_16UC3, coloredImage->data());
-            static const int kNumDigits = 6;
-            std::string frameNumberStr = std::to_string(frameIndex);
-            frameNumberStr = std::string(kNumDigits - frameNumberStr.length(), '0');
             ostringstream filenameStream;
             filenameStream << destinationDir << "/" << serial << "/"
-                           << frameNumberStr
+                           << setfill('0') << setw(6) << frameIndex
                            << ".png";
 
             imwriteExceptionOnFail(filenameStream.str(), outputImage);

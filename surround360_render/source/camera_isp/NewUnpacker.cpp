@@ -72,7 +72,7 @@ int main(int argc, const char *argv[]) {
             Mat outputImage(height, width, CV_16UC3, coloredImage->data());
             static const int kNumDigits = 6;
             std::string frameNumberStr = std::to_string(frameIndex);
-            frameNumberStr = std::string(kNumDigits - frameNumberStr.length(), ‘0’);
+            frameNumberStr = std::string(kNumDigits - frameNumberStr.length(), '0');
             ostringstream filenameStream;
             filenameStream << destinationDir << "/" << serial << "/"
                            << frameNumberStr

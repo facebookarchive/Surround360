@@ -24,12 +24,12 @@ render
 └── config
     ├── camera_rig.json
     └── isp
-      └── cam[0-16].json
+      └── <serial_number>.json
 </pre>
 
-If these files are not present, the default templates in surround360_render/res/config are used instead. However, it is strongly recommended that the steps in CALIBRATION.md are followed in other to create customized ones. These are:
+It is strongly recommended that the steps in CALIBRATION.md are followed in other to create customized files for each camera. These are:
 
-- config/isp/cam[0-16].json: output of color calibration and optical vignetting calibration
+- config/isp/<serial_number>.json: output of color calibration and optical vignetting calibration
 - config/camera_rig.json: output of geometric calibration
 
 If an older version of the software that did not have geometric calibration steps in CALIBRATION.md is used, the software will expect these files instead:

@@ -170,14 +170,6 @@ def run_step(step, cmd, verbose, dryrun, file_runtimes, num_steps, step_count=[0
 
   save_step_runtime(file_runtimes, step, timer() - start_time)
 
-def duplicate_isp_files(config_isp_path, dest_isp_path):
-  cmosis_fujinon_path = config_isp_path + "/cmosis_fujinon.json"
-  cmosis_sunex_path = config_isp_path + "/cmosis_sunex.json"
-
-  for i in range(0, 17):
-    cmosis_path = cmosis_fujinon_path if i in [0, 15, 16] else cmosis_sunex_path
-    os.system("cp " + cmosis_path + " " + dest_isp_path + "/cam" + str(i) + ".json")
-
 def list_only_files(src_dir): return filter(lambda f: f[0] != ".", [f for f in listdir(src_dir) if isfile(join(src_dir, f))])
 
 if __name__ == "__main__":
@@ -215,10 +207,6 @@ if __name__ == "__main__":
   if USE_GOOEY:
     print_runall_command(args)
 
-  binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
-  binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
-  disk_count = len(binary_files)
-
   if quality not in ["3k", "4k", "6k", "8k"]:
     sys.stderr.write("Unrecognized quality setting: " + quality)
     exit(1)
@@ -237,11 +225,9 @@ if __name__ == "__main__":
 
   dir_isp = dir_config + "/isp"
   if not os.path.isdir(dir_isp):
-    print "WARNING: Color adjustment files not found. Using default files.\n"
+    print "ERROR: No color adjustment files not found in " + dir_isp + "\n"
     sys.stdout.flush()
-    os.system("mkdir -p " + dir_isp)
-    dir_isp_default = dir_res_default + "/config/isp"
-    duplicate_isp_files(dir_isp_default, dir_isp)
+    exit(1)
 
   new_rig_format = True
   file_camera_rig = "camera_rig.json"
@@ -288,6 +274,10 @@ if __name__ == "__main__":
   ### unpack step ###
 
   if steps_unpack:
+    binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
+    binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
+    disk_count = len(binary_files)
+
     dir_raw = dest_dir + "/raw"
     if os.path.isdir(dir_raw) and len([f for f in os.listdir(dir_raw) if not f.startswith('.')]) > 0:
       print "ERROR: raw directory not empty!\n"

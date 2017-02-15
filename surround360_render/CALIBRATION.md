@@ -31,7 +31,7 @@ python scripts/color_calibrate_all.py \
 
 * Check the file scripts/color_calibrate_all.py for more options. Use the attributes min_area_chart_perc and max_area_chart_perc to set a range for the expected size of the color chart; this is useful when pictures are taken at different distances. Use the attribute black_level_adjust to set the black level of each camera to the median of all the cameras; this is useful when we expect the black level to be the same in all the cameras (note that this is not true for all the sensors.)
 
-To run the pipeline with these new ISP config files we just need to copy the generated ISP config files to the output directory, e.g. ~/Desktop/render/config/isp/isp[0-16].json, and then run run_all.py as usual.
+To run the pipeline with these new ISP config files we just need to copy the generated ISP config files to the output directory, e.g. ~/Desktop/render/config/isp/<serial_number>.json, and then run run_all.py as usual. Note that the ISP config files are named after each corresponding camera serial number.
 
 ## Optical Vignetting Calibration
 

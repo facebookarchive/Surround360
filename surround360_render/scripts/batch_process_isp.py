@@ -99,11 +99,13 @@ if __name__ == "__main__":
 
     start_frame_time = timer()
     isp_commands = []
-    for camera_dir in cameras_dirs:
+    isp_files = sorted(list_only_files(isp_dir))
+
+    for idx, camera_dir in enumerate(cameras_dirs):
       frame_semi_path = camera_dir + "/" + frame_to_process
       raw_img_path = raw_dir + "/" + frame_semi_path + "." + raw_extension
       rgb_img_path = rgb_dir + "/" + frame_semi_path + ".png"
-      isp_config_path = isp_dir + "/" + camera_dir + ".json"
+      isp_config_path = isp_dir + "/" + isp_files[idx]
 
       raw2rgb_extra_params = ""
 

@@ -80,7 +80,6 @@ if __name__ == "__main__":
   parser.add_argument('--enable_top', dest='enable_top', action='store_true')
   parser.add_argument('--enable_bottom', dest='enable_bottom', action='store_true')
   parser.add_argument('--enable_pole_removal', dest='enable_pole_removal', action='store_true')
-  parser.add_argument('--enable_render_coloradjust', dest='enable_render_coloradjust', action='store_true')
   parser.add_argument('--resume', dest='resume', action='store_true', help='looks for a previous frame optical flow instead of starting fresh')
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
   parser.add_argument('--new_rig_format', dest='new_rig_format', action='store_true')
@@ -111,7 +110,6 @@ if __name__ == "__main__":
   enable_top                = args["enable_top"]
   enable_bottom             = args["enable_bottom"]
   enable_pole_removal       = args["enable_pole_removal"]
-  enable_render_coloradjust = args["enable_render_coloradjust"]
   resume                    = args["resume"]
   rig_json_file             = args["rig_json_file"]
   new_rig_format            = args["new_rig_format"]
@@ -128,9 +126,6 @@ if __name__ == "__main__":
 
   brightness_adjust_path = root_dir + "/brightness_adjust.txt"
   frame_range = range(min_frame, max_frame + 1)
-  if enable_render_coloradjust and not os.path.isfile(brightness_adjust_path):
-    print "no brightness adjustment file found. the first frame will be rendered twice to generate one, then use it"
-    frame_range = [min_frame] + frame_range
 
   for i in frame_range:
     frame_to_process = format(i, "06d")
@@ -167,13 +162,6 @@ if __name__ == "__main__":
       "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
       "EXTRA_FLAGS": "",
     }
-
-    if enable_render_coloradjust:
-      render_params["EXTRA_FLAGS"] += " --enable_render_coloradjust"
-      if os.path.isfile(brightness_adjust_path):
-        render_params["EXTRA_FLAGS"] += " --brightness_adjustment_src " + brightness_adjust_path
-      else:
-        render_params["EXTRA_FLAGS"] += " --brightness_adjustment_dest " + brightness_adjust_path
 
     if resume or not is_first_frame:
       render_params["PREV_FRAME_DIR"] = prev_frame_dir

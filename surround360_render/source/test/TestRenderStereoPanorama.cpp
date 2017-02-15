@@ -16,7 +16,6 @@
 
 #include "Camera.h"
 #include "CameraMetadata.h"
-#include "ColorAdjustmentSampleLogger.h"
 #include "CvUtil.h"
 #include "Filter.h"
 #include "ImageWarper.h"
@@ -27,7 +26,6 @@
 #include "OpticalFlowFactory.h"
 #include "OpticalFlowVisualization.h"
 #include "PoleRemoval.h"
-#include "SideCameraBrightnessAdjustment.h"
 #include "StringUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
@@ -43,7 +41,6 @@ using namespace surround360::math_util;
 using namespace surround360::optical_flow;
 using namespace surround360::util;
 using namespace surround360::warper;
-using namespace surround360::color_adjust;
 
 DEFINE_string(src_intrinsic_param_file,   "",             "path to read intrinsic matrices");
 DEFINE_string(rig_json_file,              "",             "path to json file drescribing camera array");
@@ -74,9 +71,6 @@ DEFINE_int32(final_eqr_height,            960,            "resize before stackin
 DEFINE_int32(cubemap_width,               1536,           "face width of output cubemaps");
 DEFINE_int32(cubemap_height,              1536,           "face height of output cubemaps");
 DEFINE_string(cubemap_format,             "video",        "either video or photo");
-DEFINE_string(brightness_adjustment_dest, "",             "if non-empty, a brightness adjustment file will be written to this path");
-DEFINE_string(brightness_adjustment_src,  "",             "if non-empty, a brightness level adjustment file will be read from this path");
-DEFINE_bool(enable_render_coloradjust,    false,          "if true, color and brightness of images will be automatically adjusted to make smoother blends (in the renderer, not in the ISP step)");
 DEFINE_bool(new_rig_format,               false,          "use new rig and camera json format");
 
 const Camera::Vector3 kGlobalUp = Camera::Vector3::UnitZ();
@@ -297,7 +291,6 @@ float approximateFov(const Camera::Rig& rig, const bool vertical) {
 
 // project the image of a single camera into spherical coordinates
 void projectCamImageToSphericalThread(
-    float brightnessAdjustment,
     Mat* intrinsic,
     Mat* distCoeffs,
     const CameraMetadata* cam,
@@ -328,13 +321,6 @@ void projectCamImageToSphericalThread(
       FLAGS_side_alpha_feather_size,
       skipUndistort);
   }
-
-  // if we got a non-zero brightness adjustment, apply it
-  if (FLAGS_enable_render_coloradjust && brightnessAdjustment != 0.0f) {
-    projectedImage = addBrightnessAndClamp(
-      projectedImage, brightnessAdjustment);
-  }
-
   *outProjectedImage = projectedImage;
 }
 
@@ -345,8 +331,8 @@ void projectSideToSpherical(
     const float leftAngle,
     const float rightAngle,
     const float topAngle,
-    const float bottomAngle,
-    const float brightnessAdjust) {
+    const float bottomAngle) {
+
   // convert, clone or reference, as needed
   Mat tmp = src;
   if (src.channels() == 3) {
@@ -374,10 +360,6 @@ void projectSideToSpherical(
     rightAngle,
     topAngle,
     bottomAngle);
-  // adjust brightness
-  if (FLAGS_enable_render_coloradjust && brightnessAdjust != 0.0f) {
-    dst += Scalar(brightnessAdjust, brightnessAdjust, brightnessAdjust, 0);
-  }
 }
 
 // project all of the (side) cameras' images into spherical coordinates
@@ -410,33 +392,6 @@ void projectSphericalCamImages(
     }
   }
 
-  // if we got a brightness adjustments file, read the values
-  vector<float> brightnessAdjustments(rig.getSideCameraCount(), 0.0f);
-  if (FLAGS_enable_render_coloradjust &&
-      !FLAGS_brightness_adjustment_src.empty()){
-    LOG(INFO) << "reading brightness adjustment file: "
-      << FLAGS_brightness_adjustment_src;
-    ifstream brightnessAdjustFile(FLAGS_brightness_adjustment_src);
-    if (!brightnessAdjustFile) {
-      throw VrCamException(
-        "file read failed: " + FLAGS_brightness_adjustment_src);
-    }
-    const string strData(
-      (istreambuf_iterator<char>(brightnessAdjustFile)),
-      istreambuf_iterator<char>());
-    vector<string> brightnessStrs = stringSplit(strData , ',');
-    if (brightnessStrs.size() != rig.getSideCameraCount()) {
-      throw VrCamException(
-        "expected number of brightness adjustment values to match number of "
-        "side cameras. got # cameras = " + to_string(rig.getSideCameraCount()) +
-        " and # brightness adjustments = " +
-        to_string(brightnessAdjustments.size()));
-    }
-    for (int i = 0; i < brightnessStrs.size(); ++i) {
-      brightnessAdjustments[i] = std::stof(brightnessStrs[i]);
-    }
-  }
-
   projectionImages.resize(camImages.size());
   vector<std::thread> threads;
   if (rig.isNewFormat()) {
@@ -458,14 +413,12 @@ void projectSphericalCamImages(
         direction + hRadians / 2,
         direction - hRadians / 2,
         vRadians / 2,
-        -vRadians / 2,
-        brightnessAdjustments[camIdx]);
+        -vRadians / 2);
     }
   } else {
     for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
       threads.emplace_back(
         projectCamImageToSphericalThread,
-        brightnessAdjustments[camIdx],
         &intrinsic,
         &distCoeffs,
         &rig.camModelArray[camIdx],
@@ -588,10 +541,8 @@ void renderStereoPanoramaChunksThread(
   }
 
   const int rightIdx = (leftIdx + 1) % numCams;
-  pair<Mat, Mat> lazyNovelChunksLR = novelViewGen->combineLazyNovelViews(
-    lazyNovelViewBuffer,
-    leftIdx,
-    rightIdx);
+  pair<Mat, Mat> lazyNovelChunksLR =
+    novelViewGen->combineLazyNovelViews(lazyNovelViewBuffer);
   *chunkL = lazyNovelChunksLR.first;
   *chunkR = lazyNovelChunksLR.second;
 }
@@ -905,7 +856,6 @@ void prepareBottomImagesThread(
       true, // save data that will be used in the next frame
       FLAGS_poleremoval_flow_alg,
       FLAGS_std_alpha_feather_size,
-      FLAGS_enable_render_coloradjust,
       rig.getBottomCameraId(),
       rig.getBottomCamera2Id(),
       bottomCamUsablePixelsRadius,
@@ -1063,9 +1013,6 @@ void renderStereoPanorama() {
   const string debugDir =
     FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
 
-  ColorAdjustmentSampleLogger::instance().enabled =
-    FLAGS_enable_render_coloradjust;
-
   RigDescription rig(FLAGS_rig_json_file, FLAGS_new_rig_format);
 
   // prepare the bottom camera(s) by doing pole removal and projections in a thread.
@@ -1196,18 +1143,10 @@ void renderStereoPanorama() {
   if (FLAGS_enable_top) {
     topFlowThreadL.join();
     topFlowThreadR.join();
-
-    if (FLAGS_enable_render_coloradjust) {
-      sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
-        sphericalImageL, topSphericalWarpedL);
-      sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
-        sphericalImageR, topSphericalWarpedR);
-    } else {
-      sphericalImageL = flattenLayersDeghostPreferBase(
-        sphericalImageL, topSphericalWarpedL);
-      sphericalImageR = flattenLayersDeghostPreferBase(
-        sphericalImageR, topSphericalWarpedR);
-    }
+    sphericalImageL =
+      flattenLayersDeghostPreferBase(sphericalImageL, topSphericalWarpedL);
+    sphericalImageR =
+      flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
   }
 
   if (FLAGS_enable_bottom) {
@@ -1216,17 +1155,10 @@ void renderStereoPanorama() {
 
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
-    if (FLAGS_enable_render_coloradjust) {
-      sphericalImageL = flattenLayersDeghostPreferBaseAdjustBrightness(
-        sphericalImageL, bottomSphericalWarpedL);
-      sphericalImageR = flattenLayersDeghostPreferBaseAdjustBrightness(
-        sphericalImageR, bottomSphericalWarpedR);
-    } else {
-      sphericalImageL = flattenLayersDeghostPreferBase(
-        sphericalImageL, bottomSphericalWarpedL);
-      sphericalImageR = flattenLayersDeghostPreferBase(
-        sphericalImageR, bottomSphericalWarpedR);
-    }
+    sphericalImageL =
+      flattenLayersDeghostPreferBase(sphericalImageL, bottomSphericalWarpedL);
+    sphericalImageR =
+      flattenLayersDeghostPreferBase(sphericalImageR, bottomSphericalWarpedR);
     flip(sphericalImageL, sphericalImageL, -1);
     flip(sphericalImageR, sphericalImageR, -1);
   }
@@ -1306,33 +1238,6 @@ void renderStereoPanorama() {
   LOG(INFO) << "Creating stereo equirectangular image";
   Mat stereoEquirect = stackVertical(vector<Mat>({sphericalImageL, sphericalImageR}));
   imwriteExceptionOnFail(FLAGS_output_equirect_path, stereoEquirect);
-
-  if (FLAGS_enable_render_coloradjust &&
-      !FLAGS_brightness_adjustment_dest.empty()) {
-    LOG(INFO) << "running side brightness adjustment";
-    ColorAdjustmentSampleLogger& colorSampleLogger =
-      ColorAdjustmentSampleLogger::instance();
-
-    LOG(INFO) << "# color samples = " << colorSampleLogger.samples.size();
-
-    vector<double> sideCamBrightnessAdjustments =
-      computeBrightnessAdjustmentsForSideCameras(
-        rig.getSideCameraCount(), colorSampleLogger.samples);
-
-    LOG(INFO) << "writing brightness adjustments to file: "
-      << FLAGS_brightness_adjustment_dest;
-    ofstream brightnessAdjustFile(FLAGS_brightness_adjustment_dest);
-    if (!brightnessAdjustFile) {
-      throw VrCamException(
-        "file write failed: " + FLAGS_brightness_adjustment_dest);
-    }
-    vector<string> brightnessStrs;
-    for (int i = 0; i < sideCamBrightnessAdjustments.size(); ++i) {
-      brightnessStrs.push_back(to_string(sideCamBrightnessAdjustments[i]));
-    }
-    brightnessAdjustFile << stringJoin(",", brightnessStrs);
-    brightnessAdjustFile.close();
-  }
 
   const double endTime = getCurrTimeSec();
   VLOG(1) << "--- Runtime breakdown (sec) ---";

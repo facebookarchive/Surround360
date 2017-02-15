@@ -124,7 +124,6 @@ def parse_args():
   parser.add_argument('--enable_top',                 help='enable top camera', action='store_true')
   parser.add_argument('--enable_bottom',              help='enable bottom camera', action='store_true')
   parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
-  parser.add_argument('--enable_render_coloradjust',  help='modify color/brightness in the renderer to improve blending (increases runtime)', action='store_true')
   parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
   parser.add_argument('--verbose',                    help='increase output verbosity', action='store_true')
 
@@ -190,7 +189,6 @@ if __name__ == "__main__":
   enable_top                = args["enable_top"]
   enable_bottom             = args["enable_bottom"]
   enable_pole_removal       = args["enable_pole_removal"]
-  enable_render_coloradjust = args["enable_render_coloradjust"]
   save_debug_images         = args["save_debug_images"]
   dryrun                    = args["dryrun"];
   steps_unpack              = args["steps_unpack"]
@@ -363,9 +361,6 @@ if __name__ == "__main__":
     else:
       render_extra_params += " --rectify_file " + path_file_rectify
       render_extra_params += " --src_intrinsic_param_file " + path_file_instrinsics
-
-    if enable_render_coloradjust:
-      render_extra_params += " --enable_render_coloradjust"
 
     if save_debug_images:
       render_extra_params += " --save_debug_images"

@@ -4,7 +4,6 @@ PROJECT(Surround360Render CXX)
 
 FIND_PACKAGE(OpenCV)
 FIND_PACKAGE(Ceres REQUIRED)
-FIND_PACKAGE(Boost COMPONENTS filesystem system)
 
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
@@ -286,32 +285,34 @@ TARGET_LINK_LIBRARIES(
 
 ### NewUnpacker ###
 
-ADD_EXECUTABLE(
-  NewUnpacker
-  source/camera_isp/BinaryFootageFile.cpp
-  source/camera_isp/NewUnpacker.cpp
-  source/camera_isp/Raw12Converter.cpp
-)
+IF (DEFINED HALIDE_DIR)
+  ADD_EXECUTABLE(
+    NewUnpacker
+    source/camera_isp/BinaryFootageFile.cpp
+    source/camera_isp/NewUnpacker.cpp
+    source/camera_isp/Raw12Converter.cpp
+    "${CMAKE_BINARY_DIR}/CameraIspGen8.h"
+    "${CMAKE_BINARY_DIR}/CameraIspGen16.h")
 
-TARGET_COMPILE_FEATURES(UnpackImageBundle PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  NewUnpacker
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  Halide
-  dl
-  tinfo
-  z
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
+  TARGET_LINK_LIBRARIES(
+    NewUnpacker
+    LibVrCamera
+    LibJSON
+    glog
+    gflags
+    ${OpenCV_LIBS}
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    Halide
+    dl
+    tinfo
+    z
+    ${OpenCV_LIBS}
+    ${PLATFORM_SPECIFIC_LIBS})
+  ADD_DEPENDENCIES(NewUnpacker CameraIspGen)
+ENDIF()
 
 ### TestHyperPreview ###
 
@@ -489,6 +490,7 @@ IF (DEFINED HALIDE_DIR)
     source/test/TestVignettingCalibration.cpp
     "${CMAKE_BINARY_DIR}/CameraIspGen8.h" "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
   )
+  ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
   TARGET_COMPILE_FEATURES(TestVignettingCalibration PRIVATE cxx_range_for)
   TARGET_LINK_LIBRARIES(
     TestVignettingCalibration
@@ -505,6 +507,7 @@ IF (DEFINED HALIDE_DIR)
     ${CERES_LIBRARIES}
     Halide
     dl
+    tinfo
     ${PLATFORM_SPECIFIC_LIBS}
   )
 ELSE()
@@ -519,6 +522,7 @@ ELSE()
     gflags
     glog
     folly
+    tinfo
     ${OpenCV_LIBS}
     ${CERES_LIBRARIES}
     ${PLATFORM_SPECIFIC_LIBS}
@@ -541,25 +545,4 @@ TARGET_LINK_LIBRARIES(
   ${OpenCV_LIBS}
   ${CERES_LIBRARIES}
   ${PLATFORM_SPECIFIC_LIBS}
-)
-
-### GeoemtricCalibration ###
-
-ADD_EXECUTABLE(
-  GeometricCalibration
-  source/calibration/GeometricCalibration.cpp
-)
-TARGET_LINK_LIBRARIES(
-  GeometricCalibration
-  LibVrCamera
-  LibJSON
-  gflags
-  glog
-  folly
-  boost_filesystem
-  boost_system
-  double-conversion
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-  ${CERES_LIBRARIES}
 )

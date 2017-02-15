@@ -21,7 +21,7 @@ int main(int argc, const char *argv[]) {
   const string jsonConfigDir(argv[1]);
   const string destinationDir(argv[2]);
 
-  for (auto k = 2; k < argc; ++k) {
+  for (auto k = 3; k < argc; ++k) {
     footageFiles.emplace_back(argv[k]);
   }
 
@@ -70,11 +70,13 @@ int main(int argc, const char *argv[]) {
             isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()), true);
 
             Mat outputImage(height, width, CV_16UC3, coloredImage->data());
+            static const int kNumDigits = 6;
+            std::string frameNumberStr = std::to_string(frameIndex);
+            frameNumberStr = std::string(kNumDigits - frameNumberStr.length(), ‘0’);
             ostringstream filenameStream;
             filenameStream << destinationDir << "/" << serial << "/"
-                           << frameIndex << "-"
-                           << footageFile.getMetadata().bitsPerPixel
-                           << "bpp.png";
+                           << frameNumberStr
+                           << ".png";
 
             imwriteExceptionOnFail(filenameStream.str(), outputImage);
           }});

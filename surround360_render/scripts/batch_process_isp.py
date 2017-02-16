@@ -101,11 +101,11 @@ if __name__ == "__main__":
     isp_commands = []
     isp_files = sorted(list_only_files(isp_dir))
 
-    for idx, camera_dir in enumerate(cameras_dirs):
+    for camera_dir in cameras_dirs:
       frame_semi_path = camera_dir + "/" + frame_to_process
       raw_img_path = raw_dir + "/" + frame_semi_path + "." + raw_extension
       rgb_img_path = rgb_dir + "/" + frame_semi_path + ".png"
-      isp_config_path = isp_dir + "/" + isp_files[idx]
+      isp_config_path = isp_dir + "/" + isp_files[int(camera_dir.split("cam", 1)[1])]
 
       raw2rgb_extra_params = ""
 

@@ -444,7 +444,7 @@ int main(int argc, char* argv[]) {
       {
 #endif
         CameraIsp cameraIsp(json, FLAGS_output_bpp);
-        cameraIsp.setBitsPerPixel(16);
+        cameraIsp.setBitsPerPixel(kIspInputBitsPerPixel);
         cameraIsp.setDemosaicFilter(FLAGS_demosaic_filter);
         cameraIsp.setResize(FLAGS_resize);
         if (FLAGS_disable_tone_curve) {

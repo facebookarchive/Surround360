@@ -225,8 +225,14 @@ int main(int argc, char** argv) {
     CameraIsp cameraIspTest(getJson(ispConfigPathOut), kOutputBpp);
   #endif
 
-  cameraIspTest.setup();
+  cameraIspTest.setBitsPerPixel(kOutputBpp);
   cameraIspTest.loadImage(raw16);
+  cameraIspTest.setup();
+
+  #ifdef USE_HALIDE
+    cameraIspTest.initPipe();
+  #endif
+
   cameraIspTest.getImage(rgbOut);
 
   if (FLAGS_save_debug_images) {

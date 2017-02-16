@@ -587,3 +587,24 @@ TARGET_LINK_LIBRARIES(
   ${CERES_LIBRARIES}
   ${PLATFORM_SPECIFIC_LIBS}
 )
+
+### GeoemtricCalibration ###
+
+ADD_EXECUTABLE(
+  GeometricCalibration
+  source/calibration/GeometricCalibration.cpp
+)
+TARGET_LINK_LIBRARIES(
+  GeometricCalibration
+  LibVrCamera
+  LibJSON
+  gflags
+  glog
+  folly
+  boost_filesystem
+  boost_system
+  double-conversion
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
+  ${CERES_LIBRARIES}
+)

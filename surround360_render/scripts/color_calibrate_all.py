@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
   flags_extra = ""
   if black_level_hole:
-    flags_extra += " --black_level_hole --black_level_hole_pixels " + black_level_hole_pixels
+    flags_extra += " --black_level_hole --black_level_hole_pixels " + str(black_level_hole_pixels)
   elif black_level_y_intercept:
     flags_extra += " --black_level_y_intercept"
   elif black_level != 'NONE':

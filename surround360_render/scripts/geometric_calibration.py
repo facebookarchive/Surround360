@@ -84,20 +84,19 @@ def features_db_to_json(features_database, matches_json):
   for row in cursor:
     image_pair = {}
     pair_id = row[0]
-    inlier_matches = np.fromstring(row[1], dtype=np.uint32).reshape(-1, 2)
-    image_id1, image_id2 = pair_id_to_image_ids(pair_id)
-    image_name1 = images[image_id1]
-    image_name2 = images[image_id2]
 
-    image_pair["image1"] = image_name1
-    image_pair["image2"] = image_name2
+    if row[1] is not None:
+      inlier_matches = np.fromstring(row[1], dtype=np.uint32).reshape(-1, 2)
+      image_id1, image_id2 = pair_id_to_image_ids(pair_id)
+      image_pair["image1"] = images[image_id1]
+      image_pair["image2"] = images[image_id2]
 
-    matches = []
-    for i in range(inlier_matches.shape[0]):
-      match = {"idx1":str(inlier_matches[i][0]), "idx2":str(inlier_matches[i][1])}
-      matches.append(match)
-    image_pair["matches"] = matches
-    data["all_matches"].append(image_pair)
+      matches = []
+      for i in range(inlier_matches.shape[0]):
+        match = {"idx1": str(inlier_matches[i][0]), "idx2": str(inlier_matches[i][1])}
+        matches.append(match)
+      image_pair["matches"] = matches
+      data["all_matches"].append(image_pair)
 
   with open(matches_json, 'w') as outfile:
     json.dump(data, outfile, sort_keys=True, indent=4)

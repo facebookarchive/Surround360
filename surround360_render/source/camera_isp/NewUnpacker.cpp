@@ -1,82 +1,157 @@
-#include "BinaryFootageFile.hpp"
-#include "Raw12Converter.hpp"
-#include "CameraIspPipe.h"
-#include <vector>
-#include <future>
-#include <functional>
-#include <unordered_map>
-#include <set>
-#include <queue>
-#include <iomanip>
+/**
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the BSD-style license found in the
+* LICENSE_render file in the root directory of this subproject. An additional grant
+* of patent rights can be found in the PATENTS file in the same directory.
+*/
 
 extern "C" {
 #include <sys/stat.h>
 #include <sys/types.h>
 }
-using namespace surround360;
-using namespace std;
 
-int main(int argc, const char *argv[]) {
+#include <functional>
+#include <future>
+#include <iomanip>
+#include <queue>
+#include <set>
+#include <unordered_map>
+#include <vector>
+
+#include "BinaryFootageFile.hpp"
+#include "CameraIspPipe.h"
+#include "Raw12Converter.hpp"
+#include "SystemUtil.h"
+
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+
+using namespace std;
+using namespace surround360;
+using namespace surround360::util;
+
+DEFINE_string(isp_dir,          "",     "directory containing ISP config files");
+DEFINE_string(output_dir,       "",     "output directory");
+DEFINE_string(output_raw_dir,   "",     "output directory for raw images (will not save if empty)");
+DEFINE_string(bin_list,         "",     "comma-separated list of .bin files");
+DEFINE_int32(start_frame,       0,      "start frame (per camera)");
+DEFINE_int32(frame_count,       0,      "number of frames to unpack (per camera)");
+
+void makeCameraDir(const string outDir, const uint32_t serial) {
+  ostringstream dirStream;
+  dirStream << outDir << "/" << serial;
+  mkdir(dirStream.str().c_str(), 0755);
+}
+
+string createFilename(
+    const string outDir,
+    const uint32_t serial,
+    const size_t frameIndex,
+    const string extension) {
+
+  static const int kNumDigits = 6;
+  ostringstream filenameStream;
+  filenameStream << outDir << "/" << serial << "/"
+                 << setfill('0') << setw(kNumDigits) << frameIndex
+                 << extension;
+  return filenameStream.str();
+}
+
+int main(int argc, char *argv[]) {
+  initSurround360(argc, argv);
+  requireArg(FLAGS_isp_dir, "isp_dir");
+  requireArg(FLAGS_output_dir, "output_dir");
+  requireArg(FLAGS_bin_list, "bin_list");
+
   static unordered_map<uint32_t, string> ispConfigurations;
   vector<BinaryFootageFile> footageFiles;
-  const string jsonConfigDir(argv[1]);
-  const string destinationDir(argv[2]);
 
-  for (auto k = 3; k < argc; ++k) {
-    footageFiles.emplace_back(argv[k]);
+  istringstream binList(FLAGS_bin_list);
+  string binFile;
+  while (getline(binList, binFile, ',')) {
+    footageFiles.emplace_back(binFile);
   }
 
   set<uint32_t> serialNumbers;
 
   for (auto& footageFile : footageFiles) {
+    LOG(INFO) << "Reading " << footageFile.getFilename() << "...";
+
     footageFile.open();
-
-    clock_t t0, t1;
-    t0 = clock();
-
-    using futureType = std::future<void>;
+    using futureType = future<void>;
     vector<futureType> taskHandles;
-    vector<uint32_t> cameraIndexToSerial(footageFile.getNumberOfCameras());
+    const int numCameras = footageFile.getNumberOfCameras();
+    vector<uint32_t> cameraIndexToSerial(numCameras);
 
-    for (auto cameraIndex = 0; cameraIndex < footageFile.getNumberOfCameras(); ++cameraIndex) {
-      auto taskHandle = std::async(
-        std::launch::async,
+    const int startFrame = FLAGS_start_frame;
+    const int endFrame = FLAGS_frame_count == 0
+      ? footageFile.getNumberOfFrames() - 1
+      : startFrame + FLAGS_frame_count - 1;
+
+    for (int cameraIndex = 0; cameraIndex < numCameras; ++cameraIndex) {
+      auto taskHandle = async(
+        launch::async,
         [=, &footageFile, &serialNumbers] {
           string json;
-          for (auto frameIndex = 0; frameIndex < footageFile.getNumberOfFrames(); ++frameIndex) {
+          int percentDonePrev = 0;
+          for (int frameIndex = startFrame; frameIndex <= endFrame; ++frameIndex) {
             auto frame = footageFile.getFrame(frameIndex, cameraIndex);
             const auto serial = reinterpret_cast<const uint32_t*>(frame)[1];
 
-            if (frameIndex == 0) {
+            if (frameIndex == startFrame) {
               serialNumbers.insert(serial);
-              ostringstream dirStream;
-              dirStream << destinationDir << "/" << serial;
-              mkdir(dirStream.str().c_str(), 0755);
-              const string fname(jsonConfigDir + "/" + to_string(serial) + ".json");
-              ifstream ifs(fname, std::ios::in);
+              makeCameraDir(FLAGS_output_dir, serial);
 
+              if (FLAGS_output_raw_dir != "") {
+                makeCameraDir(FLAGS_output_raw_dir, serial);
+              }
+
+              const string fname(FLAGS_isp_dir + "/" + to_string(serial) + ".json");
+              ifstream ifs(fname, ios::in);
               json = string(
-                (std::istreambuf_iterator<char>(ifs)),
-                (std::istreambuf_iterator<char>()));
+                (istreambuf_iterator<char>(ifs)),
+                (istreambuf_iterator<char>()));
             }
 
             const auto width = footageFile.getMetadata().width;
             const auto height = footageFile.getMetadata().height;
 
             auto upscaled = Raw12Converter::convertFrame(frame, width, height);
-            auto coloredImage = make_unique<vector<uint8_t>>(width * height * 3 * sizeof(uint16_t));
-            CameraIspPipe isp(json, true, 16);
 
+            if (FLAGS_output_raw_dir != "") {
+              const string filenameRaw =
+                createFilename(FLAGS_output_raw_dir, serial, frameIndex, ".tiff");
+              Mat rawImage(height, width, CV_16UC1, upscaled->data());
+              imwriteExceptionOnFail(filenameRaw, rawImage, util::tiffParams);
+            }
+
+            const int imageSize = width * height * 3 * sizeof(uint16_t);
+            auto coloredImage = make_unique<vector<uint8_t>>(imageSize);
+
+            static const bool kFast = false;
+            static const int kOutputBpp = 16;
+            CameraIspPipe isp(json, kFast, kOutputBpp);
+            isp.setBitsPerPixel(footageFile.getBitsPerPixel());
+            isp.enableToneMap();
             isp.loadImage(reinterpret_cast<uint8_t*>(upscaled->data()), width, height);
-            isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()), true);
+            isp.setup();
+            isp.initPipe();
+            isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()));
 
             Mat outputImage(height, width, CV_16UC3, coloredImage->data());
-            ostringstream filenameStream;
-            filenameStream << destinationDir << "/" << serial << "/"
-                           << setfill('0') << setw(6) << frameIndex
-                           << ".png";
+            const string filename =
+              createFilename(FLAGS_output_dir, serial, frameIndex, ".png");
+            imwriteExceptionOnFail(filename, outputImage);
 
-            imwriteExceptionOnFail(filenameStream.str(), outputImage);
+            if (cameraIndex == 0) {
+              const int percentDoneCurr =
+                (frameIndex - startFrame + 1) * 100 / FLAGS_frame_count;
+              LOG_IF(INFO, percentDoneCurr != percentDonePrev)
+                << "Percent done " << percentDoneCurr << "%";
+              percentDonePrev = percentDoneCurr;
+            }
           }});
       taskHandles.push_back(move(taskHandle));
     }
@@ -86,11 +161,13 @@ int main(int argc, const char *argv[]) {
     }
   }
 
+  // Rename output directories from serial number to camN, sorted by serial
+  // number
   size_t ordinal = 0;
   for (auto& serial : serialNumbers) {
     ostringstream oldDir, newDir;
-    oldDir << destinationDir << "/" << serial;
-    newDir << destinationDir << "/cam" << ordinal;
+    oldDir << FLAGS_output_dir << "/" << serial;
+    newDir << FLAGS_output_dir << "/cam" << ordinal;
 
     const string oldDirname(oldDir.str());
     const string newDirname(newDir.str());

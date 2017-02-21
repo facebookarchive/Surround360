@@ -125,6 +125,10 @@ bool BinaryFootageFile::isMetadataValid() const {
   return metadata.magic == 0xfaceb00c;
 }
 
+const std::string BinaryFootageFile::getFilename() const {
+  return filename;
+}
+
 const uint8_t* BinaryFootageFile::getFrame(
   const uint32_t frameNumber, const uint32_t cameraNumber) const {
   // frame access pattern is sequential. when we reach next frame,
@@ -152,6 +156,10 @@ const size_t BinaryFootageFile::getNumberOfFrames() const {
 
 const size_t BinaryFootageFile::getFrameSize() const {
   return size_t(metadata.width * metadata.height * metadata.bitsPerPixel / CHAR_BIT);
+}
+
+const size_t BinaryFootageFile::getBitsPerPixel() const {
+  return metadata.bitsPerPixel;
 }
 
 const void* BinaryFootageFile::calculateFrameAddress(const uint32_t frameNumber, const uint32_t cameraNumber) const {

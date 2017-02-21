@@ -328,7 +328,7 @@ if __name__ == "__main__":
     # Force 16-bit output if input is 16-bit. Else use nbits flag
     image_path = list_only_files(cam0_image_dir)[0]
     image = Image.open(cam0_image_dir + "/" + image_path)
-    nbits_isp = 16 if (image.mode == "I;16" or int(nbits) == 12) else 8;
+    nbits_isp = 16 if (image.mode == "I;16" or int(nbits) == 12) else 8
 
     isp_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,

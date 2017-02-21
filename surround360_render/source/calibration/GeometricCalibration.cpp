@@ -52,14 +52,15 @@ void buildCameraIndexMaps(const Camera::Rig& rig) {
 }
 
 // an image path is assumed to be of the form:
-//   <frame index>/ ... /<camera id>.<extension>
-// e.g. 1/cam2.bmp or 000000/isp_out/cam14.png
+// .../<camera id>/<frame index>.<extension>
+// e.g. 1/cam2/000123.bmp or rgb/cam14/000123.png
 std::string getCameraIdFromPath(const boost::filesystem::path& image) {
-  return image.stem().native();
+  boost::filesystem::path target(image);
+  return target.remove_filename().filename().native();
 }
 
 int getFrameIndexFromPath(const boost::filesystem::path& image) {
-  return std::stoi(image.begin()->native());
+  return std::stoi(image.stem().native());
 }
 
 bool hasCameraIndex(const boost::filesystem::path& image) {

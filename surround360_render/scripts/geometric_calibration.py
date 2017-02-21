@@ -1,4 +1,12 @@
+# Copyright (c) 2016-present, Facebook, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE_render file in the root directory of this subproject. An additional grant
+# of patent rights can be found in the PATENTS file in the same directory.
+
 import argparse
+import cv2
 import datetime
 import json
 import numpy as np
@@ -132,6 +140,14 @@ def pair_id_to_image_ids(pair_id):
   image_id1 = (pair_id - image_id2) / k8mersenne
   return image_id1, image_id2
 
+def list_only_files_recursive(src_dir):
+  files = []
+  for r, d, f in os.walk(src_dir):
+    for fn in f:
+      if fn[0] != ".":
+        files.append(os.path.join(r, fn))
+  return files
+
 if __name__ == "__main__":
   args = parse_args()
   data_dir            = args["data_dir"]
@@ -147,6 +163,14 @@ if __name__ == "__main__":
   file_runtimes = open(data_dir + "/runtimes.txt", 'w', 0)
 
   start_time = timer()
+
+  print "Converting images to 8-bit..."
+  for filename in list_only_files_recursive(data_dir):
+    image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+    if image is not None and image.dtype == np.uint16:
+      print filename + "..."
+      image = (255.0 / (2**16 - 1) * image).astype(np.uint8)
+      cv2.imwrite(filename, image)
 
   print "Extracting features via COLMAP..."
   colmap_db_path = data_dir + "/colmap.db"

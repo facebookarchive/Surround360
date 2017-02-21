@@ -65,13 +65,13 @@ The steps below describe the geometric calibration process for a camera rig.
 
 * Capture a single frame using the Surround360 capturing software in a scene with plenty of features, that is, containing objects with sharp edges and corners of different sizes. A good example is the interior of an office.
 
-* Unpack the frames and run the ISP step to get RGB images. Put them in a separate directory. For this example we assume they are in ~/Desktop/geometric_calibration/000000/isp_out/cam[0-16].png
+* Unpack the frames and run the ISP step to get RGB images. Put them in a separate directory. For this example we assume they are in ~/Desktop/geometric_calibration/rgb/cam[0-16]/000000.png
 
-* Go to /surround360_render and run the following command:
+* Go to surround360_render and run the following command:
 <pre>
 python scripts/geometric_calibration.py \
 --data_dir  ~/Desktop/geometric_calibration \
---rig_json ./res/config/camera_rig.json \
+--rig_json $PWD/res/config/camera_rig.json \
 --output_json ~/Desktop/geometric_calibration/camera_rig.json \
 --save_debug_images
 <pre>

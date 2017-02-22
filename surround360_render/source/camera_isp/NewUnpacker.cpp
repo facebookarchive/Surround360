@@ -23,6 +23,7 @@ extern "C" {
 #include "BinaryFootageFile.hpp"
 #include "CameraIspPipe.h"
 #include "Raw12Converter.hpp"
+#include "StringUtil.h"
 #include "SystemUtil.h"
 
 #include <gflags/gflags.h>
@@ -40,9 +41,8 @@ DEFINE_int32(start_frame,       0,      "start frame (per camera)");
 DEFINE_int32(frame_count,       0,      "number of frames to unpack (per camera)");
 
 void makeCameraDir(const string outDir, const uint32_t serial) {
-  ostringstream dirStream;
-  dirStream << outDir << "/" << serial;
-  mkdir(dirStream.str().c_str(), 0755);
+  const string dir = outDir + "/" + to_string(serial);
+  mkdir(dir.c_str(), 0755);
 }
 
 string createFilename(
@@ -52,11 +52,8 @@ string createFilename(
     const string extension) {
 
   static const int kNumDigits = 6;
-  ostringstream filenameStream;
-  filenameStream << outDir << "/" << serial << "/"
-                 << setfill('0') << setw(kNumDigits) << frameIndex
-                 << extension;
-  return filenameStream.str();
+  return outDir + "/" + std::to_string(serial)
+    + "/" + intToStringZeroPad(frameIndex, kNumDigits) + extension;
 }
 
 int main(int argc, char *argv[]) {
@@ -68,9 +65,9 @@ int main(int argc, char *argv[]) {
   static unordered_map<uint32_t, string> ispConfigurations;
   vector<BinaryFootageFile> footageFiles;
 
-  istringstream binList(FLAGS_bin_list);
-  string binFile;
-  while (getline(binList, binFile, ',')) {
+  std::istringstream binList(FLAGS_bin_list);
+  std::string binFile;
+  while (std::getline(binList, binFile, ',')) {
     footageFiles.emplace_back(binFile);
   }
 
@@ -80,7 +77,7 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Reading " << footageFile.getFilename() << "...";
 
     footageFile.open();
-    using futureType = future<void>;
+    using futureType = std::future<void>;
     vector<futureType> taskHandles;
     const int numCameras = footageFile.getNumberOfCameras();
     vector<uint32_t> cameraIndexToSerial(numCameras);
@@ -91,8 +88,8 @@ int main(int argc, char *argv[]) {
       : startFrame + FLAGS_frame_count - 1;
 
     for (int cameraIndex = 0; cameraIndex < numCameras; ++cameraIndex) {
-      auto taskHandle = async(
-        launch::async,
+      auto taskHandle = std::async(
+        std::launch::async,
         [=, &footageFile, &serialNumbers] {
           string json;
           int percentDonePrev = 0;
@@ -104,15 +101,15 @@ int main(int argc, char *argv[]) {
               serialNumbers.insert(serial);
               makeCameraDir(FLAGS_output_dir, serial);
 
-              if (FLAGS_output_raw_dir != "") {
+              if (!FLAGS_output_raw_dir.empty()) {
                 makeCameraDir(FLAGS_output_raw_dir, serial);
               }
 
               const string fname(FLAGS_isp_dir + "/" + to_string(serial) + ".json");
-              ifstream ifs(fname, ios::in);
+              ifstream ifs(fname, std::ios::in);
               json = string(
-                (istreambuf_iterator<char>(ifs)),
-                (istreambuf_iterator<char>()));
+                (std::istreambuf_iterator<char>(ifs)),
+                (std::istreambuf_iterator<char>()));
             }
 
             const auto width = footageFile.getMetadata().width;
@@ -120,7 +117,7 @@ int main(int argc, char *argv[]) {
 
             auto upscaled = Raw12Converter::convertFrame(frame, width, height);
 
-            if (FLAGS_output_raw_dir != "") {
+            if (!FLAGS_output_raw_dir.empty()) {
               const string filenameRaw =
                 createFilename(FLAGS_output_raw_dir, serial, frameIndex, ".tiff");
               Mat rawImage(height, width, CV_16UC1, upscaled->data());

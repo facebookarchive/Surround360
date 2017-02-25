@@ -26,6 +26,9 @@ namespace util {
 using namespace std;
 using namespace cv;
 
+// 259: TIFF compression tag. 1: dump mode
+static const vector<int> tiffParams = {259, 1};
+
 // wrapper for cv::imread which throws an exception if loading fails
 Mat imreadExceptionOnFail(const string& filename, const int flags = IMREAD_COLOR);
 
@@ -70,25 +73,11 @@ Mat flattenLayersDeghostPreferBase(
   const Mat& bottomLayer,
   const Mat& topLayer);
 
-// similar to flattenLayersDeghostPreferBase, but also applies a correction to
-// brightness in the top layer to minimize the difference in brightness.
-Mat flattenLayersDeghostPreferBaseAdjustBrightness(
-  const Mat& bottomLayer,
-  const Mat& topLayer);
-
-// adds val to the 3 color channels of image, and clamps to avoid overflow
-Mat addBrightnessAndClamp(const Mat& image, const float val);
-
 // build a linear regression model that maps colors in imageToAdjust to
 // corresponding colors in targetImage. the model is of the form R^4->R^3.
 vector<vector<float>> buildColorAdjustmentModel(
   const Mat& targetImage,
   const Mat& imageToAdjust);
-
-// apply a linear color adjustment model and clamp any overflow
-Mat applyColorAdjustmentModel(
-  const Mat& image,
-  const vector<vector<float>>& model);
 
 // bottomLayer can be either 3 or 4 channel, and topLayer must be 4-channel
 template <typename BasePixelType>

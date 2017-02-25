@@ -72,9 +72,7 @@ struct NovelViewUtil {
     const Mat& imageL,
     const Mat& imageR,
     const Mat& flowMagL,
-    const Mat& flowMagR,
-    const int leftImageIdx,
-    const int rightImageIdx);
+    const Mat& flowMagR);
 };
 
 // the is an abstract base class for novel view generators
@@ -132,9 +130,7 @@ public:
   // left and right image indices are passed in so we can get samples of matched
   // pixels for the purpose of color calibration.
   virtual pair<Mat, Mat> combineLazyNovelViews(
-    const LazyNovelViewBuffer& lazyBuffer,
-    const int leftImageIdx,
-    const int rightImageIdx) = 0;
+    const LazyNovelViewBuffer& lazyBuffer) = 0;
 
   // for debugging
   virtual Mat getFlowLtoR() { return Mat(); }
@@ -164,10 +160,7 @@ public:
     const Mat& opticalFlow,
     const bool invertT);
 
-  pair<Mat, Mat> combineLazyNovelViews(
-    const LazyNovelViewBuffer& lazyBuffer,
-    const int leftImageIdx,
-    const int rightImageIdx);
+  pair<Mat, Mat> combineLazyNovelViews(const LazyNovelViewBuffer& lazyBuffer);
 
   Mat getFlowLtoR() { return flowLtoR; }
   Mat getFlowRtoL() { return flowRtoL; }

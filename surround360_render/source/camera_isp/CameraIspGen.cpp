@@ -223,7 +223,7 @@ class CameraIspGen
       0))));
 
     // Homogenity calulation over a diameter size region
-    const int w = 2;
+    const int w = 4;
     const int diameter = 2 * w + 1;
     const int diameterSquared = diameter * diameter;
     RDom d(0, diameter, 0, diameter);
@@ -243,18 +243,12 @@ class CameraIspGen
     // green channel estimate based on how horizontal or vertical the
     // region is.
     Func g;
-    Expr alpha = cast<float>(hCount(x, y)) / float(diameterSquared);
-    g(x, y) = lerp(gV(x, y), gH(x, y), alpha);
-
-    // We take the log of green channel which helps to supress chroma
-    // ringing and noise.
-    Func gp;
-    gp(x, y) = log(1.0f + g(x, y));
+    g(x, y) = select(hCount(x, y) < diameterSquared / 2, gV(x, y), gH(x, y));
 
     // Red and blue minus the log of the green channel
     Func rmg, bmg;
-    rmg(x, y) = rawRed(x, y) - gp(x, y);
-    bmg(x, y) = rawBlue(x, y) - gp(x, y);
+    rmg(x, y) = rawRed(x, y) - g(x, y);
+    bmg(x, y) = rawBlue(x, y) - g(x, y);
 
     // Use local box style filtering to estimate r-g and b-g
     // channels. Adding the g channel back in.
@@ -265,7 +259,7 @@ class CameraIspGen
       select(greenBluePixel(bayerPattern), (rmg(x_2, y_1) + rmg(x, y_1) + rmg(x2, y_1) + rmg(x_2, y1) + rmg(x, y1) + rmg(x2, y1)) / 6.0f,
       select(bluePixel(bayerPattern),      (rmg(x1, y1) + rmg(x1, y_1) + rmg(x_1, y1) + rmg(x_1, y_1)) / 4.0f,
       0))))
-      + gp(x, y);
+      + g(x, y);
 
     b(x, y) =
       select(redPixel(bayerPattern),       (bmg(x1, y1) + bmg(x1, y_1) + bmg(x_1, y1) + bmg(x_1, y_1)) / 4.0f,
@@ -273,7 +267,7 @@ class CameraIspGen
       select(greenBluePixel(bayerPattern), (bmg(x_1, y_2) + bmg(x_1, y) + bmg(x_1, y2) + bmg(x1, y_2) + bmg(x1, y) + bmg(x1, y2)) / 6.0f,
       select(bluePixel(bayerPattern),      (bmg(x, y) + bmg(x, y2) + bmg(x, y_2) + bmg(x2, y) + bmg(x_2, y)) / 5.0f,
       0))))
-      + gp(x, y);
+      + g(x, y);
 
     demosaiced(x, y, c) =
       select(
@@ -285,43 +279,36 @@ class CameraIspGen
 
     gV.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     gH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     dV.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     dH.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     g.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     r.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
 
     b.compute_at(toneCorrected, yi)
       .store_at(toneCorrected, yo)
-      .parallel(y)
       .vectorize(x, kVec, TailStrategy::RoundUp)
       .fold_storage(y, 64);
   }
@@ -348,6 +335,13 @@ class CameraIspGen
     // x_y = the value of channel x at a site in the input of channel y
     // gb refers to green sites in the blue rows
     // gr refers to green sites in the red rows
+
+    // We want to express black level, white balance, and clamping as A(x - B)
+    // Assuming x in [0, 1]
+    // y = [(WB(x - BL)/(1 - BL)) - CLmin] / (CLmax - CLmin)
+    //   = WB[x - (BL + CLmin(1 - BL) / WB)] / [(1 - BL)(CLmax - CLmin)]
+    //   = A(x - B),
+    //     A = WB / [(1 - BL)(CLmax - CLmin)], B = BL + CLmin(1 - BL) / WB
 
     Expr minRawR = blackLevelR;
     Expr minRawG = blackLevelG;
@@ -460,9 +454,9 @@ class CameraIspGen
 
   Func lp(
       Func input,
-      Expr height) {
-    const float alpha = powf(0.25f, 1.0f/4.0f);
-    const float alphaComp = 1.0f - alpha;
+      Expr height,
+      Expr alpha) {
+    Expr alphaComp = 1.0f - alpha;
 
     Func blur("blur");
     // Classic exponetially weighted two-tap IIR filter
@@ -486,9 +480,7 @@ class CameraIspGen
     transpose
       .compute_root()
       .tile(x, y, xo, yo, x, y, 8, 8)
-      .vectorize(x, kVec)
-      .parallel(yo)
-      .parallel(c);
+      .vectorize(x, kVec);
 
     blur.
       compute_at(transpose, yo);
@@ -515,23 +507,28 @@ class CameraIspGen
       Expr sR,
       Expr sG,
       Expr sB,
+      Expr alpha,
+      Param<float> noiseCore,
       Param<bool> BGR,
       int outputBpp) {
 
     Func lowPass("lowPass");
     Func lowPass0("lowPass0");
-    lowPass0 = lp(input, height);
-    lowPass = lp(lowPass0, width);
+    lowPass0 = lp(input, height, alpha);
+    lowPass = lp(lowPass0, width, alpha);
 
     Func highPass("hp");
     highPass(x, y, c) =  cast<float>(input(x, y, c)) - lowPass(x, y, c);
+
+    Func noiseGain("noiseGain");
+    noiseGain(x, y, c) = 1.0f - exp(-(highPass(x, y, c) * highPass(x, y, c) * noiseCore));
 
     Expr cp = select(BGR == 0, c, 2 - c);
     const int range = (1 << outputBpp) - 1;
 
     Expr outputVal =
       clamp(
-          lowPass(x, y, cp) + highPass(x, y, cp) *
+          lowPass(x, y, cp) + highPass(x, y, cp) * noiseGain(x, y, c) *
           select(cp == 0, sR, cp == 1, sG, sB),
           0, range);
 
@@ -549,9 +546,7 @@ class CameraIspGen
     sharpened
       .compute_root()
       .split(y, yo, yi, kStripSize)
-      .vectorize(yi, kVec)
-      .parallel(yo)
-      .parallel(c);
+      .vectorize(yi, kVec);
 
     return sharpened;
   }
@@ -579,6 +574,8 @@ class CameraIspGen
       Param<float> sharpenningR,
       Param<float> sharpenningG,
       Param<float> sharpenningB,
+      Param<float> sharpeningSupport,
+      Param<float> noiseCore,
       ImageParam ccm,
       ImageParam toneTable,
       Param<bool> BGR,
@@ -611,7 +608,8 @@ class CameraIspGen
       Expr cp = select(BGR == 0, c, 2 - c);
       ispOutput(x, y, c) = toneCorrected(x , y, cp);
     } else {
-      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, BGR, outputBpp);
+      Expr alpha = pow(sharpeningSupport, 1.0f/4.0f);
+      ispOutput = applyUnsharpMask(toneCorrected, width, height, sR, sG, sB, alpha, noiseCore, BGR, outputBpp);
     }
     // Schedule it using local vars
     Var yii("yii"), xi("xi");
@@ -632,8 +630,7 @@ class CameraIspGen
       .split(yi, yi, yii, 2)
       .split(x, x, xi, 2*kVec, TailStrategy::RoundUp)
       .reorder(xi, c, yii, x, yi, yo)
-      .vectorize(xi, 2 * kVec)
-      .parallel(yo);
+      .vectorize(xi, 2 * kVec);
 
     ispOutput
       .output_buffer()
@@ -671,6 +668,8 @@ int main(int argc, char **argv) {
   Param<float> sharpenningR("sharpenningR");
   Param<float> sharpenningG("sharpenningG");
   Param<float> sharpenningB("sharpenninngB");
+  Param<float> sharpeningSupport("sharpeningSupport");
+  Param<float> noiseCore("noiseCore");
   ImageParam ccm(Float(32), 2, "ccm");
   ImageParam toneTable(UInt(FLAGS_output_bpp), 2, "toneTable");
   Param<bool> BGR;
@@ -697,7 +696,7 @@ int main(int argc, char **argv) {
       blackLevelR, blackLevelG, blackLevelB,
       whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
       clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-      sharpenningR, sharpenningG, sharpenningB,
+      sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
       ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   Func cameraIspFast =
@@ -706,7 +705,7 @@ int main(int argc, char **argv) {
         blackLevelR, blackLevelG, blackLevelB,
         whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
         clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-        sharpenningR, sharpenningG, sharpenningB,
+        sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
         ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
@@ -714,7 +713,7 @@ int main(int argc, char **argv) {
     blackLevelR, blackLevelG, blackLevelB,
     whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
     clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-    sharpenningR, sharpenningG, sharpenningB,  ccm, toneTable,  BGR, bayerPattern};
+    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling

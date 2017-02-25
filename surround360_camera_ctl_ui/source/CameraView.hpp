@@ -54,7 +54,7 @@ namespace surround360 {
     GLuint m_pbo[2];
     int m_pboIdx;
     GLuint m_histogramGeometry;
-    void* rawBytes;
+    std::vector<std::uint8_t> rawBytes;
     CameraIspPipe m_isp;
     std::unique_ptr<std::vector<float>> cameraRotations;
     std::vector<std::uint32_t> m_histogram;
@@ -67,7 +67,8 @@ namespace surround360 {
     void reshape(GLuint progid);
     void initTextures();
     void init();
-    void convertPreviewFrame(const unsigned int bpp);
+    void convertPreviewFrame();
+    uint32_t bitsPerPixelForPreview;
 
   public:
     CameraView(Gtk::GLArea& glarea);
@@ -88,6 +89,6 @@ namespace surround360 {
       currentlyShowing = idx;
     }
 
-    void updatePreviewFrame(void *bytes);
+    void updatePreviewFrame(const void *bytes, const size_t size, const uint32_t bitsPerPixel);
   };
 }

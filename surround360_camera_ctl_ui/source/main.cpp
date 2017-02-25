@@ -25,10 +25,11 @@ using namespace std;
 using namespace surround360;
 
 int main(int argc, char *argv[]) {
-  auto app = Gtk::Application::create(argc, argv, "surround360.camera_control");
+  std::ios::sync_with_stdio(false);
 
+  Gtk::Main kit(argc, argv);
   MainWindow window;
-  app->run(window);
+  kit.run(window);
 
   return 0;
 }

@@ -46,7 +46,7 @@ namespace surround360 {
     int startCapture();
     int setMaster();
 
-    void* getFrame();
+    void* getFrame(void* opaque);
     unsigned int getDroppedFramesCounter() const;
     int getSerialNumber() const;
     int getInterfaceSpeed() const;
@@ -104,6 +104,10 @@ namespace surround360 {
     unsigned int m_width {2448};
     unsigned int m_height {2048};
 
+    const uint32_t kDataFlashCtrl = 0x1240;
+    const uint32_t kDataFlashData = 0x1244;
+    char *cameraBuffers;
+    
   private:
     static fc::BusManager& getBusManager();
 
@@ -163,6 +167,16 @@ namespace surround360 {
     void setPixelFormat(fc::PixelFormat pf);
 
     void getPixelFormatFromBitDepth(fc::PixelFormat* pf, unsigned int nBits);
+
+    uint32_t readRegister(uint32_t address);
+    void writeRegister(uint32_t address, uint32_t value);
+    bool isDataFlashSupported();
+    uint32_t getDataFlashSize();
+    uint64_t getDataFlashOffset();
+    void commitPageToDataFlash();
+    void throwError(const fc::Error& error);
+
+    void readFileAtIndex(uint32_t idx);
 
     friend std::ostream& operator<<(
       std::ostream& stream,

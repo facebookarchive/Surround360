@@ -28,7 +28,9 @@ PointGreyCamera::PointGreyCamera(
   : m_camera(camera),
     m_guid(guid),
     m_master(false),
-    m_ifaceType(iftype) {
+    m_ifaceType(iftype),
+    cameraBuffers(nullptr)
+{
 }
 
 BusManager& PointGreyCamera::getBusManager() {
@@ -88,19 +90,18 @@ shared_ptr<PointGreyCamera> PointGreyCamera::getCamera(
   return pgcam;
 }
 
-void* PointGreyCamera::getFrame() {
-  Image rawImage;
-  ImageMetadata metadata;
+void* PointGreyCamera::getFrame(void* opaque) {
+  fc::Image* img = reinterpret_cast<fc::Image*>(opaque);
 
-  Error error = m_camera->RetrieveBuffer(&rawImage);
+  Error error = m_camera->RetrieveBuffer(img);
+
   if (error != PGRERROR_OK) {
     throw "Error retrieving frame buffer.";
   }
 
-  metadata = rawImage.GetMetadata();
-  m_droppedFrames = metadata.embeddedFrameCounter;
+  m_droppedFrames = img->GetMetadata().embeddedFrameCounter;
 
-  return rawImage.GetData();
+  return img->GetData();
 }
 
 int PointGreyCamera::toggleStrobeOut(int pin, bool onOff) {
@@ -159,6 +160,9 @@ int PointGreyCamera::stopCapture() {
 }
 
 int PointGreyCamera::detach() {
+  toggleStrobeOut(2, false);
+  toggleStrobeOut(3, false);
+  m_camera->StopCapture();
   fc::Error error = m_camera->Disconnect();
   return error.GetType();
 }
@@ -350,10 +354,17 @@ int PointGreyCamera::init(
   // Set grabbing mode and buffer retrieval timeout
   setCameraGrabMode(timeoutBuffer);
 
-  // unsigned long long sz = (7ull << 20) * 100ull;
-  // auto ptr = (unsigned char*)memalign(4096, sz);
-  // assert(ptr != nullptr);
-  // m_camera->SetUserBuffers(ptr, 7ull << 20, 100);
+  const size_t kPageSize = 4096;
+  const size_t kHorizRes = 2048;
+  const size_t kNumBuffers = 7;
+  const int kSingleCameraBufferSize = kPageSize * kHorizRes * kNumBuffers;
+  cameraBuffers = reinterpret_cast<char*>(memalign(kPageSize, kSingleCameraBufferSize));
+
+  if (cameraBuffers == nullptr) {
+    throw "Not enough memory to allocate camera buffers";
+  }
+  m_camera->SetUserBuffers(
+    reinterpret_cast<unsigned char*>(cameraBuffers), kPageSize * kHorizRes, kNumBuffers);
 
   return 0;
 }
@@ -362,8 +373,9 @@ void PointGreyCamera::embedImageInfo() {
   EmbeddedImageInfo embeddedInfo;
   m_camera->GetEmbeddedImageInfo(&embeddedInfo);
   embeddedInfo.frameCounter.onOff = true;
-  embeddedInfo.shutter.onOff = false;
-  embeddedInfo.gain.onOff = false;
+  embeddedInfo.shutter.onOff = true;
+  embeddedInfo.gain.onOff = true;
+  embeddedInfo.timestamp.onOff = true;
   m_camera->SetEmbeddedImageInfo(&embeddedInfo);
 }
 
@@ -391,16 +403,6 @@ void PointGreyCamera::setCameraTrigger(bool isMaster) {
   // Set external trigger params
   // If single image all cameras set to external trigger
   const bool isExternalTrigger = !isMaster;
-
-  // Check if trigger is already set
-  if ((triggerMode.onOff == isExternalTrigger && isExternalTrigger == false)
-      ||
-      (triggerMode.onOff == isExternalTrigger &&
-       triggerMode.mode == CameraConfig::get().triggerMode &&
-       triggerMode.parameter == 0 &&
-       triggerMode.source == 3)) {
-    return;
-  }
 
   triggerMode.onOff = isExternalTrigger;
 
@@ -591,6 +593,7 @@ void PointGreyCamera::setCameraGrabMode(int timeoutBuffer) {
   // BUFFER_FRAMES uses the camera buffer to store some frames so we don't drop
   // them
   config.grabMode = BUFFER_FRAMES;
+  config.grabTimeout = timeoutBuffer;
 
   // Setting a large number of buffers for each camera may cause the program to
   // hang trying to allocate resources. Try less than 10
@@ -669,6 +672,10 @@ void PointGreyCamera::setPixelFormat(PixelFormat pf) {
 
 PointGreyCamera::~PointGreyCamera() {
   detach();
+
+  if (cameraBuffers != nullptr) {
+    free(cameraBuffers);
+  }
 }
 
 ostream& surround360::operator<<(ostream& stream, const PointGreyCamera& c) {
@@ -698,4 +705,111 @@ int PointGreyCamera::getSerialNumber() const {
     serialCached_ = true;
   }
   return serial_;
+}
+
+
+uint32_t PointGreyCamera::readRegister(uint32_t address) {
+    uint32_t value;
+    fc::Error error = m_camera->ReadRegister(address, &value);
+    if (error != fc::PGRERROR_OK) {
+        throwError(error);
+    }
+
+    return value;
+}
+
+void PointGreyCamera::writeRegister(uint32_t address, uint32_t value) {
+    fc::Error error = m_camera->WriteRegister(address, value);
+    if (error != fc::PGRERROR_OK) {
+        throwError(error);
+    }
+}
+
+bool PointGreyCamera::isDataFlashSupported() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 0 https://www.ptgrey.com/tan/10370
+    const uint32_t Presence_Inc = 0x80000000;
+    return value & Presence_Inc ? true : false;
+}
+
+uint32_t PointGreyCamera::getDataFlashSize() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 8-19 https://www.ptgrey.com/tan/10370
+    const uint32_t Page_Size = 0x00FFF000;
+    const uint32_t pageSizeExponent = (value & Page_Size) >> 12;
+
+    // bit 20-31 https://www.ptgrey.com/tan/10370
+    const uint32_t Num_Pages = 0x00000FFF;
+    const uint32_t numPagesExponent = (value & Num_Pages) >> 0;
+
+    return uint32_t(1) << (pageSizeExponent + numPagesExponent);
+}
+
+uint64_t PointGreyCamera::getDataFlashOffset() {
+    uint32_t value = readRegister(kDataFlashData);
+
+    // from looking at point grey sample code, value appears to be measured in
+    // 'quartets'
+    // Also: 'Addresses are offsets from the IEEE-1394 base address', see
+    // https://www.ptgrey.com/tan/10370
+    const uint64_t IEEE_1394_base_address = 0xFFFFF0000000;
+    return IEEE_1394_base_address + value * sizeof(uint32_t);
+}
+
+void PointGreyCamera::commitPageToDataFlash() {
+    uint32_t value = readRegister(kDataFlashCtrl);
+
+    // bit 6 https://www.ptgrey.com/tan/10370
+    const uint32_t Clean_Page = 0x02000000;
+    value |= Clean_Page;
+
+    writeRegister(kDataFlashCtrl, value);
+}
+
+void PointGreyCamera::throwError(const fc::Error& error) {
+    error.PrintErrorTrace();
+    throw std::runtime_error(error.GetDescription());
+}
+
+void PointGreyCamera::readFileAtIndex(uint32_t fileIdx) {
+  const uint64_t kFlashOffset = getDataFlashOffset();
+
+  uint64_t offset = kFlashOffset;
+  uint32_t recordSize = 0;
+  const uint32_t flashSize = getDataFlashSize();
+
+  for (uint32_t currIdx = 0; currIdx != fileIdx && offset < flashSize; ++currIdx) {
+    uint32_t currRecordSize = 0;
+    auto err = m_camera->ReadRegisterBlock(
+      static_cast<uint32_t>(offset >> 32),
+      static_cast<uint32_t>(offset),
+      &currRecordSize,
+      1);
+
+    if (err != fc::PGRERROR_OK) {
+      throwError(err);
+    }
+
+    offset += currRecordSize + 1;
+  }
+
+  uint32_t recSize = 0;
+  auto err = m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(offset >> 32),
+    static_cast<uint32_t>(offset),
+    &recSize,
+    1);
+
+  vector<uint32_t> data(recSize, 0);
+  err = m_camera->ReadRegisterBlock(
+    static_cast<uint32_t>(offset >> 32),
+    static_cast<uint32_t>(offset),
+    &data[0],
+    data.size());
+
+  if (err != fc::PGRERROR_OK) {
+    throwError(err);
+  }
 }

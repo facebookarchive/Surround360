@@ -258,23 +258,6 @@ Mat flattenLayersDeghostPreferBase(
   return mergedImage;
 }
 
-Mat addBrightnessAndClamp(const Mat& image, const float val) {
-
-  Mat adjustedImage(image.size(), CV_8UC4);
-  Vec4b color;
-  for (int y = 0; y < image.rows; ++y) {
-    for (int x = 0; x < image.cols; ++x) {
-      color = image.at<Vec4b>(y, x);
-      adjustedImage.at<Vec4b>(y, x) = Vec4b(
-        clamp<int>(int(float(color[0]) + val), 0, 255),
-        clamp<int>(int(float(color[1]) + val), 0, 255),
-        clamp<int>(int(float(color[2]) + val), 0, 255),
-        color[3]);
-    }
-  }
-  return adjustedImage;
-}
-
 vector<vector<float>> buildColorAdjustmentModel(
     const Mat& targetImage,
     const Mat& imageToAdjust) {
@@ -323,51 +306,6 @@ vector<vector<float>> buildColorAdjustmentModel(
     outputs,
     kNumIterations,
     kStepSize,kPrintObjective);
-}
-
-// this function is somewhat low-level optimized, because it used a significant
-// amount of the total runtime.
-Mat applyColorAdjustmentModel(
-    const Mat& image,
-    const vector<vector<float>>& model) {
-
-  const static int kModelInputDim = 4;
-  const static int kModelOutputDim = 3;
-  vector<float> modelInput(kModelInputDim);
-  vector<float> modelOutput(kModelOutputDim);
-  modelInput[0] = 1.0;
-  static const float kOneOver255 = 1.0f / 255.0f;
-  Mat adjustedImage(image.size(), CV_8UC4);
-  Vec4b color;
-  for (int y = 0; y < image.rows; ++y) {
-    for (int x = 0; x < image.cols; ++x) {
-      color = image.at<Vec4b>(y, x);
-      modelInput[1] = float(color[0]) * kOneOver255;
-      modelInput[2] = float(color[1]) * kOneOver255;
-      modelInput[3] = float(color[2]) * kOneOver255;
-
-      applyLinearModelRdToRk(
-        kModelInputDim, kModelOutputDim, model, modelInput, modelOutput);
-
-      adjustedImage.at<Vec4b>(y, x) = Vec4b(
-        clamp<int>(int((float(color[0]) - modelOutput[0] * 255.0f)), 0, 255),
-        clamp<int>(int((float(color[1]) - modelOutput[1] * 255.0f)), 0, 255),
-        clamp<int>(int((float(color[2]) - modelOutput[2] * 255.0f)), 0, 255),
-        color[3]);
-    }
-  }
-  return adjustedImage;
-}
-
-Mat flattenLayersDeghostPreferBaseAdjustBrightness(
-    const Mat& bottomLayer,
-    const Mat& topLayer) {
-
-  const vector<vector<float>> colorAdjustModel =
-    buildColorAdjustmentModel(bottomLayer, topLayer);
-  const Mat adjustedTop = applyColorAdjustmentModel(topLayer, colorAdjustModel);
-
-  return flattenLayersDeghostPreferBase(bottomLayer, adjustedTop);
 }
 
 } // namespace util

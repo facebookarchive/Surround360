@@ -16,6 +16,7 @@
 #include <fstream>
 #include <string>
 #include <cassert>
+#include <algorithm>
 #include <malloc.h>
 #include <x86intrin.h>
 
@@ -38,11 +39,16 @@ R"(
     "blackLevel" : [6939.000, 6939.000, 6939.000],
     "clampMin" : [0.000, 0.000, 0.000],
     "clampMax" : [0.962, 0.967, 0.967],
-    "vignetteRollOff" : [[1.000, 1.000, 1.000],
-                         [1.000, 1.000, 1.000],
-                         [1.000, 1.000, 1.000],
-                         [1.000, 1.000, 1.000],
-                         [1.100, 1.100, 1.100]],
+    "vignetteRollOffH" : [[1.1, 1.1, 1.1],
+                          [1.0, 1.0, 1.0],
+                          [1.0, 1.0, 1.0],
+                          [1.0, 1.0, 1.0],
+                          [1.1, 1.1, 1.1]],
+    "vignetteRollOffV" : [[1.1, 1.1, 1.1],
+                          [1.0, 1.0, 1.0],
+                          [1.0, 1.0, 1.0],
+                          [1.0, 1.0, 1.0],
+                          [1.1, 1.1, 1.1]],
     "whiteBalanceGain" : [1.0, 1.0, 1.0],
     "stuckPixelThreshold" : 0,
     "stuckPixelDarknessThreshold" : 0.000,
@@ -64,7 +70,6 @@ CameraView::CameraView(Gtk::GLArea& glarea)
   : m_glAreaRef(glarea),
     m_pboIdx(0),
     m_rawBuf(nullptr),
-    rawBytes(nullptr),
     m_isp(defaultIsp, true, 8) {
   m_normalized.resize(256);
   m_histogram.resize(256);
@@ -284,13 +289,12 @@ void CameraView::update() {
 }
 
 bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
-  if (m_rawBuf->empty() || rawBytes == nullptr) {
+  if (m_rawBuf->empty() || rawBytes.empty()) {
     glClear(GL_COLOR_BUFFER_BIT);
     return true;
   }
 
-  const unsigned int bpp = CameraConfig::get().bits;
-  convertPreviewFrame(bpp);
+  convertPreviewFrame();
 
   glDisable(GL_BLEND);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -362,7 +366,7 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
     histogramGeometry.push_back(0.0f);
 
     histogramGeometry.push_back(-1.f + k * barWidth);
-    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(-.8f + 0.25f/20.0f * m_normalized[k]);
     histogramGeometry.push_back(0.0f);
 
     histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
@@ -371,7 +375,7 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
 
     // second triangle
     histogramGeometry.push_back(-1.f + k * barWidth);
-    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(-.8f + 0.25f/20.0f * m_normalized[k]);
     histogramGeometry.push_back(0.0f);
 
     histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
@@ -379,7 +383,7 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
     histogramGeometry.push_back(0.0f);
 
     histogramGeometry.push_back(-1.f + (k + 1) * barWidth);
-    histogramGeometry.push_back(-.8f + 1.5f * m_normalized[k]);
+    histogramGeometry.push_back(-.8f + 0.25f/20.0f * m_normalized[k]);
     histogramGeometry.push_back(0.0f);
   }
 
@@ -410,28 +414,27 @@ bool CameraView::onRender(const Glib::RefPtr<Gdk::GLContext>& context) {
   return true;
 }
 
-void CameraView::updatePreviewFrame(void* bytes) {
-  rawBytes = bytes;
+void CameraView::updatePreviewFrame(const void* bytes, const size_t size, const uint32_t bpp) {
+  rawBytes.resize(size);
+  memcpy(rawBytes.data(), bytes, size);
+  bitsPerPixelForPreview = bpp;
 }
 
-void CameraView::convertPreviewFrame(const unsigned int bpp) {
+void CameraView::convertPreviewFrame() {
   auto& bufPtr = *getRawBuffer();
   auto buf = &bufPtr[0];
-  auto raw = (uint8_t*)rawBytes;
+  auto raw = (uint8_t*)rawBytes.data();
   uint64_t vaddrRaw = (uint64_t)raw;
   uint64_t vaddrBuf = (uint64_t)buf;
   uint32_t x, y, p;
 
   fill(m_histogram.begin(), m_histogram.end(), 0);
 
+  auto bpp = bitsPerPixelForPreview;
+  
   p = 0;
   for (y = 0; y < m_height; ++y) {
     for (x = 0; x < m_width; ++x, vaddrBuf += 2) {
-#ifdef __AVX2__
-      if ((vaddrRaw & 31) == 0 && bpp == 8) {
-        break;
-      }
-#endif
       if (bpp == 12) {
         uint16_t lo = raw[p];
         uint16_t hi = raw[p + 1];
@@ -462,35 +465,7 @@ void CameraView::convertPreviewFrame(const unsigned int bpp) {
     }
   }
 
-  uint32_t sum = 0;
-  for (auto& el : m_histogram) {
-    sum += el;
-  }
-
   for (auto k = 0; k < m_normalized.size(); ++k) {
-    m_normalized[k] = float(m_histogram[k]) / float(sum);
+    m_normalized[k] = std::log(float(m_histogram[k])) / std::log(2.0f);
   }
-
-#ifdef __AVX2__
-  assert((vaddrBuf & 31) == 0);
-  assert((vaddrRaw & 31) == 0);
-
-  if (bpp == 8) {
-    for (; (p + 16) < m_width * m_height; p += 16) {
-      __m128i pix  = _mm_load_si128((__m128i*)vaddrRaw);
-      __m256i cvt = _mm256_cvtepi8_epi16(pix);
-      __m256i hcvt = _mm256_slli_epi16(cvt, 8);
-
-      __m256i rep = _mm256_add_epi16(cvt, hcvt);
-      _mm256_stream_si256((__m256i*)vaddrBuf, rep);
-
-      vaddrRaw += 16;
-      vaddrBuf += 32;
-    }
-    for (; p < m_width * m_height; ++p) {
-      buf[p * 2] = raw[p];
-      buf[p * 2] = raw[p];
-    }
-  }
-#endif
 }

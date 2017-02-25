@@ -29,7 +29,7 @@ public:
     const unsigned int nbits) = 0;
   virtual int startCapture() = 0;
   virtual int stopCapture() = 0;
-  virtual void* getFrame() = 0;
+  virtual void* getFrame(void* opaque) = 0;
   virtual unsigned int getDroppedFramesCounter() const = 0;
   virtual int powerCamera(bool onOff) = 0;
   virtual unsigned int frameWidth() = 0;

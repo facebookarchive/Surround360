@@ -31,6 +31,7 @@ using namespace surround360::optical_flow;
 
 void combineBottomImagesWithPoleRemoval(
     const string& imagesDir,
+    const string& frameNumber,
     const string& poleMaskDir,
     const string& prevFrameDataDir,
     const string& outputDataDir,
@@ -38,21 +39,22 @@ void combineBottomImagesWithPoleRemoval(
     const bool saveFlowDataForNextFrame,
     const string& flowAlgName,
     const int alphaFeatherSize,
-    const bool enableAutoColorAdjust,
-    const vector<CameraMetadata>& camModelArrayWithTop,
-    CameraMetadata& bottomCamModel,
+    const string& bottomCamId,
+    const string& bottomCam2Id,
+    const float bottomCamUsablePixelsRadius,
+    const float bottomCam2UsablePixelsRadius,
+    const bool flip180,
     Mat& bottomImage) {
 
-  bottomCamModel = getBottomCamModel(camModelArrayWithTop);
-  CameraMetadata bottomCamModel2 = getBottomCamModel2(camModelArrayWithTop);
-  const string bottomImageFilename = bottomCamModel.cameraId + ".png";
-  const string bottomImagePath = imagesDir + "/" + bottomImageFilename;
-  const string bottomImageFilename2 = bottomCamModel2.cameraId + ".png";
-  const string bottomImagePath2 = imagesDir + "/" + bottomImageFilename2;
+  const string cameraDir = imagesDir + "/" + bottomCamId;
+  const string camera2Dir = imagesDir + "/" + bottomCam2Id;
+  const string bottomImageFilename = frameNumber + ".png";
+  const string bottomImagePath = cameraDir + "/" + bottomImageFilename;
+  const string bottomImagePath2 = camera2Dir + "/" + bottomImageFilename;
   bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
   Mat bottomImage2 = imreadExceptionOnFail(bottomImagePath2, CV_LOAD_IMAGE_COLOR);
-  const string poleMaskPath = poleMaskDir + "/" + bottomCamModel.cameraId + ".png";
-  const string poleMaskPath2 = poleMaskDir + "/" + bottomCamModel2.cameraId + ".png";
+  const string poleMaskPath = poleMaskDir + "/" + bottomCamId + ".png";
+  const string poleMaskPath2 = poleMaskDir + "/" + bottomCam2Id + ".png";
   Mat bottomRedMask = imreadExceptionOnFail(poleMaskPath, 1);
   Mat bottomRedMask2 = imreadExceptionOnFail(poleMaskPath2, 1);
   if (bottomRedMask.rows == 0 ||
@@ -66,8 +68,8 @@ void combineBottomImagesWithPoleRemoval(
   // make alpha channels from usable radius
   cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
   cvtColor(bottomImage2, bottomImage2, CV_BGR2BGRA);
-  circleAlphaCut(bottomImage, bottomCamModel.usablePixelsRadius);
-  circleAlphaCut(bottomImage2, bottomCamModel2.usablePixelsRadius);
+  circleAlphaCut(bottomImage, bottomCamUsablePixelsRadius);
+  circleAlphaCut(bottomImage2, bottomCam2UsablePixelsRadius);
 
   // cut out red masks from alpha channel
   cutRedMaskOutOfAlphaChannel(bottomImage, bottomRedMask);
@@ -78,7 +80,7 @@ void combineBottomImagesWithPoleRemoval(
   bottomImage2 = featherAlphaChannel(bottomImage2, alphaFeatherSize);
 
   // rotate the second bottom camera's image 180 degree
-  if (bottomCamModel2.flip180) {
+  if (flip180) {
     flip(bottomImage2, bottomImage2, -1);
   }
 
@@ -90,12 +92,17 @@ void combineBottomImagesWithPoleRemoval(
   if (prevFrameDataDir != "NONE") {
     VLOG(1) << "Reading previous frame flow for bottom-secondary camera: "
       << prevFrameDataDir;
+
+    const string flowPrevDir = outputDataDir + "/flow/" + prevFrameDataDir;
+    const string flowImagesPrevDir =
+      outputDataDir + "/debug/" + prevFrameDataDir + "/flow_images";
+
     prevFrameBottomPoleRemovalFlow = readFlowFromFile(
-      prevFrameDataDir + "/flow/flow_bottom_secondary.bin");
+      flowPrevDir + "/flow_bottom_secondary.bin");
     prevBottomImage = imreadExceptionOnFail(
-      prevFrameDataDir + "/flow_images/bottomImage.png", -1);
+      flowImagesPrevDir + "/bottomImage.png", -1);
     prevBottomImage2 = imreadExceptionOnFail(
-      prevFrameDataDir + "/flow_images/bottomImage2.png", -1);
+      flowImagesPrevDir + "/bottomImage2.png", -1);
   }
 
   OpticalFlowInterface* flowAlg = makeOpticalFlowByName(flowAlgName);
@@ -110,11 +117,14 @@ void combineBottomImagesWithPoleRemoval(
     OpticalFlowInterface::DirectionHint::DOWN);
   delete flowAlg;
 
+  const string flowDir = outputDataDir + "/flow/" + frameNumber;
+  const string flowImagesDir =
+    outputDataDir + "/debug/" + frameNumber + "/flow_images";
   if (saveFlowDataForNextFrame) {
     VLOG(1) << "Serializing bottom-secondary flow and images";
-    saveFlowToFile(flow, outputDataDir + "/flow/flow_bottom_secondary.bin");
-    imwriteExceptionOnFail(outputDataDir + "/flow_images/bottomImage.png", bottomImage);
-    imwriteExceptionOnFail(outputDataDir + "/flow_images/bottomImage2.png", bottomImage2);
+    saveFlowToFile(flow, flowDir + "/flow_bottom_secondary.bin");
+    imwriteExceptionOnFail(flowImagesDir + "/bottomImage.png", bottomImage);
+    imwriteExceptionOnFail(flowImagesDir + "/bottomImage2.png", bottomImage2);
   }
 
   VLOG(1) << "Warping secondary bottom camera to align with primary bottom camera";
@@ -135,20 +145,11 @@ void combineBottomImagesWithPoleRemoval(
     CV_INTER_CUBIC,
     BORDER_CONSTANT);
 
+  const string debugDir = outputDataDir + "/debug/" + frameNumber;
   if (saveDebugImages) {
-    imwriteExceptionOnFail(outputDataDir + "/bottomImage.png", bottomImage);
-    imwriteExceptionOnFail(outputDataDir + "/bottomImage2.png", bottomImage2);
-    imwriteExceptionOnFail(outputDataDir + "/bottomWarp2.png", warpedBottomImage2);
-  }
-
-  Mat adjustedBottomImage2;
-  if (enableAutoColorAdjust) {
-    const vector<vector<float>> colorAdjustModel = buildColorAdjustmentModel(
-      bottomImage, warpedBottomImage2);
-    adjustedBottomImage2 = applyColorAdjustmentModel(
-      warpedBottomImage2, colorAdjustModel);
-  } else {
-    adjustedBottomImage2 = warpedBottomImage2;
+    imwriteExceptionOnFail(debugDir + "/bottomImage.png", bottomImage);
+    imwriteExceptionOnFail(debugDir + "/bottomImage2.png", bottomImage2);
+    imwriteExceptionOnFail(debugDir + "/bottomWarp2.png", warpedBottomImage2);
   }
 
   VLOG(1) << "Combining the primary bottom image and the secondary warped image";
@@ -156,7 +157,7 @@ void combineBottomImagesWithPoleRemoval(
     for (int x = 0; x < bottomImage.cols; ++x) {
       const float alpha = bottomImage.at<Vec4b>(y, x)[3] / 255.0f;
       const float alpha2 =
-        adjustedBottomImage2.at<Vec4b>(y, x)[3] / 255.0f;
+        warpedBottomImage2.at<Vec4b>(y, x)[3] / 255.0f;
       // if we don't have full alpha from the primary image, and we have some data from
       // the secondary image, use a weighted combination. otherwise leave it unchanged.
       if (alpha < 1.0f && alpha2 > 0.0f) {
@@ -165,9 +166,9 @@ void combineBottomImagesWithPoleRemoval(
         const float r1 = bottomImage.at<Vec4b>(y, x)[2];
         const float g1 = bottomImage.at<Vec4b>(y, x)[1];
         const float b1 = bottomImage.at<Vec4b>(y, x)[0];
-        const float r2 = adjustedBottomImage2.at<Vec4b>(y, x)[2];
-        const float g2 = adjustedBottomImage2.at<Vec4b>(y, x)[1];
-        const float b2 = adjustedBottomImage2.at<Vec4b>(y, x)[0];
+        const float r2 = warpedBottomImage2.at<Vec4b>(y, x)[2];
+        const float g2 = warpedBottomImage2.at<Vec4b>(y, x)[1];
+        const float b2 = warpedBottomImage2.at<Vec4b>(y, x)[0];
         bottomImage.at<Vec4b>(y, x) = Vec4b(
           a1 * b1 + a2 * b2,
           a1 * g1 + a2 * g2,
@@ -178,11 +179,11 @@ void combineBottomImagesWithPoleRemoval(
   }
   // redo the alpha channel.. this is to remove an alpha-channel hole where
   // pole masks overlap at the very bottom.
-  circleAlphaCut(bottomImage, bottomCamModel.usablePixelsRadius);
+  circleAlphaCut(bottomImage, bottomCamUsablePixelsRadius);
   bottomImage = featherAlphaChannel(bottomImage, alphaFeatherSize);
 
   if (saveDebugImages) {
-    imwriteExceptionOnFail(outputDataDir + "/_bottomCombined.png", bottomImage);
+    imwriteExceptionOnFail(debugDir + "/_bottomCombined.png", bottomImage);
   }
 }
 

@@ -34,7 +34,8 @@ RENDER_COMMAND_TEMPLATE = """
 --src_intrinsic_param_file {SRC_INTRINSIC_PARAM_FILE}
 --rig_json_file {RIG_JSON_FILE}
 --ring_rectify_file {RECTIFY_FILE}
---imgs_dir {SRC_DIR}/isp_out
+--imgs_dir {SRC_DIR}/rgb
+--frame_number {FRAME_ID}
 --output_data_dir {SRC_DIR}
 --prev_frame_data_dir {PREV_FRAME_DIR}
 --output_cubemap_path {OUT_CUBE_DIR}/cube_{FRAME_ID}.png
@@ -79,11 +80,11 @@ if __name__ == "__main__":
   parser.add_argument('--enable_top', dest='enable_top', action='store_true')
   parser.add_argument('--enable_bottom', dest='enable_bottom', action='store_true')
   parser.add_argument('--enable_pole_removal', dest='enable_pole_removal', action='store_true')
-  parser.add_argument('--enable_render_coloradjust', dest='enable_render_coloradjust', action='store_true')
   parser.add_argument('--resume', dest='resume', action='store_true', help='looks for a previous frame optical flow instead of starting fresh')
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
+  parser.add_argument('--new_rig_format', dest='new_rig_format', action='store_true')
   parser.add_argument('--rectify_file', help='path to rectification param file', required=False, default="NONE")
-  parser.add_argument('--src_intrinsic_param_file', help='path to camera instrinsic param file', required=True)
+  parser.add_argument('--src_intrinsic_param_file', help='path to camera instrinsic param file', required=False, default="NONE")
   parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
   parser.set_defaults(save_debug_images=False)
@@ -94,10 +95,11 @@ if __name__ == "__main__":
 
   root_dir                  = args["root_dir"]
   surround360_render_dir    = args["surround360_render_dir"]
-  vid_dir                   = root_dir + "/vid"
   log_dir                   = root_dir + "/logs"
   out_eqr_frames_dir        = root_dir + "/eqr_frames"
   out_cube_frames_dir       = root_dir + "/cube_frames"
+  flow_dir                  = root_dir + "/flow"
+  debug_dir                 = root_dir + "/debug"
   min_frame                 = int(args["start_frame"])
   max_frame                 = int(args["end_frame"])
   cubemap_width             = int(args["cubemap_width"])
@@ -108,20 +110,22 @@ if __name__ == "__main__":
   enable_top                = args["enable_top"]
   enable_bottom             = args["enable_bottom"]
   enable_pole_removal       = args["enable_pole_removal"]
-  enable_render_coloradjust = args["enable_render_coloradjust"]
   resume                    = args["resume"]
   rig_json_file             = args["rig_json_file"]
+  new_rig_format            = args["new_rig_format"]
   rectify_file              = args["rectify_file"]
   src_intrinsic_param_file  = args["src_intrinsic_param_file"]
   flow_alg                  = args["flow_alg"]
   verbose                   = args["verbose"]
 
   start_time = timer()
+
+  os.system("mkdir -p " + out_eqr_frames_dir)
+  os.system("mkdir -p " + out_cube_frames_dir)
+  os.system("mkdir -p " + flow_dir)
+
   brightness_adjust_path = root_dir + "/brightness_adjust.txt"
   frame_range = range(min_frame, max_frame + 1)
-  if enable_render_coloradjust and not os.path.isfile(brightness_adjust_path):
-    print "no brightness adjustment file found. the first frame will be rendered twice to generate one, then use it"
-    frame_range = [min_frame] + frame_range
 
   for i in frame_range:
     frame_to_process = format(i, "06d")
@@ -130,14 +134,20 @@ if __name__ == "__main__":
     print "----------- [Render] processing frame:", frame_to_process
     sys.stdout.flush()
 
-    frame_dir = vid_dir + "/" + frame_to_process
-    prev_frame_dir = vid_dir + "/" + format(i - 1, "06d")
+    debug_frame_dir = debug_dir + "/" + frame_to_process
+    flow_images_dir = debug_frame_dir + "/flow_images"
+    projections_dir = debug_frame_dir + "/projections"
+    os.system("mkdir -p " + flow_dir + "/" + frame_to_process)
+    os.system("mkdir -p " + flow_images_dir)
+    os.system("mkdir -p " + projections_dir)
+
+    prev_frame_dir = format(i - 1, "06d")
     render_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
       "LOG_DIR": log_dir,
       "VERBOSE_LEVEL": 1 if verbose else 0,
       "FRAME_ID": frame_to_process,
-      "SRC_DIR": frame_dir,
+      "SRC_DIR": root_dir,
       "PREV_FRAME_DIR": "NONE",
       "OUT_EQR_DIR": out_eqr_frames_dir,
       "OUT_CUBE_DIR": out_cube_frames_dir,
@@ -152,13 +162,6 @@ if __name__ == "__main__":
       "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
       "EXTRA_FLAGS": "",
     }
-
-    if enable_render_coloradjust:
-      render_params["EXTRA_FLAGS"] += " --enable_render_coloradjust"
-      if os.path.isfile(brightness_adjust_path):
-        render_params["EXTRA_FLAGS"] += " --brightness_adjustment_src " + brightness_adjust_path
-      else:
-        render_params["EXTRA_FLAGS"] += " --brightness_adjustment_dest " + brightness_adjust_path
 
     if resume or not is_first_frame:
       render_params["PREV_FRAME_DIR"] = prev_frame_dir
@@ -178,6 +181,9 @@ if __name__ == "__main__":
       if enable_pole_removal:
         render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
         render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
+
+    if new_rig_format:
+      render_params["EXTRA_FLAGS"] += " --new_rig_format"
 
     if quality == "3k":
       render_params["SHARPENNING"]                  = 0.25
@@ -216,7 +222,7 @@ if __name__ == "__main__":
     start_subprocess("render", render_command)
 
     if DELETE_OLD_FLOW_FILES and not is_first_frame:
-      rm_old_flow_command = "rm " + prev_frame_dir + "/flow/*"
+      rm_old_flow_command = "rm " + flow_dir + "/" + prev_frame_dir + "/*"
 
       if verbose:
         print rm_old_flow_command
@@ -225,7 +231,7 @@ if __name__ == "__main__":
       subprocess.call(rm_old_flow_command, shell=True)
 
     if DELETE_OLD_FLOW_IMAGES and not is_first_frame:
-      rm_old_flow_images_command = "rm " + prev_frame_dir + "/flow_images/*"
+      rm_old_flow_images_command = "rm " + debug_dir + "/" + prev_frame_dir + "/flow_images/*"
 
       if verbose:
         print rm_old_flow_images_command

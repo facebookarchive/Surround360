@@ -59,21 +59,22 @@ static void requireArgGeqZero(const int& argValue, const string& argName) {
 
 // return the current system time in seconds. reasonably high precision.
 static double getCurrTimeSec() {
-  return (double)(system_clock::now().time_since_epoch().count()) / 1000000.0;
+  return (double)(system_clock::now().time_since_epoch().count()) * system_clock::period::num / system_clock::period::den;
 }
 
 // scans srcDir for all files/folders, and return a vector of filenames (or full file
 // paths if fullPath is true)
 static vector<string> getFilesInDir(
     const string& srcDir,
-    const bool fullPath) {
+    const bool fullPath,
+    int numFilesToReturn = -1) {
 
   DIR* dir = opendir(srcDir.c_str());
   if (!dir) { return vector<string>(); }
 
   vector<string> out_file_names;
   dirent* dent;
-  while(true) {
+  while (true) {
     dent = readdir(dir);
     if (!dent) break;
     // skip hidden files and/or links to parent dir
@@ -82,6 +83,9 @@ static vector<string> getFilesInDir(
       out_file_names.push_back(srcDir + "/" + string(dent->d_name));
     } else {
       out_file_names.push_back(string(dent->d_name));
+    }
+    if (--numFilesToReturn == 0) {
+      break;
     }
   }
   return out_file_names;

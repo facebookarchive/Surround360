@@ -43,29 +43,33 @@ class CameraIspGen
   }
 
 
-  Expr redPixel() {
-    return (x % 2) == 0 && (y % 2) == 1;
+  Expr redPixel(Expr bayerPattern) {
+    return select(bayerPattern == 0, (x % 2) == 0 && (y % 2) == 1,
+    select(bayerPattern == 1, (x % 2) == 0 && (y % 2) == 0, 0));
   }
 
-  Expr greenRedPixel() {
-    return (x % 2) == 1 && (y % 2) == 1;
+  Expr greenRedPixel(Expr bayerPattern) {
+    return select(bayerPattern == 0, (x % 2) == 1 && (y % 2) == 1,
+    select(bayerPattern == 1, (x % 2) == 1 && (y % 2) == 0, 0));
   }
 
 
-  Expr bluePixel() {
-    return (x % 2) == 1 && (y % 2) == 0;
+  Expr bluePixel(Expr bayerPattern) {
+    return select(bayerPattern == 0, (x % 2) == 1 && (y % 2) == 0,
+    select(bayerPattern == 1, (x % 2) == 1 && (y % 2) == 1, 0));
    }
 
-  Expr greenBluePixel() {
-    return (x % 2) == 0 && (y % 2) == 0;
+  Expr greenBluePixel(Expr bayerPattern) {
+    return select(bayerPattern == 0, (x % 2) == 0 && (y % 2) == 0,
+    select(bayerPattern == 1, (x % 2) == 0 && (y % 2) == 1, 0));
   }
 
-  Expr greenPixel() {
-    return greenBluePixel() || greenRedPixel();
+  Expr greenPixel(Expr bayerPattern) {
+    return greenBluePixel(bayerPattern) || greenRedPixel(bayerPattern);
   }
 
 
-  Func deinterleave(Func raw) {
+  Func deinterleave(Func raw, Expr bayerPattern) {
     // Deinterleave the color channels
     Func deinterleaved("deinterleaved");
 
@@ -74,10 +78,10 @@ class CameraIspGen
     // R G
     deinterleaved(x, y, c) =
       cast<float>(
-          select(c == 1 && greenBluePixel(), raw(x, y), // green on blue row
-          select(c == 2 && bluePixel(),      raw(x, y), // blue
-          select(c == 0 && redPixel(),       raw(x, y), // red
-          select(c == 1 && greenRedPixel(),  raw(x, y), // green on red row
+          select(c == 1 && greenBluePixel(bayerPattern), raw(x, y), // green on blue row
+          select(c == 2 && bluePixel(bayerPattern),      raw(x, y), // blue
+          select(c == 0 && redPixel(bayerPattern),       raw(x, y), // red
+          select(c == 1 && greenRedPixel(bayerPattern),  raw(x, y), // green on red row
           0)))));
 
     return deinterleaved;
@@ -100,7 +104,9 @@ class CameraIspGen
       Func& redOnRed,
       Func& greenOnRed,
       Func& blueOnRed,
-      Func& demosaiced) {
+      Func& demosaiced,
+      Expr bayerPattern) {
+
     // Neighbor indices
     Expr x1 = x + 1;
     Expr x_1 = x - 1;
@@ -136,11 +142,22 @@ class CameraIspGen
     g = interleave_y(interleave_x(greenOnGreenBlue,greenOnBlue),  interleave_x(greenOnRed, greenOnGreenRed));
     b = interleave_y(interleave_x(blueOnGreenBlue, blueOnBlue),   interleave_x(blueOnRed, blueOnGreenRed));
 
+    // RGGB
+    Func r_rggb, g_rggb, b_rggb;
+    r_rggb = interleave_y(interleave_x(redOnRed, redOnGreenRed), interleave_x(redOnGreenBlue,  redOnBlue));
+    g_rggb = interleave_y(interleave_x(greenOnRed, greenOnGreenRed), interleave_x(greenOnGreenBlue,greenOnBlue));
+    b_rggb = interleave_y(interleave_x(blueOnRed, blueOnGreenRed), interleave_x(blueOnGreenBlue, blueOnBlue));
+
     demosaiced(x, y, c) =
+      select(bayerPattern == 0,
       select(
           c == 0, r(x, y),
           c == 1, g(x, y),
-          b(x, y));
+          b(x, y)),
+      select(
+          c == 0, r_rggb(x, y),
+          c == 1, g_rggb(x, y),
+          b_rggb(x, y)));
   }
 
   void edgeAwareDemosaic(
@@ -160,7 +177,8 @@ class CameraIspGen
       Func& redOnRed,
       Func& greenOnRed,
       Func& blueOnRed,
-      Func& demosaiced) {
+      Func& demosaiced,
+      Expr bayerPattern) {
     // Neighbor indices
     Expr x1 = x + 1;
     Expr x2 = x + 2;
@@ -175,33 +193,33 @@ class CameraIspGen
     // Green horizonal & vertical value interpolates at green input pixels
     Func gV("gV"), gH("gH");
     gV(x, y) =
-      select(greenBluePixel(), rawGreenB(x, y), // green on blue row
-      select(bluePixel(),      avg(rawGreenR(x, y1), rawGreenR(x, y_1)) + (2.0f * rawBlue(x, y) - rawBlue(x, y2) - rawBlue(x, y_2)) / 4.0f, // blue
-      select(redPixel(),       avg(rawGreenB(x, y1), rawGreenB(x, y_1)) + (2.0f * rawRed(x, y)  - rawRed(x, y2)  - rawRed(x, y_2)) / 4.0f, // red
-      select(greenRedPixel(),  rawGreenR(x, y), // green on red row
+      select(greenBluePixel(bayerPattern), rawGreenB(x, y), // green on blue row
+      select(bluePixel(bayerPattern),      avg(rawGreenR(x, y1), rawGreenR(x, y_1)) + (2.0f * rawBlue(x, y) - rawBlue(x, y2) - rawBlue(x, y_2)) / 4.0f, // blue
+      select(redPixel(bayerPattern),       avg(rawGreenB(x, y1), rawGreenB(x, y_1)) + (2.0f * rawRed(x, y)  - rawRed(x, y2)  - rawRed(x, y_2)) / 4.0f, // red
+      select(greenRedPixel(bayerPattern),  rawGreenR(x, y), // green on red row
       0))));
 
     gH(x, y) =
-      select(greenBluePixel(), rawGreenB(x, y), // green on blue row
-      select(bluePixel(),      avg(rawGreenB(x1, y), rawGreenB(x_1, y)) + (2.0f * rawBlue(x, y) - rawBlue(x2, y) - rawBlue(x_2, y)) / 4.0f, // blue
-      select(redPixel(),       avg(rawGreenR(x1, y), rawGreenR(x_1, y)) + (2.0f * rawRed(x, y)  - rawRed(x2, y)  - rawRed(x_2, y)) / 4.0f, // red
-      select(greenRedPixel(),  rawGreenR(x, y), // green on red row
+      select(greenBluePixel(bayerPattern), rawGreenB(x, y), // green on blue row
+      select(bluePixel(bayerPattern),      avg(rawGreenB(x1, y), rawGreenB(x_1, y)) + (2.0f * rawBlue(x, y) - rawBlue(x2, y) - rawBlue(x_2, y)) / 4.0f, // blue
+      select(redPixel(bayerPattern),       avg(rawGreenR(x1, y), rawGreenR(x_1, y)) + (2.0f * rawRed(x, y)  - rawRed(x2, y)  - rawRed(x_2, y)) / 4.0f, // red
+      select(greenRedPixel(bayerPattern),  rawGreenR(x, y), // green on red row
       0))));
 
     // And the derivatives
     Func dV("dV"), dH("dh");
     dV(x, y) =
-      select(greenBluePixel(), avg(absd(rawGreenB(x, y2), rawGreenB(x, y)), absd(rawGreenB(x, y_2), rawGreenB(x, y))), // green on blue row
-      select(bluePixel(),      avg(absd(rawGreenR(x, y1), rawGreenR(x, y_1)), absd(rawBlue(x, y2) + rawBlue(x, y_2), 2.0f*rawBlue(x, y))), // blue
-      select(redPixel(),       avg(absd(rawGreenB(x, y1), rawGreenB(x, y_1)), absd(rawRed(x, y2)  + rawRed(x, y_2),  2.0f*rawRed(x, y))), // red
-      select(greenRedPixel(),  avg(absd(rawGreenR(x, y2), rawGreenR(x, y)), absd(rawGreenR(x, y_2), rawGreenR(x, y))), // green on red row
+      select(greenBluePixel(bayerPattern), avg(absd(rawGreenB(x, y2), rawGreenB(x, y)), absd(rawGreenB(x, y_2), rawGreenB(x, y))), // green on blue row
+      select(bluePixel(bayerPattern),      avg(absd(rawGreenR(x, y1), rawGreenR(x, y_1)), absd(rawBlue(x, y2) + rawBlue(x, y_2), 2.0f*rawBlue(x, y))), // blue
+      select(redPixel(bayerPattern),       avg(absd(rawGreenB(x, y1), rawGreenB(x, y_1)), absd(rawRed(x, y2)  + rawRed(x, y_2),  2.0f*rawRed(x, y))), // red
+      select(greenRedPixel(bayerPattern),  avg(absd(rawGreenR(x, y2), rawGreenR(x, y)), absd(rawGreenR(x, y_2), rawGreenR(x, y))), // green on red row
       0))));
 
     dH(x, y) =
-      select(greenBluePixel(), avg(absd(rawGreenB(x2, y), rawGreenB(x,   y)), absd(rawGreenB(x_2, y), rawGreenB(x, y))), // green on blue row
-      select(bluePixel(),      avg(absd(rawGreenB(x1, y), rawGreenB(x_1, y)), absd(rawBlue(x2, y) + rawBlue(x_2, y), 2.0f*rawBlue(x, y))), // blue
-      select(redPixel(),       avg(absd(rawGreenR(x1, y), rawGreenR(x_1, y)), absd(rawRed(x2, y)  + rawRed(x_2, y),  2.0f*rawRed(x, y))), // red
-      select(greenRedPixel(),  avg(absd(rawGreenR(x2, y), rawGreenR(x,   y)), absd(rawGreenR(x_2, y), rawGreenR(x, y))), // green on red row
+      select(greenBluePixel(bayerPattern), avg(absd(rawGreenB(x2, y), rawGreenB(x,   y)), absd(rawGreenB(x_2, y), rawGreenB(x, y))), // green on blue row
+      select(bluePixel(bayerPattern),      avg(absd(rawGreenB(x1, y), rawGreenB(x_1, y)), absd(rawBlue(x2, y) + rawBlue(x_2, y), 2.0f*rawBlue(x, y))), // blue
+      select(redPixel(bayerPattern),       avg(absd(rawGreenR(x1, y), rawGreenR(x_1, y)), absd(rawRed(x2, y)  + rawRed(x_2, y),  2.0f*rawRed(x, y))), // red
+      select(greenRedPixel(bayerPattern),  avg(absd(rawGreenR(x2, y), rawGreenR(x,   y)), absd(rawGreenR(x_2, y), rawGreenR(x, y))), // green on red row
       0))));
 
     // Homogenity calulation over a diameter size region
@@ -236,18 +254,18 @@ class CameraIspGen
     // channels. Adding the g channel back in.
     Func r, b;
     r(x, y) =
-      select(redPixel(),       (rmg(x, y) + rmg(x, y2) + rmg(x, y_2) + rmg(x2, y) + rmg(x_2, y)) / 5.0f,
-      select(greenRedPixel(),  (rmg(x_1, y_2) + rmg(x_1, y) + rmg(x_1, y2) + rmg(x1, y_2) + rmg(x1, y) + rmg(x1, y2)) / 6.0f,
-      select(greenBluePixel(), (rmg(x_2, y_1) + rmg(x, y_1) + rmg(x2, y_1) + rmg(x_2, y1) + rmg(x, y1) + rmg(x2, y1)) / 6.0f,
-      select(bluePixel(),      (rmg(x1, y1) + rmg(x1, y_1) + rmg(x_1, y1) + rmg(x_1, y_1)) / 4.0f,
+      select(redPixel(bayerPattern),       (rmg(x, y) + rmg(x, y2) + rmg(x, y_2) + rmg(x2, y) + rmg(x_2, y)) / 5.0f,
+      select(greenRedPixel(bayerPattern),  (rmg(x_1, y_2) + rmg(x_1, y) + rmg(x_1, y2) + rmg(x1, y_2) + rmg(x1, y) + rmg(x1, y2)) / 6.0f,
+      select(greenBluePixel(bayerPattern), (rmg(x_2, y_1) + rmg(x, y_1) + rmg(x2, y_1) + rmg(x_2, y1) + rmg(x, y1) + rmg(x2, y1)) / 6.0f,
+      select(bluePixel(bayerPattern),      (rmg(x1, y1) + rmg(x1, y_1) + rmg(x_1, y1) + rmg(x_1, y_1)) / 4.0f,
       0))))
       + g(x, y);
 
     b(x, y) =
-      select(redPixel(),       (bmg(x1, y1) + bmg(x1, y_1) + bmg(x_1, y1) + bmg(x_1, y_1)) / 4.0f,
-      select(greenRedPixel(),  (bmg(x_2, y_1) + bmg(x, y_1) + bmg(x2, y_1) + bmg(x_2, y1) + bmg(x, y1) + bmg(x2, y1)) / 6.0f,
-      select(greenBluePixel(), (bmg(x_1, y_2) + bmg(x_1, y) + bmg(x_1, y2) + bmg(x1, y_2) + bmg(x1, y) + bmg(x1, y2)) / 6.0f,
-      select(bluePixel(),      (bmg(x, y) + bmg(x, y2) + bmg(x, y_2) + bmg(x2, y) + bmg(x_2, y)) / 5.0f,
+      select(redPixel(bayerPattern),       (bmg(x1, y1) + bmg(x1, y_1) + bmg(x_1, y1) + bmg(x_1, y_1)) / 4.0f,
+      select(greenRedPixel(bayerPattern),  (bmg(x_2, y_1) + bmg(x, y_1) + bmg(x2, y_1) + bmg(x_2, y1) + bmg(x, y1) + bmg(x2, y1)) / 6.0f,
+      select(greenBluePixel(bayerPattern), (bmg(x_1, y_2) + bmg(x_1, y) + bmg(x_1, y2) + bmg(x1, y_2) + bmg(x1, y) + bmg(x1, y2)) / 6.0f,
+      select(bluePixel(bayerPattern),      (bmg(x, y) + bmg(x, y2) + bmg(x, y_2) + bmg(x2, y) + bmg(x_2, y)) / 5.0f,
       0))))
       + g(x, y);
 
@@ -310,7 +328,8 @@ class CameraIspGen
       Expr clampMinB,
       Expr clampMaxR,
       Expr clampMaxG,
-      Expr clampMaxB) {
+      Expr clampMaxB,
+      Expr bayerPattern) {
 
     // These are the values we already know from the input
     // x_y = the value of channel x at a site in the input of channel y
@@ -388,14 +407,16 @@ class CameraIspGen
           redOnGreenRed, greenOnGreenRed, blueOnGreenRed,
           redOnBlue, greenOnBlue, blueOnBlue,
           redOnRed, greenOnRed, blueOnRed,
-          demosaiced);
+          demosaiced,
+          bayerPattern);
     } else {
       edgeAwareDemosaic(rawRed, rawBlue, rawGreenB, rawGreenR,
           redOnGreenBlue, greenOnGreenBlue, blueOnGreenBlue,
           redOnGreenRed, greenOnGreenRed, blueOnGreenRed,
           redOnBlue, greenOnBlue, blueOnBlue,
           redOnRed, greenOnRed, blueOnRed,
-          demosaiced);
+          demosaiced,
+          bayerPattern);
     }
 
     int kVec = target.natural_vector_size(Float(32));
@@ -558,6 +579,7 @@ class CameraIspGen
       ImageParam ccm,
       ImageParam toneTable,
       Param<bool> BGR,
+      Param<int> bayerPattern,
       int outputBpp) {
 
     this->target = target;
@@ -572,13 +594,13 @@ class CameraIspGen
     Func colorCorrected("ccm");
     Func sharpened("sharpened");
 
-    deinterleaved   = deinterleave(raw);
+    deinterleaved   = deinterleave(raw, bayerPattern);
     demosaiced      = demosaic(
       deinterleaved,
       vignetteTableH, vignetteTableV,
       blackLevelR, blackLevelG, blackLevelB,
       whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
-      clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB);
+      clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB, bayerPattern);
     colorCorrected  = applyCCM(demosaiced, ccm);
     toneCorrected(x, y, c) = toneTable(c, colorCorrected(x, y, c));
 
@@ -651,6 +673,7 @@ int main(int argc, char **argv) {
   ImageParam ccm(Float(32), 2, "ccm");
   ImageParam toneTable(UInt(FLAGS_output_bpp), 2, "toneTable");
   Param<bool> BGR;
+  Param<int> bayerPattern("bayerPattern");
 
   // Pick a target architecture
   Target target = get_target_from_environment();
@@ -674,7 +697,7 @@ int main(int argc, char **argv) {
       whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
       clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
       sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
-      ccm, toneTable, BGR, FLAGS_output_bpp);
+      ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   Func cameraIspFast =
     cameraIspGenFast.generate(
@@ -683,14 +706,14 @@ int main(int argc, char **argv) {
         whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
         clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
         sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
-        ccm, toneTable, BGR, FLAGS_output_bpp);
+        ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
     input, width, height, vignetteTableH, vignetteTableV,
     blackLevelR, blackLevelG, blackLevelB,
     whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
     clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable,  BGR};
+    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling

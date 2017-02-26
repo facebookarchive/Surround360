@@ -713,7 +713,7 @@ int main(int argc, char **argv) {
     blackLevelR, blackLevelG, blackLevelB,
     whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
     clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};.
+    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling

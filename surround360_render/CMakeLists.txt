@@ -563,7 +563,6 @@ ELSE()
     gflags
     glog
     folly
-    tinfo
     ${OpenCV_LIBS}
     ${CERES_LIBRARIES}
     ${PLATFORM_SPECIFIC_LIBS}

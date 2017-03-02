@@ -96,7 +96,7 @@
               </tr>
             </table>
           <br>
-          <video id="feed_preview" src="http://127.0.0.1:8090/live.webm" width="512" height="512" autoplay></video>
+          <video id="feed_preview" src="http://127.0.0.1:8090/preview.ffm" width="512" height="512" autoplay></video>
         </div>
       </div>
     </div>

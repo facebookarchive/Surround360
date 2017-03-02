@@ -6,7 +6,12 @@
 # of patent rights can be found in the PATENTS file in the same directory.
 
 import argparse
-import cv2
+
+try:
+  import cv2
+except ImportError:
+  print("cv2 not found, 16 bit images will not work")
+
 import datetime
 import json
 import numpy as np
@@ -164,13 +169,14 @@ if __name__ == "__main__":
 
   start_time = timer()
 
-  print "Converting images to 8-bit..."
-  for filename in list_only_files_recursive(data_dir):
-    image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
-    if image is not None and image.dtype == np.uint16:
-      print filename + "..."
-      image = (255.0 / (2**16 - 1) * image).astype(np.uint8)
-      cv2.imwrite(filename, image)
+  if 'cv2' in sys.modules:
+    print "Converting images to 8-bit..."
+    for filename in list_only_files_recursive(data_dir):
+      image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+      if image is not None and image.dtype == np.uint16:
+        print filename + "..."
+        image = (255.0 / (2**16 - 1) * image).astype(np.uint8)
+        cv2.imwrite(filename, image)
 
   print "Extracting features via COLMAP..."
   colmap_db_path = data_dir + "/colmap.db"

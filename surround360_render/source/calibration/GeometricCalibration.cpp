@@ -55,8 +55,7 @@ void buildCameraIndexMaps(const Camera::Rig& rig) {
 // .../<camera id>/<frame index>.<extension>
 // e.g. 1/cam2/000123.bmp or rgb/cam14/000123.png
 std::string getCameraIdFromPath(const boost::filesystem::path& image) {
-  boost::filesystem::path target(image);
-  return target.remove_filename().filename().native();
+  return image.parent_path().filename().native();
 }
 
 int getFrameIndexFromPath(const boost::filesystem::path& image) {

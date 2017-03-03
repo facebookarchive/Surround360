@@ -1052,7 +1052,7 @@ int main(int argc, char *argv[]) {
     S_IXOTH;
 
   google::SetUsageMessage("Control capturing of image data.");
-  google::ParseCommandLineFlags(&argc, &argv, false);
+  gflags::ParseCommandLineFlags(&argc, &argv, false);
 
   if (argc == 1) {
     cerr << "No arguments. See --help for more information." << endl;

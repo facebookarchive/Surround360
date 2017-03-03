@@ -71,7 +71,7 @@ void initSurround360(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   // GFlags
-  google::ParseCommandLineNonHelpFlags(&argc, &argv, true);
+  gflags::ParseCommandLineNonHelpFlags(&argc, &argv, true);
   fLB::FLAGS_helpshort = fLB::FLAGS_help;
   fLB::FLAGS_help = false;
   google::HandleCommandLineHelpFlags();

@@ -68,7 +68,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 
 * Install Python (method 1 - Linux only):
 ```
-  sudo apt-get install python
+  sudo apt-get install python python-dev
 ```
 
 * Install Python (method 2 - OS X only):
@@ -104,7 +104,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   brew install folly
 </pre>
 
-* Install Ceres (method 1 - Linux only)
+* Install Ceres (method 1 - Linux only):
   see http://ceres-solver.org/installation.html
 ```
   sudo apt-get install libatlas-base-dev
@@ -120,17 +120,47 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   sudo ln -s /usr/include/eigen3/Eigen /usr/local/include/Eigen
 ```
 
-* Install Ceres (method 2 - OSX only)
+* Install Ceres (method 2 - OSX only):
 ```
   brew install --build-from-source homebrew/science/ceres-solver
 ```
 
-* Install OpenCV:
+* Install pip (OSX only):
+```
+  pip install --upgrade pip
+```
+
+* Install numpy (method 1 - Linux only):
+```
+  sudo apt-get install python-numpy
+```
+
+* Install numpy (method 2 - OSX only):
+```
+  pip install numpy
+```
+
+* Install OpenCV (method 1 - Linux only):
 ```
   cd ~
   git clone https://github.com/Itseez/opencv.git
   cd opencv
   cmake -DWITH_IPP=OFF
+  make
+  sudo make install
+```
+
+* Install OpenCV (method 2 - OSX only):
+```
+  cd ~
+  git clone https://github.com/Itseez/opencv.git
+  cd opencv
+  cmake -DWITH_IPP=OFF \
+  -DPYTHON2_PACKAGES_PATH=/usr/local/lib/python2.7/site-packages \
+  -DPYTHON2_LIBRARIES=/usr/local/Cellar/python/2.7.13/Frameworks/Python.framework/Versions/2.7/bin \
+  -DPYTHON2_INCLUDE_DIR=$(python -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
+  -DBUILD_opencv_python2=ON \
+  -DHAVE_opencv_python2=ON
   make
   sudo make install
 ```
@@ -168,7 +198,6 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
 
 * Install Gooey (method 3 - OS X only):
 ```
-  pip install --upgrade pip
   sudo pip install Gooey
   brew install wxpython
   brew install wxmac

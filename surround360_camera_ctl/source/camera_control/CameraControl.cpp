@@ -1051,7 +1051,7 @@ int main(int argc, char *argv[]) {
     S_IROTH |
     S_IXOTH;
 
-  google::SetUsageMessage("Control capturing of image data.");
+  gflags::SetUsageMessage("Control capturing of image data.");
   gflags::ParseCommandLineFlags(&argc, &argv, false);
 
   if (argc == 1) {

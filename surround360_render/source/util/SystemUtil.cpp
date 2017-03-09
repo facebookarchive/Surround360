@@ -74,7 +74,7 @@ void initSurround360(int argc, char** argv) {
   gflags::ParseCommandLineNonHelpFlags(&argc, &argv, true);
   fLB::FLAGS_helpshort = fLB::FLAGS_help;
   fLB::FLAGS_help = false;
-  google::HandleCommandLineHelpFlags();
+  gflags::HandleCommandLineHelpFlags();
 
   // setup signal and termination handlers
   set_terminate(terminateHandler);

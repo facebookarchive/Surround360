@@ -1099,25 +1099,47 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  umask(ACCESSPERMS^kPermissions);
+  ret = stat(kFramesDisk.c_str(), &dirStat);
+  try {
+    if (ret == -1 && errno == ENOENT) {
+      ret = mkdir(kFramesDisk.c_str(), kPermissions);
+      if (ret == -1) {
+        const string kErrString(strerror(errno));
+        throw "Can't create framedisk directory "
+          + kFramesDisk + ": " + kErrString;
+      }
+    }
+  } catch (string err) {
+    cerr << err << endl;
+    exit(EXIT_FAILURE);
+  }
+
   const string label = FLAGS_dir;
   string captureDir = kFramesDisk + "/" + FLAGS_dir;
 
   ret = stat(captureDir.c_str(), &dirStat);
-  if (ret == -1 && errno == ENOENT) {
-    ret = mkdir(captureDir.c_str(), kPermissions);
-    if (ret == -1) {
-      const string kErrString(strerror(errno));
-      throw "Can't create destination directory: " + kErrString;
+  try {
+    if (ret == -1 && errno == ENOENT) {
+      ret = mkdir(captureDir.c_str(), kPermissions);
+      if (ret == -1) {
+        const string kErrString(strerror(errno));
+        throw "Can't create destination directory "
+          + captureDir + ": " + kErrString;
+      }
+    } else {
+      // destination directory exists. Don't overwrite. Append timestamp to the name
+      captureDir += "-" + to_string(time(nullptr));
+      ret = mkdir(captureDir.c_str(), kPermissions);
+      if (ret == -1) {
+        const string kErrString(strerror(errno));
+        throw "Can't create destination directory "
+          + captureDir + ": " + kErrString;
+      }
     }
-  } else {
-    // destination directory exists. Don't overwrite. Append timestamp to the name
-    captureDir += "-" + to_string(time(nullptr));
-    ret = mkdir(captureDir.c_str(), kPermissions);
-    if (ret == -1) {
-      const string kErrString(strerror(errno));
-      throw "Can't create destination directory "
-        + captureDir + ": " + kErrString;
-    }
+  } catch (string err) {
+    cerr << err << endl;
+    exit(EXIT_FAILURE);
   }
 
   saveCMDArgs(captureDir, argc, argv);

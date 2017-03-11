@@ -43,28 +43,16 @@ NUM_CAMS = 17
 FRAME_NUM_DIGITS = 6
 
 UNPACK_COMMAND_TEMPLATE = """
-{SURROUND360_RENDER_DIR}/bin/UnpackImageBundle
+{SURROUND360_RENDER_DIR}/bin/Unpacker
 --logbuflevel -1
 --log_dir {ROOT_DIR}/logs
 --stderrthreshold 0
---v {VERBOSE_LEVEL}
---binary_prefix {BINARY_PREFIX}
---dest_path {ROOT_DIR}
+--isp_dir {ISP_DIR}
+--output_dir {ROOT_DIR}/rgb
+--bin_list {BIN_LIST}
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
---file_count {DISK_COUNT}
 {FLAGS_UNPACK_EXTRA}
-"""
-
-ISP_COMMAND_TEMPLATE = """
-python {SURROUND360_RENDER_DIR}/scripts/batch_process_isp.py
---surround360_render_dir {SURROUND360_RENDER_DIR}
---root_dir {ROOT_DIR}
---start_frame {START_FRAME}
---end_frame {END_FRAME}
---isp_dir {ISP_DIR}
---nbits {NBITS}
-{FLAGS_ISP_EXTRA}
 """
 
 RENDER_COMMAND_TEMPLATE = """
@@ -106,9 +94,6 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
-  parser.add_argument('--image_width',                metavar='Image Width', help='image width (ignore if no cameranames.txt)', required=False, default='2048')
-  parser.add_argument('--image_height',               metavar='Image Height', help='image height (ignore if no cameranames.txt)', required=False, default='2048')
-  parser.add_argument('--nbits',                      metavar='Bit Depth', help='bit depth (ignore if no cameranames.txt)', required=False, choices=['8', '12'], default='12')
   parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
@@ -116,8 +101,8 @@ def parse_args():
   parser.add_argument('--cubemap_width',              metavar='Cubemap Face Width', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--cubemap_height',             metavar='Cubemap Face Height', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
+  parser.add_argument('--save_raw',                   help='Save RAW images', action='store_true')
   parser.add_argument('--steps_unpack',               help='Step 1: convert data in .bin files to RAW .tiff files', action='store_true', required=False)
-  parser.add_argument('--steps_isp',                  help='Step 3: convert RAW frames to RGB', action='store_true', required=False)
   parser.add_argument('--steps_rectify',              help='Step 4: use/create rectification file', action='store_true', required=False)
   parser.add_argument('--steps_render',               help='Step 5: render PNG stereo panoramas', action='store_true', required=False)
   parser.add_argument('--steps_ffmpeg',               help='Step 6: create MP4 output', action='store_true', required=False)
@@ -177,9 +162,6 @@ if __name__ == "__main__":
   args = parse_args()
   data_dir                  = args["data_dir"]
   dest_dir                  = args["dest_dir"]
-  image_width               = args["image_width"]
-  image_height              = args["image_height"]
-  nbits                     = args["nbits"]
   quality                   = args["quality"]
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
@@ -190,9 +172,9 @@ if __name__ == "__main__":
   enable_bottom             = args["enable_bottom"]
   enable_pole_removal       = args["enable_pole_removal"]
   save_debug_images         = args["save_debug_images"]
+  save_raw                  = args["save_raw"]
   dryrun                    = args["dryrun"];
   steps_unpack              = args["steps_unpack"]
-  steps_isp                 = args["steps_isp"]
   steps_render              = args["steps_render"]
   steps_ffmpeg              = args["steps_ffmpeg"]
   verbose                   = args["verbose"]
@@ -217,48 +199,48 @@ if __name__ == "__main__":
 
   print "Checking required files..."
 
-  dir_res_default = surround360_render_dir + "/res"
-  dir_config = dest_dir + "/config"
-  os.system("mkdir -p " + dir_config)
+  res_default_dir = surround360_render_dir + "/res"
+  config_dir = dest_dir + "/config"
+  os.system("mkdir -p " + config_dir)
 
-  dir_isp = dir_config + "/isp"
-  if not os.path.isdir(dir_isp):
-    print "ERROR: No color adjustment files not found in " + dir_isp + "\n"
+  isp_dir = config_dir + "/isp"
+  if not os.path.isdir(isp_dir):
+    print "ERROR: No color adjustment files not found in " + isp_dir + "\n"
     sys.stdout.flush()
     exit(1)
 
   new_rig_format = True
   file_camera_rig = "camera_rig.json"
-  path_file_camera_rig = dir_config + "/" + file_camera_rig
+  path_file_camera_rig = config_dir + "/" + file_camera_rig
   if not os.path.isfile(path_file_camera_rig):
     print "WARNING: Calibration file not found. Using default file.\n"
     sys.stdout.flush()
-    path_file_camera_rig_default = dir_res_default + "/config/" + file_camera_rig
+    path_file_camera_rig_default = res_default_dir + "/config/" + file_camera_rig
     os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
   else:
     json_camera_rig = json.load(open(path_file_camera_rig))
     if "camera_ring_radius" in json_camera_rig:
       # If using old format, we also need rectification and intrinsics files
       new_rig_format = False
-      path_file_rectify = dir_config + "/rectify.yml"
+      path_file_rectify = config_dir + "/rectify.yml"
       if not os.path.isfile(path_file_rectify):
         print "ERROR: Rectification file (" + path_file_rectify + ") not found.\n"
         sys.stdout.flush()
         exit(1)
       file_intrinsics = "intrinsics.xml"
-      path_file_instrinsics = dir_config + "/" + file_intrinsics
+      path_file_instrinsics = config_dir + "/" + file_intrinsics
       if not os.path.isfile(path_file_instrinsics):
         print "WARNING: Instrinsics file not found. Using default file.\n"
         sys.stdout.flush()
-        path_file_instrinsics_default = dir_res_default + "/config/" + file_intrinsics
+        path_file_instrinsics_default = res_default_dir + "/config/" + file_intrinsics
         os.system("cp " + path_file_instrinsics_default + " " + path_file_instrinsics)
 
-  dir_pole_masks = dest_dir + "/pole_masks"
-  if not os.path.isdir(dir_pole_masks):
+  pole_masks_dir = dest_dir + "/pole_masks"
+  if not os.path.isdir(pole_masks_dir):
     print "WARNING: Pole masks not found. Using default files.\n"
     sys.stdout.flush()
-    dir_pole_masks_default = dir_res_default + "/pole_masks"
-    os.system("cp -R " + dir_pole_masks_default + " " + dir_pole_masks)
+    pole_masks_default_dir = res_default_dir + "/pole_masks"
+    os.system("cp -R " + pole_masks_default_dir + " " + pole_masks_dir)
 
   # Open file (unbuffered)
   file_runtimes = open(dest_dir + "/runtimes.txt", 'w', 0)
@@ -267,38 +249,31 @@ if __name__ == "__main__":
 
   os.chdir(surround360_render_dir)
 
-  num_steps = sum([steps_unpack, steps_isp, steps_render, steps_ffmpeg])
+  num_steps = sum([steps_unpack, steps_render, steps_ffmpeg])
 
   ### unpack step ###
 
   if steps_unpack:
-    binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
-    binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
-    disk_count = len(binary_files)
-
-    dir_raw = dest_dir + "/raw"
-    if os.path.isdir(dir_raw) and len([f for f in os.listdir(dir_raw) if not f.startswith('.')]) > 0:
-      print "ERROR: raw directory not empty!\n"
-      sys.stdout.flush()
-      exit(1)
-
-    # If there is no cameranames we assume binaries are tagged with metadata
+    rgb_dir = dest_dir + "/rgb"
+    os.system("mkdir -p " + rgb_dir)
+    binary_files = [join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.bin')]
     unpack_extra_params = ""
-    if not os.path.isfile(binary_prefix + "/cameranames.txt"):
-      unpack_extra_params += " --tagged"
-    else:
-      unpack_extra_params += " --image_width " + image_width
-      unpack_extra_params += " --image_height " + image_height
-      unpack_extra_params += " --nbits " + nbits
+    if save_raw:
+      unpack_extra_params += " --output_raw_dir " + raw_dir
+      raw_dir = dest_dir + "/raw"
+      if os.path.isdir(raw_dir) and len([f for f in os.listdir(raw_dir) if not f.startswith('.')]) > 0:
+        print "ERROR: raw directory not empty!\n"
+        sys.stdout.flush()
+        exit(1)
 
     unpack_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
-      "BINARY_PREFIX": binary_prefix,
-      "ROOT_DIR": dir_raw,
-      "VERBOSE_LEVEL": 1 if verbose else 0,
+      "BIN_LIST": ",".join(binary_files),
+      "ROOT_DIR": dest_dir,
+      "ISP_DIR": isp_dir,
       "START_FRAME": start_frame,
       "FRAME_COUNT": frame_count,
-      "DISK_COUNT": disk_count,
+
       "FLAGS_UNPACK_EXTRA": unpack_extra_params,
     }
     unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
@@ -316,31 +291,6 @@ if __name__ == "__main__":
   file_runtimes.write("total frames: " + str(frame_count) + "\n")
 
   end_frame = int(start_frame) + int(frame_count) - 1
-
-  ### ISP step ###
-
-  if steps_isp:
-    isp_extra_params = ""
-
-    if verbose:
-      isp_extra_params += " --verbose"
-
-    # Force 16-bit output if input is 16-bit. Else use nbits flag
-    image_path = list_only_files(cam0_image_dir)[0]
-    image = Image.open(cam0_image_dir + "/" + image_path)
-    nbits_isp = 16 if (image.mode == "I;16" or int(nbits) == 12) else 8
-
-    isp_params = {
-      "SURROUND360_RENDER_DIR": surround360_render_dir,
-      "ROOT_DIR": dest_dir,
-      "START_FRAME": start_frame,
-      "END_FRAME": end_frame,
-      "ISP_DIR": dir_isp,
-      "FLAGS_ISP_EXTRA": isp_extra_params,
-      "NBITS": nbits_isp,
-    }
-    isp_command = ISP_COMMAND_TEMPLATE.replace("\n", " ").format(**isp_params)
-    run_step("isp", isp_command, verbose, dryrun, file_runtimes, num_steps)
 
   ### render step ###
 
@@ -393,7 +343,7 @@ if __name__ == "__main__":
       ffmpeg_extra_params += " -loglevel error -stats"
 
     # Sequence name is the directory containing raw data
-    sequence_name = binary_prefix.rsplit('/', 2)[-2]
+    sequence_name = data_dir.rsplit('/', 2)[-1]
     mp4_path = dest_dir + "/" + sequence_name + "_" + str(int(timer())) + "_" + quality + "_TB.mp4"
 
     ffmpeg_params = {

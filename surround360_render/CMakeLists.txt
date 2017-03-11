@@ -283,20 +283,21 @@ TARGET_LINK_LIBRARIES(
   ${PLATFORM_SPECIFIC_LIBS}
 )
 
-### NewUnpacker ###
+### Unpacker ###
 
 IF (DEFINED HALIDE_DIR)
   ADD_EXECUTABLE(
-    NewUnpacker
+    Unpacker
     source/camera_isp/BinaryFootageFile.cpp
-    source/camera_isp/NewUnpacker.cpp
-    source/camera_isp/Raw12Converter.cpp
+    source/camera_isp/Unpacker.cpp
+    source/camera_isp/RawConverter.cpp
     "${CMAKE_BINARY_DIR}/CameraIspGen8.h"
-    "${CMAKE_BINARY_DIR}/CameraIspGen16.h")
+    "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
+  )
 
   IF(NOT APPLE AND NOT MSVC)
     TARGET_LINK_LIBRARIES(
-      NewUnpacker
+      Unpacker
       LibVrCamera
       LibJSON
       glog
@@ -315,12 +316,11 @@ IF (DEFINED HALIDE_DIR)
     )
   ELSE()
     TARGET_LINK_LIBRARIES(
-      NewUnpacker
+      Unpacker
       LibVrCamera
       LibJSON
       glog
       gflags
-      ${OpenCV_LIBS}
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
@@ -332,7 +332,7 @@ IF (DEFINED HALIDE_DIR)
       ${PLATFORM_SPECIFIC_LIBS}
   )
   ENDIF()
-  ADD_DEPENDENCIES(NewUnpacker CameraIspGen)
+  ADD_DEPENDENCIES(Unpacker CameraIspGen)
 ENDIF()
 
 ### TestHyperPreview ###

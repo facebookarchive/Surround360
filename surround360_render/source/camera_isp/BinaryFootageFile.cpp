@@ -1,4 +1,4 @@
-#include "BinaryFootageFile.hpp"
+#include "BinaryFootageFile.h"
 
 extern "C" {
 #include <fcntl.h>

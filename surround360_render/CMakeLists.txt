@@ -266,74 +266,56 @@ TARGET_LINK_LIBRARIES(
   ${OpenCV_LIBS}
 )
 
-### UnpackImageBundle ###
-
-ADD_EXECUTABLE(
-  UnpackImageBundle
-  source/camera_isp/UnpackImageBundle.cpp
-)
-TARGET_COMPILE_FEATURES(UnpackImageBundle PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  UnpackImageBundle
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
-
 ### Unpacker ###
 
-IF (DEFINED HALIDE_DIR)
-  ADD_EXECUTABLE(
-    Unpacker
-    source/camera_isp/BinaryFootageFile.cpp
-    source/camera_isp/Unpacker.cpp
-    source/camera_isp/RawConverter.cpp
-    "${CMAKE_BINARY_DIR}/CameraIspGen8.h"
-    "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
-  )
+ADD_EXECUTABLE(
+  Unpacker
+  source/camera_isp/BinaryFootageFile.cpp
+  source/camera_isp/Unpacker.cpp
+  source/camera_isp/RawConverter.cpp
+  "${CMAKE_BINARY_DIR}/CameraIspGen8.h"
+  "${CMAKE_BINARY_DIR}/CameraIspGen16.h"
+)
 
-  IF(NOT APPLE AND NOT MSVC)
-    TARGET_LINK_LIBRARIES(
-      Unpacker
-      LibVrCamera
-      LibJSON
-      glog
-      gflags
-      ${OpenCV_LIBS}
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      Halide
-      dl
-      tinfo
-      z
-      ${OpenCV_LIBS}
-      ${PLATFORM_SPECIFIC_LIBS}
-    )
-  ELSE()
-    TARGET_LINK_LIBRARIES(
-      Unpacker
-      LibVrCamera
-      LibJSON
-      glog
-      gflags
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      Halide
-      dl
-      z
-      ${OpenCV_LIBS}
-      ${PLATFORM_SPECIFIC_LIBS}
+IF(NOT APPLE AND NOT MSVC)
+  TARGET_LINK_LIBRARIES(
+    Unpacker
+    LibVrCamera
+    LibJSON
+    glog
+    gflags
+    ${OpenCV_LIBS}
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    Halide
+    dl
+    tinfo
+    z
+    ${OpenCV_LIBS}
+    ${PLATFORM_SPECIFIC_LIBS}
   )
-  ENDIF()
-  ADD_DEPENDENCIES(Unpacker CameraIspGen)
+ELSE()
+  TARGET_LINK_LIBRARIES(
+    Unpacker
+    LibVrCamera
+    LibJSON
+    glog
+    gflags
+    ${OpenCV_LIBS}
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    Halide
+    dl
+    z
+    ${OpenCV_LIBS}
+    ${PLATFORM_SPECIFIC_LIBS}
+)
 ENDIF()
+ADD_DEPENDENCIES(Unpacker CameraIspGen)
 
 ### TestHyperPreview ###
 

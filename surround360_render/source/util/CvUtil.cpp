@@ -147,6 +147,7 @@ Mat featherAlphaChannel(const Mat& src, int erodeSize) {
     cv::Size(2 * erodeSize + 1, 2 * erodeSize + 1),
     cv::Point(erodeSize, erodeSize) );
   erode(channels[3], channels[3], erosionKernel);
+
   // blur the eroded alpha channel
   GaussianBlur(channels[3], channels[3], Size(erodeSize, erodeSize), erodeSize / 2.0f);
 

@@ -94,23 +94,22 @@ def parse_args():
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',                   metavar='Data Directory', help='directory containing .bin files', required=True, **dir_chooser)
   parser.add_argument('--dest_dir',                   metavar='Destination Directory', help='destination directory', required=True, **({"widget": "DirChooser"} if USE_GOOEY else {}))
-  parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--start_frame',                metavar='Start Frame', help='start frame', required=False, default='0')
   parser.add_argument('--frame_count',                metavar='Frame Count', help='0 = all', required=False, default='0')
+  parser.add_argument('--quality',                    metavar='Quality', help='final output quality', required=False, choices=['3k', '4k', '6k', '8k'], default='6k')
   parser.add_argument('--cubemap_format',             metavar='Cubemap Format', help='photo or video', required=False, choices=['photo', 'video'], default='video')
   parser.add_argument('--cubemap_width',              metavar='Cubemap Face Width', help='0 = no cubemaps', required=False, default='0')
   parser.add_argument('--cubemap_height',             metavar='Cubemap Face Height', help='0 = no cubemaps', required=False, default='0')
-  parser.add_argument('--save_debug_images',          help='save debug images', action='store_true')
+  parser.add_argument('--save_debug_images',          help='Save debug images', action='store_true')
   parser.add_argument('--save_raw',                   help='Save RAW images', action='store_true')
-  parser.add_argument('--steps_unpack',               help='Step 1: convert data in .bin files to RAW .tiff files', action='store_true', required=False)
-  parser.add_argument('--steps_rectify',              help='Step 4: use/create rectification file', action='store_true', required=False)
-  parser.add_argument('--steps_render',               help='Step 5: render PNG stereo panoramas', action='store_true', required=False)
-  parser.add_argument('--steps_ffmpeg',               help='Step 6: create MP4 output', action='store_true', required=False)
-  parser.add_argument('--enable_top',                 help='enable top camera', action='store_true')
-  parser.add_argument('--enable_bottom',              help='enable bottom camera', action='store_true')
+  parser.add_argument('--steps_unpack',               help='Step 1: convert data in .bin files to RGB files', action='store_true', required=False)
+  parser.add_argument('--steps_render',               help='Step 2: render stereo panoramas', action='store_true', required=False)
+  parser.add_argument('--steps_ffmpeg',               help='Step 3: create video output', action='store_true', required=False)
+  parser.add_argument('--enable_top',                 help='Enable top camera', action='store_true')
+  parser.add_argument('--enable_bottom',              help='Enable bottom camera', action='store_true')
   parser.add_argument('--enable_pole_removal',        help='false = use primary bottom camera', action='store_true')
-  parser.add_argument('--dryrun',                     help='do not execute steps', action='store_true')
-  parser.add_argument('--verbose',                    help='increase output verbosity', action='store_true')
+  parser.add_argument('--dryrun',                     help='Do not execute steps', action='store_true')
+  parser.add_argument('--verbose',                    help='Increase output verbosity', action='store_true')
 
   return vars(parser.parse_args())
 
@@ -162,9 +161,9 @@ if __name__ == "__main__":
   args = parse_args()
   data_dir                  = args["data_dir"]
   dest_dir                  = args["dest_dir"]
-  quality                   = args["quality"]
   start_frame               = int(args["start_frame"])
   frame_count               = int(args["frame_count"])
+  quality                   = args["quality"]
   cubemap_width             = int(args["cubemap_width"])
   cubemap_height            = int(args["cubemap_height"])
   cubemap_format            = args["cubemap_format"]
@@ -209,7 +208,6 @@ if __name__ == "__main__":
     sys.stdout.flush()
     exit(1)
 
-  new_rig_format = True
   file_camera_rig = "camera_rig.json"
   path_file_camera_rig = config_dir + "/" + file_camera_rig
   if not os.path.isfile(path_file_camera_rig):
@@ -217,23 +215,6 @@ if __name__ == "__main__":
     sys.stdout.flush()
     path_file_camera_rig_default = res_default_dir + "/config/" + file_camera_rig
     os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
-  else:
-    json_camera_rig = json.load(open(path_file_camera_rig))
-    if "camera_ring_radius" in json_camera_rig:
-      # If using old format, we also need rectification and intrinsics files
-      new_rig_format = False
-      path_file_rectify = config_dir + "/rectify.yml"
-      if not os.path.isfile(path_file_rectify):
-        print "ERROR: Rectification file (" + path_file_rectify + ") not found.\n"
-        sys.stdout.flush()
-        exit(1)
-      file_intrinsics = "intrinsics.xml"
-      path_file_instrinsics = config_dir + "/" + file_intrinsics
-      if not os.path.isfile(path_file_instrinsics):
-        print "WARNING: Instrinsics file not found. Using default file.\n"
-        sys.stdout.flush()
-        path_file_instrinsics_default = res_default_dir + "/config/" + file_intrinsics
-        os.system("cp " + path_file_instrinsics_default + " " + path_file_instrinsics)
 
   pole_masks_dir = dest_dir + "/pole_masks"
   if not os.path.isdir(pole_masks_dir):
@@ -273,14 +254,13 @@ if __name__ == "__main__":
       "ISP_DIR": isp_dir,
       "START_FRAME": start_frame,
       "FRAME_COUNT": frame_count,
-
       "FLAGS_UNPACK_EXTRA": unpack_extra_params,
     }
     unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
     run_step("unpack", unpack_command, verbose, dryrun, file_runtimes, num_steps)
 
   # If unpack not in list of steps, we get frame count from raw directory
-  cam0_image_dir = dest_dir + "/raw/cam0"
+  cam0_image_dir = dest_dir + "/rgb/cam0"
   if int(frame_count) == 0:
     if os.path.isdir(cam0_image_dir):
       frame_count = len(os.listdir(cam0_image_dir))
@@ -305,12 +285,6 @@ if __name__ == "__main__":
 
       if enable_pole_removal:
         render_extra_params += " --enable_pole_removal"
-
-    if new_rig_format:
-      render_extra_params += " --new_rig_format"
-    else:
-      render_extra_params += " --rectify_file " + path_file_rectify
-      render_extra_params += " --src_intrinsic_param_file " + path_file_instrinsics
 
     if save_debug_images:
       render_extra_params += " --save_debug_images"

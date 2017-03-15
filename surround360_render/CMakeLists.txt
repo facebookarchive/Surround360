@@ -101,6 +101,7 @@ ADD_LIBRARY(
 TARGET_COMPILE_FEATURES(LibVrCamera PRIVATE cxx_range_for)
 
 ### Raw2Rgb ###
+
 IF (DEFINED HALIDE_DIR)
    halide_gen_app(CameraIspGen "apps" source/camera_isp/CameraIspGen.cpp)
 
@@ -120,7 +121,6 @@ IF (DEFINED HALIDE_DIR)
   ADD_DEPENDENCIES(Raw2Rgb CameraIspGen)
 ENDIF()
 
-### Raw2Rgb ###
 IF (DEFINED HALIDE_DIR)
   IF(NOT APPLE AND NOT MSVC)
     TARGET_LINK_LIBRARIES(
@@ -200,22 +200,6 @@ TARGET_LINK_LIBRARIES(
   gflags
 )
 
-### TestIntrinsicCalibration ###
-
-ADD_EXECUTABLE(
-  TestIntrinsicCalibration
-  source/test/TestIntrinsicCalibration.cpp
-)
-TARGET_COMPILE_FEATURES(TestIntrinsicCalibration PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestIntrinsicCalibration
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-)
-
 ### TestOpticalFlow ###
 
 ADD_EXECUTABLE(
@@ -227,24 +211,6 @@ TARGET_LINK_LIBRARIES(
   TestOpticalFlow
   LibVrCamera
   LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
-
-### TestImageWarper ###
-
-ADD_EXECUTABLE(
-  TestImageWarper
-  source/test/TestImageWarper.cpp
-)
-TARGET_COMPILE_FEATURES(TestImageWarper PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestImageWarper
-  LibVrCamera
-  LibJSON
-  folly
   glog
   gflags
   ${OpenCV_LIBS}
@@ -335,23 +301,6 @@ TARGET_LINK_LIBRARIES(
   ${PLATFORM_SPECIFIC_LIBS}
 )
 
-### TestRingRectification ###
-
-ADD_EXECUTABLE(
-  TestRingRectification
-  source/test/TestRingRectification.cpp
-)
-TARGET_COMPILE_FEATURES(TestRingRectification PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestRingRectification
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
-
 ### TestPoleRemoval ###
 
 ADD_EXECUTABLE(
@@ -361,40 +310,6 @@ ADD_EXECUTABLE(
 TARGET_COMPILE_FEATURES(TestPoleRemoval PRIVATE cxx_range_for)
 TARGET_LINK_LIBRARIES(
   TestPoleRemoval
-  LibVrCamera
-  LibJSON
-  gflags
-  glog
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
-
-### TestOpticalCenterVisualization ###
-
-ADD_EXECUTABLE(
-  TestOpticalCenterVisualization
-  source/test/TestOpticalCenterVisualization.cpp
-)
-TARGET_COMPILE_FEATURES(TestOpticalCenterVisualization PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestOpticalCenterVisualization
-  LibVrCamera
-  LibJSON
-  glog
-  gflags
-  ${OpenCV_LIBS}
-  ${PLATFORM_SPECIFIC_LIBS}
-)
-
-### TestRenderWithoutSides ###
-
-ADD_EXECUTABLE(
-  TestRenderWithoutSides
-  source/test/TestRenderWithoutSides.cpp
-)
-TARGET_COMPILE_FEATURES(TestRenderWithoutSides PRIVATE cxx_range_for)
-TARGET_LINK_LIBRARIES(
-  TestRenderWithoutSides
   LibVrCamera
   LibJSON
   folly

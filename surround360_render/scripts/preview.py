@@ -42,7 +42,7 @@ time {SURROUND360_RENDER_DIR}/bin/TestHyperPreview
 --eqr_width {EQR_WIDTH}
 --eqr_height {EQR_HEIGHT}
 --gamma {GAMMA}
- --disk_count 2
+ --file_count 2
 """
 
 FFMPEG_COMMAND_TEMPLATE = """
@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
   binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
   binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
-  disk_count = len(binary_files)
+  file_count = len(binary_files)
 
   os.system("mkdir -p " + dest_dir + "/logs")
   os.system("mkdir -p " + dest_dir + "/eqr_preview")
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     "DEST_DIR": dest_dir,
     "START_FRAME": start_frame,
     "FRAME_COUNT": frame_count,
-    "DISK_COUNT": disk_count,
+    "FILE_COUNT": file_count,
     "RIG_JSON_FILE": rig_json_file,
     "EQR_WIDTH": eqr_width,
     "EQR_HEIGHT": eqr_height,

@@ -9,11 +9,13 @@
 
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
+
 #include "BinaryFootageFile.h"
 
 namespace surround360 {
+
 class RawConverter {
  public:
   static std::unique_ptr<std::vector<uint16_t>> convert8Frame(
@@ -26,4 +28,5 @@ class RawConverter {
     const size_t width,
     const size_t height);
 };
-}
+
+}  //end namespace surround360

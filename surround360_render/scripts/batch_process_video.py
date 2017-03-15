@@ -31,9 +31,7 @@ RENDER_COMMAND_TEMPLATE = """
 --log_dir {LOG_DIR}
 --stderrthreshold 0
 --v {VERBOSE_LEVEL}
---src_intrinsic_param_file {SRC_INTRINSIC_PARAM_FILE}
 --rig_json_file {RIG_JSON_FILE}
---ring_rectify_file {RECTIFY_FILE}
 --imgs_dir {SRC_DIR}/rgb
 --frame_number {FRAME_ID}
 --output_data_dir {SRC_DIR}
@@ -82,9 +80,6 @@ if __name__ == "__main__":
   parser.add_argument('--enable_pole_removal', dest='enable_pole_removal', action='store_true')
   parser.add_argument('--resume', dest='resume', action='store_true', help='looks for a previous frame optical flow instead of starting fresh')
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
-  parser.add_argument('--new_rig_format', dest='new_rig_format', action='store_true')
-  parser.add_argument('--rectify_file', help='path to rectification param file', required=False, default="NONE")
-  parser.add_argument('--src_intrinsic_param_file', help='path to camera instrinsic param file', required=False, default="NONE")
   parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
   parser.set_defaults(save_debug_images=False)
@@ -112,9 +107,6 @@ if __name__ == "__main__":
   enable_pole_removal       = args["enable_pole_removal"]
   resume                    = args["resume"]
   rig_json_file             = args["rig_json_file"]
-  new_rig_format            = args["new_rig_format"]
-  rectify_file              = args["rectify_file"]
-  src_intrinsic_param_file  = args["src_intrinsic_param_file"]
   flow_alg                  = args["flow_alg"]
   verbose                   = args["verbose"]
 
@@ -154,9 +146,7 @@ if __name__ == "__main__":
       "CUBEMAP_WIDTH": cubemap_width,
       "CUBEMAP_HEIGHT": cubemap_height,
       "CUBEMAP_FORMAT": cubemap_format,
-      "SRC_INTRINSIC_PARAM_FILE": src_intrinsic_param_file,
       "RIG_JSON_FILE": rig_json_file,
-      "RECTIFY_FILE": rectify_file,
       "SIDE_FLOW_ALGORITHM": flow_alg,
       "POLAR_FLOW_ALGORITHM": flow_alg,
       "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
@@ -181,9 +171,6 @@ if __name__ == "__main__":
       if enable_pole_removal:
         render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
         render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
-
-    if new_rig_format:
-      render_params["EXTRA_FLAGS"] += " --new_rig_format"
 
     if quality == "3k":
       render_params["SHARPENNING"]                  = 0.25

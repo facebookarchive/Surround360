@@ -12,7 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "CameraMetadata.h"
 #include "CvUtil.h"
 #include "MathUtil.h"
 #include "OpticalFlowFactory.h"
@@ -28,6 +27,7 @@ using namespace cv;
 using namespace std;
 using namespace surround360::calibration;
 using namespace surround360::optical_flow;
+using namespace surround360::util;
 
 void combineBottomImagesWithPoleRemoval(
     const string& imagesDir,

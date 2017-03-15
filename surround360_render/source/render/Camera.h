@@ -1,4 +1,15 @@
+/**
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the BSD-style license found in the
+* LICENSE_render file in the root directory of this subproject. An additional grant
+* of patent rights can be found in the PATENTS file in the same directory.
+*/
+
 #pragma once
+
+#include <algorithm>
 
 #include <Eigen/Geometry>
 #include <folly/dynamic.h>
@@ -129,6 +140,20 @@ struct Camera {
       }
     }
     return inside / Real(kProbeCount * kProbeCount);
+  }
+
+  // sample the camera's fov cone to find the closest point to the image center
+  static float approximateUsablePixelsRadius(const Camera& camera) {
+    const Camera::Real fov = camera.getFov();
+    const Camera::Real kStep = 2 * M_PI / 10.0;
+    Camera::Real result = camera.resolution.norm();
+    for (Camera::Real a = 0; a < 2 * M_PI; a += kStep) {
+      Camera::Vector3 ortho = cos(a) * camera.right() + sin(a) * camera.up();
+      Camera::Vector3 direction = cos(fov) * camera.forward() + sin(fov) * ortho;
+      Camera::Vector2 pixel = camera.pixel(camera.position + direction);
+      result = std::min(result, (pixel - camera.resolution / 2.0).norm());
+    }
+    return result;
   }
 
   static void unitTest();

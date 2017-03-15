@@ -11,14 +11,12 @@
 
 #include <vector>
 
-#include "CameraMetadata.h"
 #include "CvUtil.h"
 
 namespace surround360 {
 
 using namespace cv;
 using namespace std;
-using namespace surround360::calibration;
 
 // loads the two bottom camera images. generates an alpha channel corresponding to pole
 // masks. does optical flow to merge the two images. results are saved to bottomImage.

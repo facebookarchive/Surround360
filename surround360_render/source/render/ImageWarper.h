@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "Camera.h"
-#include "CameraMetadata.h"
 #include "CvUtil.h"
 
 namespace surround360 {
@@ -20,7 +19,6 @@ namespace warper {
 
 using namespace cv;
 using namespace std;
-using namespace surround360::calibration;
 
 enum CubemapFace {
   CUBEMAP_FACE_BACK,
@@ -58,12 +56,6 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   const int faceWidth,
   const int faceHeight);
 
-// helper for bicubicRemapFisheyeToSpherical. returns the warp matrix to be
-// passed to cv::remap
-Mat precomputeBicubicRemapFisheyeToSpherical(
-  const CameraMetadata& camModel,
-  const Size sphericalImageSize);
-
 void bicubicRemapToSpherical(
   Mat& dst,
   const Mat& src,
@@ -72,6 +64,12 @@ void bicubicRemapToSpherical(
   const float rightAngle,
   const float topAngle,
   const float bottomAngle);
+
+Camera::Vector2 projectEquirectToCam(
+  const float srcTheta,
+  const float srcPhi,
+  const Camera& destCam,
+  const float depth);
 
 } // namespace warper
 } // namespace surround360

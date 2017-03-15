@@ -140,29 +140,6 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   return faceImages;
 }
 
-Mat precomputeBicubicRemapFisheyeToSpherical(
-    const CameraMetadata& camModel,
-    const Size sphericalImageSize) {
-
-  assert(camModel.isFisheye);
-
-  Mat warpMat = Mat(sphericalImageSize.height, sphericalImageSize.width, CV_32FC2);
-  const float dTheta = 2.0f * M_PI / float(sphericalImageSize.width);
-
-  for (int i = 0; i < sphericalImageSize.width; ++i) {
-    const float theta = -i * dTheta + M_PI
-      + toRadians(camModel.fisheyeRotationDegrees);
-    for (int j = 0; j < sphericalImageSize.height; ++j) {
-      const float r = j / float(sphericalImageSize.height);
-      const float rPix = camModel.usablePixelsRadius * r;
-      const float srcX = camModel.imageCenterX + cosf(theta) * rPix;
-      const float srcY = camModel.imageCenterY + sinf(theta) * rPix;
-      warpMat.at<Point2f>(j, i) = Point2f(srcX, srcY);
-    }
-  }
-  return warpMat;
-}
-
 void bicubicRemapToSpherical(
     Mat& dst,
     const Mat& src,
@@ -194,6 +171,28 @@ void bicubicRemapToSpherical(
     cvtColor(src, tmp, CV_BGR2BGRA);
   }
   remap(tmp, dst, warp, Mat(), CV_INTER_CUBIC, BORDER_CONSTANT);
+}
+
+// srcTheta and srcPhi correspond to a pixel in an equirectangular projection.
+// returns the point in the image of destCam corresponding to that pixel in the
+// equirect, or (-1, -1) if the camera doesn't see that point.
+Camera::Vector2 projectEquirectToCam(
+    const float srcTheta,
+    const float srcPhi,
+    const Camera& destCam,
+    const float depth) {
+
+  const Camera::Vector3 sphericalDir(
+    sinf(srcPhi) * cosf(srcTheta),
+    sinf(srcPhi) * sinf(srcTheta),
+    cosf(srcPhi));
+  const Camera::Vector3 worldPoint = depth * sphericalDir;
+
+  if (destCam.sees(worldPoint)) {
+    return destCam.pixel(worldPoint);
+  } else {
+    return Camera::Vector2(-1, -1); // this will sample 0-alpha when cv::remap'd
+  }
 }
 
 } // namespace warper

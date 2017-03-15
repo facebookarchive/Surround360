@@ -49,6 +49,7 @@ struct Camera {
   folly::dynamic serialize() const;
   static Rig loadRig(const std::string& filename);
   static void saveRig(const std::string& filename, const Rig& rig);
+  static Camera createRescaledCamera(const Camera& cam, const float scale);
 
   // access rotation as forward/up/right vectors
   Vector3 forward() const { return -backward(); }

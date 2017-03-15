@@ -104,5 +104,15 @@ static Mat flattenLayers(
   return mergedImage;
 }
 
+// Applies radial alpha mask to input image
+void radialAlphaFade(Mat& img);
+
+// Applies top-down alpha mask to input image
+void topDownAlphaFade(Mat& img);
+
+// Applies a softmax function to the input color layers
+Mat flattenLayersAlphaSoftmax(
+  const vector<Mat>& layers, const float softmaxCoef);
+
 } // namespace util
 } // namespace surround360

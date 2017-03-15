@@ -243,6 +243,26 @@ void Camera::saveRig(
   folly::writeFile(folly::toPrettyJson(dynamic), filename.c_str());
 }
 
+// takes a camera and a scale factor. returns a camera model equivalent to
+// changing the resolution of the original camera
+Camera Camera::createRescaledCamera(
+    const Camera& cam,
+    const float scale) {
+
+  Camera scaledCam(cam);
+  scaledCam.resolution = Camera::Vector2(
+    int(cam.resolution.x() * scale),
+    int(cam.resolution.y() * scale));
+
+  const float scaleX = scaledCam.resolution.x() / cam.resolution.x();
+  const float scaleY = scaledCam.resolution.y() / cam.resolution.y();
+  scaledCam.principal.x() *= scaleX;
+  scaledCam.principal.y() *= scaleY;
+  scaledCam.focal.x() *= scaleX;
+  scaledCam.focal.y() *= scaleY;
+  return scaledCam;
+}
+
 void Camera::unitTest() {
   folly::dynamic serialized = folly::dynamic::object
       ("version", 1)

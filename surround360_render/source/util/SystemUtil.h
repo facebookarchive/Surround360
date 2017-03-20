@@ -20,6 +20,8 @@
 #include <thread>
 #include <vector>
 
+#include "CvUtil.h"
+#include "StringUtil.h"
 #include "VrCamException.h"
 
 namespace surround360 {
@@ -91,6 +93,17 @@ static vector<string> getFilesInDir(
   return out_file_names;
 }
 
+static string getImageFileExtension(const string& imageDir) {
+  // figure out the file extension used by the images. This is complicated but
+  // it's all so we can iterate over the images in the right order.
+  // assumption: no weird mixtures of file extension
+  vector<string> imageFilenames = getFilesInDir(imageDir, false, 1);
+  assert(imageFilenames.size() > 0);
+  vector<string> firstFilenameParts = stringSplit(imageFilenames[0], '.');
+  assert(firstFilenameParts.size() == 2);
+  return firstFilenameParts[1];
+}
+
 // Thread functor wrapper.
 template <typename T>
 struct Threadable {
@@ -103,6 +116,10 @@ struct Threadable {
   }
 };
 
+// wrapper for imreadExceptionOnFail( for use in std::threads
+static void imreadInStdThread(string path, int flags, Mat* dest) {
+  *dest = imreadExceptionOnFail(path, flags);
+}
 
 } // namespace util
 } // namespace surround360

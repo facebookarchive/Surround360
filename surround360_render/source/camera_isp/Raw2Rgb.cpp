@@ -435,7 +435,6 @@ int main(int argc, char* argv[]) {
 
       cameraIsp.addBlackLevelOffset(FLAGS_black_level_offset);
       cameraIsp.loadImage(inputImage16);
-      cameraIsp.setup();
       cameraIsp.initPipe();
       runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
       writeDng(cameraIsp, FLAGS_output_dng_path, inputImage16, outputImage);
@@ -454,7 +453,6 @@ int main(int argc, char* argv[]) {
         }
         cameraIsp.addBlackLevelOffset(FLAGS_black_level_offset);
         cameraIsp.loadImage(inputImage16);
-        cameraIsp.setup();
         runPipeline(&cameraIsp, inputImage16, outputImage, FLAGS_output_image_path);
         writeDng(cameraIsp, FLAGS_output_dng_path, inputImage16, outputImage);
       }

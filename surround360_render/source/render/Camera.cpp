@@ -1,3 +1,12 @@
+/**
+* Copyright (c) 2016-present, Facebook, Inc.
+* All rights reserved.
+*
+* This source code is licensed under the BSD-style license found in the
+* LICENSE_render file in the root directory of this subproject. An additional grant
+* of patent rights can be found in the PATENTS file in the same directory.
+*/
+
 #include "Camera.h"
 
 namespace surround360 {
@@ -232,6 +241,26 @@ void Camera::saveRig(
     dynamic["cameras"].push_back(camera.serialize());
   }
   folly::writeFile(folly::toPrettyJson(dynamic), filename.c_str());
+}
+
+// takes a camera and a scale factor. returns a camera model equivalent to
+// changing the resolution of the original camera
+Camera Camera::createRescaledCamera(
+    const Camera& cam,
+    const float scale) {
+
+  Camera scaledCam(cam);
+  scaledCam.resolution = Camera::Vector2(
+    int(cam.resolution.x() * scale),
+    int(cam.resolution.y() * scale));
+
+  const float scaleX = scaledCam.resolution.x() / cam.resolution.x();
+  const float scaleY = scaledCam.resolution.y() / cam.resolution.y();
+  scaledCam.principal.x() *= scaleX;
+  scaledCam.principal.y() *= scaleY;
+  scaledCam.focal.x() *= scaleX;
+  scaledCam.focal.y() *= scaleY;
+  return scaledCam;
 }
 
 void Camera::unitTest() {

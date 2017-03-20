@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "Camera.h"
-#include "CameraMetadata.h"
 #include "CvUtil.h"
 
 namespace surround360 {
@@ -20,7 +19,6 @@ namespace warper {
 
 using namespace cv;
 using namespace std;
-using namespace surround360::calibration;
 
 enum CubemapFace {
   CUBEMAP_FACE_BACK,
@@ -58,28 +56,6 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   const int faceWidth,
   const int faceHeight);
 
-// takes a fisheyeImage (un-distorted/straight from the sensor), and generates
-// an equirect projection. intended for use with top/bottom cameras
-Mat bicubicRemapFisheyeToSpherical(
-  const CameraMetadata& camModel,
-  const Mat& fisheyeImage,
-  const Size sphericalImageSize);
-
-// helper for bicubicRemapFisheyeToSpherical. returns the warp matrix to be
-// passed to cv::remap
-Mat precomputeBicubicRemapFisheyeToSpherical(
-  const CameraMetadata& camModel,
-  const Size sphericalImageSize);
-
-// for camera arrays that use 180 degree fisheye lenses on the side, we need a different
-// approach to projection to spherical coordinates than with a smaller FOV wide-angle
-// lens. assumes a 180 degree fisheye pointing horizontally sideways
-Mat sideFisheyeToSpherical(
-  const Mat& src,
-  const CameraMetadata& camModel,
-  const int outWidth,
-  const int outHeight);
-
 void bicubicRemapToSpherical(
   Mat& dst,
   const Mat& src,
@@ -88,6 +64,12 @@ void bicubicRemapToSpherical(
   const float rightAngle,
   const float topAngle,
   const float bottomAngle);
+
+Camera::Vector2 projectEquirectToCam(
+  const float srcTheta,
+  const float srcPhi,
+  const Camera& destCam,
+  const float depth);
 
 } // namespace warper
 } // namespace surround360

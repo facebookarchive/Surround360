@@ -147,6 +147,7 @@ Mat featherAlphaChannel(const Mat& src, int erodeSize) {
     cv::Size(2 * erodeSize + 1, 2 * erodeSize + 1),
     cv::Point(erodeSize, erodeSize) );
   erode(channels[3], channels[3], erosionKernel);
+
   // blur the eroded alpha channel
   GaussianBlur(channels[3], channels[3], Size(erodeSize, erodeSize), erodeSize / 2.0f);
 
@@ -306,6 +307,56 @@ vector<vector<float>> buildColorAdjustmentModel(
     outputs,
     kNumIterations,
     kStepSize,kPrintObjective);
+}
+
+void radialAlphaFade(Mat& img) {
+  CHECK_EQ(img.type(), CV_32FC4);
+  for (int y = 0; y < img.rows; ++y) {
+    for (int x = 0; x < img.cols; ++x) {
+      const float dx = x - float(img.cols) / 2.0f;
+      const float dy = y - float(img.rows) / 2.0f;
+      const float r =
+        sqrt(dx * dx + dy * dy) / float(std::min(img.rows, img.cols) / 2.0f);
+      const float alpha = max(0.0f, 1.0f - r);
+      img.at<Vec4f>(y, x)[3] *= alpha;
+    }
+  }
+}
+
+void topDownAlphaFade(Mat& img) {
+  CHECK_EQ(img.type(), CV_32FC4);
+  for (int y = 0; y < img.rows; ++y) {
+    const float alpha = y / float(img.rows);
+    for (int x = 0; x < img.cols; ++x) {
+      img.at<Vec4f>(y, x)[3] *= alpha;
+    }
+  }
+}
+
+Mat flattenLayersAlphaSoftmax(
+    const vector<Mat>& layers,
+    const float softmaxCoef) {
+
+  for (const auto& img : layers) {
+    CHECK_EQ(img.type(), CV_32FC4);
+  }
+
+  Mat flattened(layers[0].size(), CV_32FC3);
+  for (int y = 0; y < flattened.rows; ++y) {
+    for (int x = 0; x < flattened.cols; ++x) {
+      float sumAlpha = 0.0f;
+      Vec3f sumColor(0.0f, 0.0f, 0.0f);
+      for (int imgIdx = 0; imgIdx < layers.size(); ++imgIdx) {
+        const Vec4f srcColor = layers[imgIdx].at<Vec4f>(y, x);
+        const float alpha =
+          expf(softmaxCoef * srcColor[3]) - 1.0f;
+        sumColor += alpha * Vec3f(srcColor[0], srcColor[1], srcColor[2]);
+        sumAlpha += alpha;
+      }
+      flattened.at<Vec3f>(y, x) = sumColor / sumAlpha;
+    }
+  }
+  return flattened;
 }
 
 } // namespace util

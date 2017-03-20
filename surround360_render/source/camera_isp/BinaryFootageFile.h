@@ -23,10 +23,12 @@ class BinaryFootageFile {
 
   void open();
   void close();
+  const std::string getFilename() const;
   const uint8_t* getFrame(const uint32_t frameNumber, const uint32_t cameraNumber) const;
   const size_t getNumberOfCameras() const;
   const size_t getNumberOfFrames() const;
   const size_t getFrameSize() const;
+  const size_t getBitsPerPixel() const;
   const MetadataHeader& getMetadata() const {
     return metadata;
   }

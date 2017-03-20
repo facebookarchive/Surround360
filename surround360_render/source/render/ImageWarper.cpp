@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 
-#include "CameraMetadata.h"
 #include "MathUtil.h"
 
 namespace surround360 {
@@ -22,7 +21,6 @@ namespace warper {
 using namespace cv;
 using namespace std;
 using namespace surround360::math_util;
-using namespace surround360::calibration;
 using namespace surround360::util;
 
 inline Vec3f cubemapIndexToVec3(
@@ -142,97 +140,6 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   return faceImages;
 }
 
-Mat precomputeBicubicRemapFisheyeToSpherical(
-    const CameraMetadata& camModel,
-    const Size sphericalImageSize) {
-
-  assert(camModel.isFisheye);
-
-  Mat warpMat = Mat(sphericalImageSize.height, sphericalImageSize.width, CV_32FC2);
-  const float dTheta = 2.0f * M_PI / float(sphericalImageSize.width);
-
-  for (int i = 0; i < sphericalImageSize.width; ++i) {
-    const float theta = -i * dTheta + M_PI
-      + toRadians(camModel.fisheyeRotationDegrees);
-    for (int j = 0; j < sphericalImageSize.height; ++j) {
-      const float r = j / float(sphericalImageSize.height);
-      const float rPix = camModel.usablePixelsRadius * r;
-      const float srcX = camModel.imageCenterX + cosf(theta) * rPix;
-      const float srcY = camModel.imageCenterY + sinf(theta) * rPix;
-      warpMat.at<Point2f>(j, i) = Point2f(srcX, srcY);
-    }
-  }
-  return warpMat;
-}
-
-Mat bicubicRemapFisheyeToSpherical(
-    const CameraMetadata& camModel,
-    const Mat& fisheyeImage,
-    const Size sphericalImageSize) {
-
-  assert(camModel.isFisheye);
-
-  const Mat warpMat = precomputeBicubicRemapFisheyeToSpherical(
-    camModel, sphericalImageSize);
-
-  Mat sphericalImage(sphericalImageSize.height, sphericalImageSize.width, CV_8UC3);
-  remap(
-    fisheyeImage,
-    sphericalImage,
-    warpMat,
-    Mat(),
-    CV_INTER_CUBIC,
-    BORDER_CONSTANT);
-  return sphericalImage;
-}
-
-Mat sideFisheyeToSpherical(
-    const Mat& src,
-    const CameraMetadata& camModel,
-    const int outWidth,
-    const int outHeight) {
-
-  Mat srcRGBA = src;
-  if (src.type() == CV_8UC3) {
-    cvtColor(src, srcRGBA, CV_BGR2BGRA);
-  }
-
-  const float fovHRad = toRadians(camModel.fovHorizontal);
-  const float fovVRad = fovHRad / camModel.aspectRatioWH;
-  const float offsetHRad = (M_PI - fovHRad) / 2.0f;
-  const float offsetVRad = (M_PI - fovVRad) / 2.0f;
-
-  Mat warpMat(Size(outWidth, outHeight), CV_32FC2);
-  for (int y = 0; y < outHeight; ++y) {
-    for (int x = 0; x < outWidth; ++x) {
-      const float theta =
-        fovHRad * (1.0 - float(x) / float(outWidth)) + offsetHRad;
-      const float phi = fovVRad * float(y) / float(outHeight) + offsetVRad;
-      const float xSphere = cos(theta) * sin(phi);
-      const float ySphere = sin(theta) * sin(phi);
-      const float zSphere = cos(phi);
-      const float theta2 = atan2(-zSphere, xSphere);
-      const float phi2 = acos(ySphere);
-      const float r = phi2 / toRadians(camModel.fisheyeFovDegrees / 2.0f);
-      const float srcX =
-        camModel.imageCenterX + camModel.usablePixelsRadius * r * cos(theta2);
-      const float srcY =
-        camModel.imageCenterY + camModel.usablePixelsRadius * r * sin(theta2);
-      warpMat.at<Point2f>(y, x) = Point2f(srcX, srcY);
-    }
-  }
-  Mat eqrImage(Size(outWidth, outHeight), CV_8UC4);
-  remap(
-    srcRGBA,
-    eqrImage,
-    warpMat,
-    Mat(),
-    CV_INTER_CUBIC,
-    BORDER_CONSTANT,
-    Scalar(0, 0, 0, 0));
-  return eqrImage;
-}
-
 void bicubicRemapToSpherical(
     Mat& dst,
     const Mat& src,
@@ -264,6 +171,28 @@ void bicubicRemapToSpherical(
     cvtColor(src, tmp, CV_BGR2BGRA);
   }
   remap(tmp, dst, warp, Mat(), CV_INTER_CUBIC, BORDER_CONSTANT);
+}
+
+// srcTheta and srcPhi correspond to a pixel in an equirectangular projection.
+// returns the point in the image of destCam corresponding to that pixel in the
+// equirect, or (-1, -1) if the camera doesn't see that point.
+Camera::Vector2 projectEquirectToCam(
+    const float srcTheta,
+    const float srcPhi,
+    const Camera& destCam,
+    const float depth) {
+
+  const Camera::Vector3 sphericalDir(
+    sinf(srcPhi) * cosf(srcTheta),
+    sinf(srcPhi) * sinf(srcTheta),
+    cosf(srcPhi));
+  const Camera::Vector3 worldPoint = depth * sphericalDir;
+
+  if (destCam.sees(worldPoint)) {
+    return destCam.pixel(worldPoint);
+  } else {
+    return Camera::Vector2(-1, -1); // this will sample 0-alpha when cv::remap'd
+  }
 }
 
 } // namespace warper

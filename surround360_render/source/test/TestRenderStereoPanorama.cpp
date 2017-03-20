@@ -15,17 +15,16 @@
 #include <vector>
 
 #include "Camera.h"
-#include "CameraMetadata.h"
 #include "CvUtil.h"
 #include "Filter.h"
 #include "ImageWarper.h"
-#include "IntrinsicCalibration.h"
 #include "MathUtil.h"
 #include "MonotonicTable.h"
 #include "NovelView.h"
 #include "OpticalFlowFactory.h"
 #include "OpticalFlowVisualization.h"
 #include "PoleRemoval.h"
+#include "RigDescription.h"
 #include "StringUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
@@ -42,9 +41,7 @@ using namespace surround360::optical_flow;
 using namespace surround360::util;
 using namespace surround360::warper;
 
-DEFINE_string(src_intrinsic_param_file,   "",             "path to read intrinsic matrices");
 DEFINE_string(rig_json_file,              "",             "path to json file drescribing camera array");
-DEFINE_string(ring_rectify_file,          "NONE",         "path to rectification transforms file for ring of cameras");
 DEFINE_string(imgs_dir,                   "",             "path to folder of images with names matching cameras in the rig file");
 DEFINE_string(frame_number,               "",             "frame number (6-digit zero-padded)");
 DEFINE_string(output_data_dir,            "",             "path to write spherical projections for debugging");
@@ -71,198 +68,8 @@ DEFINE_int32(final_eqr_height,            960,            "resize before stackin
 DEFINE_int32(cubemap_width,               1536,           "face width of output cubemaps");
 DEFINE_int32(cubemap_height,              1536,           "face height of output cubemaps");
 DEFINE_string(cubemap_format,             "video",        "either video or photo");
-DEFINE_bool(new_rig_format,               false,          "use new rig and camera json format");
 
 const Camera::Vector3 kGlobalUp = Camera::Vector3::UnitZ();
-
-// represents either new or old rig format depending on FLAGS_new_rig_format
-struct RigDescription {
-  // new format fields
-  Camera::Rig rig;
-  Camera::Rig rigSideOnly;
-
-  // old format fields
-  float cameraRingRadius;
-  vector<CameraMetadata> camModelArrayWithTop;
-  vector<CameraMetadata> camModelArray;
-  vector<Mat> sideCamTransforms;
-
-  RigDescription(const string& filename, bool useNewFormat);
-
-  bool isNewFormat() const { return !rig.empty(); }
-
-  // find the camera that is closest to pointing in the provided direction
-  // ignore those with excessive distance from the camera axis to the rig center
-  const Camera& findCameraByDirection(
-      const Camera::Vector3& direction,
-      const Camera::Real distCamAxisToRigCenterMax = 1.0) const {
-    CHECK(isNewFormat());
-    const Camera* best = nullptr;
-    for (const Camera& camera : rig) {
-      if (best == nullptr ||
-          best->forward().dot(direction) < camera.forward().dot(direction)) {
-        if (distCamAxisToRigCenter(camera) <= distCamAxisToRigCenterMax) {
-          best = &camera;
-        }
-      }
-    }
-    return *CHECK_NOTNULL(best);
-  }
-
-  // find the camera with the largest distance from camera axis to rig center
-  const Camera& findLargestDistCamAxisToRigCenter() const {
-    CHECK(isNewFormat());
-    const Camera* best = &rig.back();
-    for (const Camera& camera : rig) {
-      if (distCamAxisToRigCenter(camera) > distCamAxisToRigCenter(*best)) {
-        best = &camera;
-      }
-    }
-    return *best;
-  }
-
-  string getTopCameraId() const {
-    return isNewFormat()
-      ? findCameraByDirection(kGlobalUp).id
-      : getTopCamModel(camModelArrayWithTop).cameraId;
-  }
-
-  string getBottomCameraId() const {
-    return isNewFormat()
-      ? findCameraByDirection(-kGlobalUp).id
-      : getBottomCamModel(camModelArrayWithTop).cameraId;
-  }
-
-  string getBottomCamera2Id() const {
-    return isNewFormat()
-      ? findLargestDistCamAxisToRigCenter().id
-      : getBottomCamModel2(camModelArrayWithTop).cameraId;
-  }
-
-  int getSideCameraCount() const {
-    return isNewFormat() ? rigSideOnly.size() : camModelArray.size();
-  }
-
-  string getSideCameraId(const int idx) const {
-    return isNewFormat() ? rigSideOnly[idx].id : camModelArray[idx].cameraId;
-  }
-
-  float getRingRadius() const {
-    return isNewFormat() ? rigSideOnly[0].position.norm() : cameraRingRadius;
-  }
-
-  vector<Mat> loadSideCameraImages(
-      const string& imageDir,
-      const string& frameNumber) const {
-
-    string extension;
-
-    VLOG(1) << "loadSideCameraImages spawning threads";
-    vector<std::thread> threads;
-    vector<Mat> images(getSideCameraCount());
-    for (int i = 0; i < getSideCameraCount(); ++i) {
-      const string camDir = imageDir + "/" + getSideCameraId(i);
-      if (i == 0) {
-        extension = getImageFileExtension(camDir);
-      }
-      const string filename = frameNumber + "." + extension;
-      const string imagePath = camDir + "/" + filename;
-      VLOG(1) << "imagePath = " << imagePath;
-      threads.emplace_back(
-        imreadInStdThread,
-        imagePath,
-        CV_LOAD_IMAGE_COLOR,
-        &(images[i]));
-    }
-    for (auto& thread : threads) {
-      thread.join();
-    }
-
-    return images;
-  }
-
-private:
-  static Camera::Real distCamAxisToRigCenter(const Camera& camera) {
-    return camera.rig(camera.principal).distance(Camera::Vector3::Zero());
-  }
-};
-
-RigDescription::RigDescription(const string& filename, bool useNewFormat) {
-  if (useNewFormat) {
-    rig = Camera::loadRig(filename);
-    for (const Camera& camera : rig) {
-      if (camera.group.find("side") != string::npos) {
-        rigSideOnly.emplace_back(camera);
-      }
-    }
-  } else {
-    requireArg(FLAGS_src_intrinsic_param_file, "src_intrinsic_param_file");
-    // load camera meta data and source images
-    VLOG(1) << "Reading camera model json";
-    camModelArrayWithTop =
-      readCameraProjectionModelArrayFromJSON(
-        filename,
-        cameraRingRadius);
-
-    VLOG(1) << "Verifying image filenames";
-    verifyImageDirFilenamesMatchCameraArray(
-      camModelArrayWithTop, FLAGS_imgs_dir, FLAGS_frame_number);
-
-    VLOG(1) << "Removing top and bottom cameras";
-    camModelArray =
-      removeTopAndBottomFromCamArray(camModelArrayWithTop);
-
-    // read bundle adjustment for side cameras
-    if (FLAGS_ring_rectify_file == "NONE") {
-      LOG(WARNING) << "No ring rectification file specified";
-      for (int i = 0; i < camModelArray.size(); ++i) {
-        sideCamTransforms.push_back(Mat());
-      }
-    } else {
-      VLOG(1) << "Reading ring rectification file: " << FLAGS_ring_rectify_file;
-      FileStorage fileStorage(FLAGS_ring_rectify_file, FileStorage::READ);
-      if (!fileStorage.isOpened()) {
-        throw VrCamException("file read failed: " + FLAGS_ring_rectify_file);
-      }
-
-      for (int i = 0; i < camModelArray.size(); ++i) {
-        Mat transformForCamI;
-        fileStorage[camModelArray[i].cameraId] >> transformForCamI;
-        sideCamTransforms.push_back(transformForCamI);
-      }
-    }
-  }
-
-  // validation
-  CHECK_EQ(useNewFormat, isNewFormat());
-  CHECK_NE(getSideCameraCount(), 0);
-
-  if (FLAGS_eqr_width % getSideCameraCount() != 0) {
-    VLOG(1) << "Number of side cameras:" << getSideCameraCount();
-    VLOG(1) << "Suggested widths:";
-    for (int i = FLAGS_eqr_width * 0.9; i < FLAGS_eqr_width * 1.1; ++i) {
-      if (i % getSideCameraCount() == 0) {
-        VLOG(1) << i;
-      }
-    }
-    throw VrCamException("eqr_width must be evenly divisible by the number of cameras");
-  }
-
-}
-
-// sample the camera's fov cone to find the closest point to the image center
-float approximateUsablePixelsRadius(const Camera& camera) {
-  const Camera::Real fov = camera.getFov();
-  const Camera::Real kStep = 2 * M_PI / 10.0;
-  Camera::Real result = camera.resolution.norm();
-  for (Camera::Real a = 0; a < 2 * M_PI; a += kStep) {
-    Camera::Vector3 ortho = cos(a) * camera.right() + sin(a) * camera.up();
-    Camera::Vector3 direction = cos(fov) * camera.forward() + sin(fov) * ortho;
-    Camera::Vector2 pixel = camera.pixel(camera.position + direction);
-    result = min(result, (pixel - camera.resolution / 2.0).norm());
-  }
-  return result;
-}
 
 // measured in radians from forward
 float approximateFov(const Camera& camera, const bool vertical) {
@@ -287,41 +94,6 @@ float approximateFov(const Camera::Rig& rig, const bool vertical) {
     result = std::max(result, approximateFov(camera, vertical));
   }
   return result;
-}
-
-// project the image of a single camera into spherical coordinates
-void projectCamImageToSphericalThread(
-    Mat* intrinsic,
-    Mat* distCoeffs,
-    const CameraMetadata* cam,
-    const Mat* perspectiveTransform,
-    Mat* camImage,
-    Mat* outProjectedImage) {
-
-  Mat projectedImage;
-  if (cam->isFisheye) {
-    VLOG(1) << "Projecting fisheye camera";
-    projectedImage = sideFisheyeToSpherical(
-      *camImage,
-      *cam,
-      FLAGS_eqr_width * (cam->fovHorizontal / 360.0),
-      FLAGS_eqr_height * ((cam->fovHorizontal / cam->aspectRatioWH) / 180.0));
-  } else {
-    VLOG(1) << "Projecting non-fisheye camera";
-    const bool skipUndistort = (FLAGS_src_intrinsic_param_file == "NONE");
-    projectedImage = undistortToSpherical(
-      cam->fovHorizontal,
-      cam->fovHorizontal / cam->aspectRatioWH,
-      FLAGS_eqr_width * (cam->fovHorizontal / 360.0),
-      FLAGS_eqr_height * ((cam->fovHorizontal / cam->aspectRatioWH) / 180.0),
-      *intrinsic,
-      *distCoeffs,
-      *perspectiveTransform,
-      *camImage,
-      FLAGS_side_alpha_feather_size,
-      skipUndistort);
-  }
-  *outProjectedImage = projectedImage;
 }
 
 void projectSideToSpherical(
@@ -378,55 +150,27 @@ void projectSphericalCamImages(
     << endLoadCameraImagesTime - startLoadCameraImagesTime
     << " sec";
 
-  // if we got intrinsic lens parameters, read them to correct distortion
-  Mat intrinsic, distCoeffs;
-  if (FLAGS_src_intrinsic_param_file == "NONE") {
-    VLOG(1) << "src_intrinsic_param_file = NONE. no intrinsics loaded";
-  } else {
-    FileStorage fileStorage(FLAGS_src_intrinsic_param_file, FileStorage::READ);
-    if (fileStorage.isOpened()) {
-      fileStorage["intrinsic"] >> intrinsic;
-      fileStorage["distCoeffs"] >> distCoeffs;
-    } else {
-      throw VrCamException("file read failed: " + FLAGS_src_intrinsic_param_file);
-    }
-  }
-
   projectionImages.resize(camImages.size());
   vector<std::thread> threads;
-  if (rig.isNewFormat()) {
-    const float hRadians = 2 * approximateFov(rig.rigSideOnly, false);
-    const float vRadians = 2 * approximateFov(rig.rigSideOnly, true);
-    for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
-      const Camera& camera = rig.rigSideOnly[camIdx];
-      projectionImages[camIdx].create(
-        FLAGS_eqr_height * vRadians / M_PI,
-        FLAGS_eqr_width * hRadians / (2 * M_PI),
-        CV_8UC4);
-      // the negative sign here is so the camera array goes clockwise
-      float direction = -float(camIdx) / float(camImages.size()) * 2.0f * M_PI;
-      threads.emplace_back(
-        projectSideToSpherical,
-        ref(projectionImages[camIdx]),
-        cref(camImages[camIdx]),
-        cref(camera),
-        direction + hRadians / 2,
-        direction - hRadians / 2,
-        vRadians / 2,
-        -vRadians / 2);
-    }
-  } else {
-    for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
-      threads.emplace_back(
-        projectCamImageToSphericalThread,
-        &intrinsic,
-        &distCoeffs,
-        &rig.camModelArray[camIdx],
-        &rig.sideCamTransforms[camIdx],
-        &camImages[camIdx],
-        &projectionImages[camIdx]
-      );
-    }
+  const float hRadians = 2 * approximateFov(rig.rigSideOnly, false);
+  const float vRadians = 2 * approximateFov(rig.rigSideOnly, true);
+  for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
+    const Camera& camera = rig.rigSideOnly[camIdx];
+    projectionImages[camIdx].create(
+      FLAGS_eqr_height * vRadians / M_PI,
+      FLAGS_eqr_width * hRadians / (2 * M_PI),
+      CV_8UC4);
+    // the negative sign here is so the camera array goes clockwise
+    float direction = -float(camIdx) / float(camImages.size()) * 2.0f * M_PI;
+    threads.emplace_back(
+      projectSideToSpherical,
+      ref(projectionImages[camIdx]),
+      cref(camImages[camIdx]),
+      cref(camera),
+      direction + hRadians / 2,
+      direction - hRadians / 2,
+      vRadians / 2,
+      -vRadians / 2);
   }
   for (std::thread& t : threads) { t.join(); }
 
@@ -712,26 +456,22 @@ void poleToSideFlowThread(
   float poleCameraCropRadius;
   float poleCameraRadius;
   float sideCameraRadius;
-  if (rig.isNewFormat()) {
-    // use fov from bottom camera
-    poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
-    // use fov from first side camera
-    sideCameraRadius = approximateFov(rig.rigSideOnly, true);
-    // crop is average of side and pole cameras
-    poleCameraCropRadius =
-      0.5f * (M_PI / 2 - sideCameraRadius) +
-      0.5f * (std::min(float(M_PI / 2), poleCameraRadius));
-    // convert from radians to degrees
-    poleCameraCropRadius *= 180 / M_PI;
-    poleCameraRadius *= 180 / M_PI;
-    sideCameraRadius *= 180 / M_PI;
-  } else {
-    CameraMetadata bottom = getBottomCamModel(rig.camModelArrayWithTop);
-    const CameraMetadata& side = rig.camModelArray[0];
-    poleCameraCropRadius = bottom.fisheyeFovDegreesCrop / 2.0f;
-    poleCameraRadius = bottom.fisheyeFovDegrees / 2.0f;
-    sideCameraRadius = (side.fovHorizontal / side.aspectRatioWH) / 2.0f;
-  }
+
+  // use fov from bottom camera
+  poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
+
+  // use fov from first side camera
+  sideCameraRadius = approximateFov(rig.rigSideOnly, true);
+
+  // crop is average of side and pole cameras
+  poleCameraCropRadius =
+    0.5f * (M_PI / 2 - sideCameraRadius) +
+    0.5f * (std::min(float(M_PI / 2), poleCameraRadius));
+
+  // convert from radians to degrees
+  poleCameraCropRadius *= 180 / M_PI;
+  poleCameraRadius *= 180 / M_PI;
+  sideCameraRadius *= 180 / M_PI;
 
   const float phiFromPole = poleCameraCropRadius;
   const float phiFromSide = 90.0f - sideCameraRadius;
@@ -833,19 +573,12 @@ void prepareBottomImagesThread(
     float bottomCamUsablePixelsRadius;
     float bottomCam2UsablePixelsRadius;
     bool flip180;
-    if (rig.isNewFormat()) {
-      const Camera& cam = rig.findCameraByDirection(-kGlobalUp);
-      const Camera& cam2 = rig.findLargestDistCamAxisToRigCenter();
-      bottomCamUsablePixelsRadius = approximateUsablePixelsRadius(cam);
-      bottomCam2UsablePixelsRadius = approximateUsablePixelsRadius(cam2);
-      flip180 = cam.up().dot(cam2.up()) < 0 ? true : false;
-    } else {
-      const CameraMetadata& cam = getBottomCamModel(rig.camModelArrayWithTop);
-      const CameraMetadata& cam2 = getBottomCamModel2(rig.camModelArrayWithTop);
-      bottomCamUsablePixelsRadius = cam.usablePixelsRadius;
-      bottomCam2UsablePixelsRadius = cam2.usablePixelsRadius;
-      flip180 = cam2.flip180;
-    }
+    const Camera& cam = rig.findCameraByDirection(-kGlobalUp);
+    const Camera& cam2 = rig.findLargestDistCamAxisToRigCenter();
+    bottomCamUsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam);
+    bottomCam2UsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam2);
+    flip180 = cam.up().dot(cam2.up()) < 0 ? true : false;
+    static const bool kSaveDataNextFrame = true;
     combineBottomImagesWithPoleRemoval(
       FLAGS_imgs_dir,
       FLAGS_frame_number,
@@ -853,7 +586,7 @@ void prepareBottomImagesThread(
       FLAGS_prev_frame_data_dir,
       FLAGS_output_data_dir,
       FLAGS_save_debug_images,
-      true, // save data that will be used in the next frame
+      kSaveDataNextFrame,
       FLAGS_poleremoval_flow_alg,
       FLAGS_std_alpha_feather_size,
       rig.getBottomCameraId(),
@@ -870,29 +603,19 @@ void prepareBottomImagesThread(
     bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
   }
 
-  if (rig.isNewFormat()) {
-    const Camera& camera = rig.findCameraByDirection(-kGlobalUp);
-    bottomSpherical->create(
-      FLAGS_eqr_height * camera.getFov() / M_PI,
-      FLAGS_eqr_width,
-      CV_8UC3);
-    bicubicRemapToSpherical(
-      *bottomSpherical,
-      bottomImage,
-      camera,
-      0,
-      2.0f * M_PI,
-      -(M_PI / 2.0f),
-      -(M_PI / 2.0f - camera.getFov()));
-  } else {
-    CameraMetadata bottom = getBottomCamModel(rig.camModelArrayWithTop);
-    *bottomSpherical = bicubicRemapFisheyeToSpherical(
-      bottom,
-      bottomImage,
-      Size(
-        FLAGS_eqr_width,
-        FLAGS_eqr_height * (bottom.fisheyeFovDegrees / 2.0f) / 180.0f));
-  }
+  const Camera& camera = rig.findCameraByDirection(-kGlobalUp);
+  bottomSpherical->create(
+    FLAGS_eqr_height * camera.getFov() / M_PI,
+    FLAGS_eqr_width,
+    CV_8UC3);
+  bicubicRemapToSpherical(
+    *bottomSpherical,
+    bottomImage,
+    camera,
+    0,
+    2.0f * M_PI,
+    -(M_PI / 2.0f),
+    -(M_PI / 2.0f - camera.getFov()));
 
   // if we skipped pole removal, there is no alpha channel and we need to add one.
   if (bottomSpherical->type() != CV_8UC4) {
@@ -929,30 +652,19 @@ void prepareTopImagesThread(
   const string topImageFilename = FLAGS_frame_number + ".png";
   const string topImagePath = cameraDir + "/" + topImageFilename;
   Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
-  if (rig.isNewFormat()) {
-    const Camera& camera = rig.findCameraByDirection(kGlobalUp);
-    topSpherical->create(
-      FLAGS_eqr_height * camera.getFov() / M_PI,
-      FLAGS_eqr_width,
-      CV_8UC3);
-    bicubicRemapToSpherical(
-      *topSpherical,
-      topImage,
-      camera,
-      2.0f * M_PI,
-      0,
-      M_PI / 2.0f,
-      M_PI / 2.0f - camera.getFov());
-  } else {
-    CameraMetadata top = getTopCamModel(rig.camModelArrayWithTop);
-    *topSpherical = bicubicRemapFisheyeToSpherical(
-      top,
-      topImage,
-      Size(
-        FLAGS_eqr_width,
-        FLAGS_eqr_height * (top.fisheyeFovDegrees / 2.0f) / 180.0f));
-
-  }
+  const Camera& camera = rig.findCameraByDirection(kGlobalUp);
+  topSpherical->create(
+    FLAGS_eqr_height * camera.getFov() / M_PI,
+    FLAGS_eqr_width,
+    CV_8UC3);
+  bicubicRemapToSpherical(
+    *topSpherical,
+    topImage,
+    camera,
+    2.0f * M_PI,
+    0,
+    M_PI / 2.0f,
+    M_PI / 2.0f - camera.getFov());
 
   // alpha feather the top spherical image for flow purposes
   cvtColor(*topSpherical, *topSpherical, CV_BGR2BGRA);
@@ -1013,7 +725,17 @@ void renderStereoPanorama() {
   const string debugDir =
     FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
 
-  RigDescription rig(FLAGS_rig_json_file, FLAGS_new_rig_format);
+  RigDescription rig(FLAGS_rig_json_file);
+  if (FLAGS_eqr_width % rig.getSideCameraCount() != 0) {
+    VLOG(1) << "Number of side cameras:" << rig.getSideCameraCount();
+    VLOG(1) << "Suggested widths:";
+    for (int i = FLAGS_eqr_width * 0.9; i < FLAGS_eqr_width * 1.1; ++i) {
+      if (i % rig.getSideCameraCount() == 0) {
+        VLOG(1) << i;
+      }
+    }
+    throw VrCamException("eqr_width must be evenly divisible by the number of cameras");
+  }
 
   // prepare the bottom camera(s) by doing pole removal and projections in a thread.
   // will join that thread as late as possible.
@@ -1056,9 +778,8 @@ void renderStereoPanorama() {
   double opticalFlowRuntime, novelViewRuntime;
   Mat sphericalImageL, sphericalImageR;
   LOG(INFO) << "Rendering stereo panorama";
-  const double fovHorizontal = rig.isNewFormat()
-    ? 2 * approximateFov(rig.rigSideOnly, false) * (180 / M_PI)
-    : rig.camModelArray[0].fovHorizontal;
+  const double fovHorizontal =
+    2 * approximateFov(rig.rigSideOnly, false) * (180 / M_PI);
   generateRingOfNovelViewsAndRenderStereoSpherical(
     rig.getRingRadius(),
     fovHorizontal,

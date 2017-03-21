@@ -195,9 +195,8 @@ int PointGreyCamera::reset() {
   return 0;
 }
 
-string PointGreyCamera::getProperty(CameraProperty p) {
-  Property prop;
-  ostringstream oss;
+pair<float, float> PointGreyCamera::getPropertyMinMax(CameraProperty p) {
+  Property prop; 
 
   switch (p) {
   case CameraProperty::BRIGHTNESS:
@@ -229,15 +228,9 @@ string PointGreyCamera::getProperty(CameraProperty p) {
   if (error != PGRERROR_OK) {
     throw "Error getting camera property.";
   }
-
-  if (propInfo.absValSupported) {
-    oss << setprecision(3) << fixed
-        << float(propInfo.min) << ";" << float(propInfo.max) << ";"
-        << propInfo.pUnitAbbr;
-  } else {
-    oss << float(propInfo.min) << ";" << float(propInfo.max);
-  }
-  return oss.str();
+  
+  pair<float, float> minMax(propInfo.absMin, propInfo.absMax);
+  return minMax;
 }
 
 int PointGreyCamera::powerCamera(bool on) {

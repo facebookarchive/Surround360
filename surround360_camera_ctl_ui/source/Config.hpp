@@ -15,9 +15,10 @@ namespace surround360 {
   class CameraConfig {
   public:
     std::atomic<float> shutter {10.0f};
-    std::atomic<float> fps {5.0f};
+    std::atomic<float> fps {0.0f};
+    std::atomic<float> frameInterval {1.0f};
     std::atomic<float> whitebalance[2];
-    std::atomic<float> bits {8};
+    std::atomic<float> bits {12};
     std::atomic<float> gain {0.0f};
     std::atomic<int>   previewCam {0};
     std::atomic<int>   triggerMode {0};

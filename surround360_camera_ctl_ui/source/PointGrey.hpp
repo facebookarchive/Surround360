@@ -81,7 +81,7 @@ namespace surround360 {
       FRAME_RATE,
     };
 
-    std::string getProperty(CameraProperty p);
+    std::pair<float, float> getPropertyMinMax(CameraProperty p);
     ~PointGreyCamera();
     void updatePixelFormat(int bpp);
 

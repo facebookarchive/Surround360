@@ -79,13 +79,13 @@ ADD_EXECUTABLE(
   source/CameraListView.cpp
   source/CameraView.cpp
   source/Config.cpp
-  source/FramerateComboBox.cpp
   source/MainWindow.cpp
   source/PointGrey.cpp
   source/PreviewButton.cpp
   source/PreviewCamComboBox.cpp
   source/RecordButton.cpp
   source/ShutterComboBox.cpp
+  source/GainComboBox.cpp
   source/StillButton.cpp
   source/Shaders.cpp
   source/main.cpp

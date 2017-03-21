@@ -82,9 +82,21 @@ CameraController& CameraController::get() {
   }
 }
 
+pair<float, float> CameraController::getPropertyMinMax(
+    PointGreyCamera::CameraProperty property) {
+
+  const unsigned int ncameras = PointGreyCamera::findCameras();
+
+  if (ncameras > 0) {
+    PointGreyCameraPtr c = PointGreyCamera::getCamera(0);
+    return c->getPropertyMinMax(property);
+  }
+}
+
 bool CameraController::configureCameras(
   const float shutter,
   const float framerate,
+  const int frameInterval,
   const float gain,
   const int bitsPerPixel) {
 
@@ -93,6 +105,7 @@ bool CameraController::configureCameras(
 
   m_shutter = shutter;
   m_framerate = framerate;
+  m_frameInterval = frameInterval;
   m_gain = gain;
   m_bitsPerPixel = bitsPerPixel;
 
@@ -113,7 +126,6 @@ bool CameraController::configureCameras(
   for (int k = 0; k < m_camera.size(); ++k) {
     try {
       bool master = k == m_masterCameraIndex;
-
       m_camera[k]->powerCamera(true);
       if (-1 == m_camera[k]->init(
         master,
@@ -139,6 +151,7 @@ bool CameraController::configureCameras(
 bool CameraController::updateCameraParams(
   const float shutter,
   const float fps,
+  const int frameInterval,
   const float gain,
   const int bits) {
 
@@ -148,6 +161,10 @@ bool CameraController::updateCameraParams(
 
   if (fps != m_framerate) {
     m_framerate = fps;
+  }
+
+  if (frameInterval != m_frameInterval) {
+    m_frameInterval = frameInterval;
   }
 
   if (gain != m_gain) {
@@ -321,6 +338,10 @@ void CameraController::cameraProducer(const uint32_t id) {
 
         if (prevFrameCounter[i] != 0 && (frameCounter[i] - prevFrameCounter[i]) != 1) {
           cerr << "camera " << i << " dropped " << (frameCounter[i] - prevFrameCounter[i]) << " frames" << endl;
+        }
+
+        if (frameCount % m_frameInterval > 0) {
+          continue;
         }
 
         if (m_recording) {

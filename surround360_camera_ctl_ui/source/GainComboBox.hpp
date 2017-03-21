@@ -10,13 +10,17 @@
 
 #include <gtkmm.h>
 
-namespace surround360 {
-  class FpsListModel : public Gtk::TreeModel::ColumnRecord {
-  public:
-    FpsListModel() {
-      add(m_fps);
-    }
+#include "GainListModel.hpp"
 
-    Gtk::TreeModelColumn<float>  m_fps;
+namespace surround360 {
+  class GainComboBox : public Gtk::ComboBox {
+  public:
+    GainComboBox();
+    void configureGains(const float maxGain);
+    void on_changed();
+
+  protected:
+    GainListModel                 m_gainModel;
+    Glib::RefPtr<Gtk::ListStore>  m_refTreeModel;
   };
 }

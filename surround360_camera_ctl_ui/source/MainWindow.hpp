@@ -10,7 +10,7 @@
 
 #include "CameraView.hpp"
 #include "ShutterComboBox.hpp"
-#include "FramerateComboBox.hpp"
+#include "GainComboBox.hpp"
 #include "RecordButton.hpp"
 #include "StillButton.hpp"
 #include "CameraListView.hpp"
@@ -28,46 +28,49 @@ namespace surround360 {
     void connectSignals();
     void updatePreviewParams();
     void takeNameDialog();
+    void fpsSelectorClicked();
+    void timelapseSpinChanged();
     void bitSelectorClicked();
-    void rawIspSelector();
+    void configureCameras();
     void singleTakeDialog();
-    void rotationFilePicker();
-    void shutterOverride();
-    bool shutterOverrideFocusOut(GdkEventFocus* evt);
 
   protected:
-    Gtk::Box             m_topVbox;
-    Gtk::Box             m_controlVbox;
-    Gtk::Box             m_cameraVbox;
+    Gtk::Box                        m_topVbox;
+    Gtk::Box                        m_controlVbox;
+    Gtk::Box                        m_cameraVbox;
 
-    Gtk::Frame           m_fpsFrame;
-    FramerateComboBox    m_fpsSelectionBox;
+    Gtk::Frame                      m_fpsFrame;
+    Gtk::Box                        m_fpsVbox;
+    Gtk::RadioButton                m_24fps;
+    Gtk::RadioButton                m_30fps;
+    Gtk::Box                        m_timelapseHBox;
+    Gtk::RadioButton                m_timelapse;
+    Glib::RefPtr<Gtk::Adjustment>   m_timelapseAdjustment;
+    Gtk::SpinButton                 m_timelapseSpin;
+    Gtk::Label                      m_timelapseLabelSeconds;
 
-    Gtk::Entry           m_shutterOverrideEntry;
-    Gtk::Box             m_shutterFrameVbox;
-    Gtk::Frame           m_shutterFrame;
-    ShutterComboBox      m_shutterSelectionBox;
+    Gtk::Frame                      m_shutterFrame;
+    ShutterComboBox                 m_shutterSelectionBox;
 
-    Gtk::Frame           m_previewSelFrame;
-    PreviewCamComboBox   m_previewCamSelBox;
+    Gtk::Frame                      m_gainFrame;
+    GainComboBox                    m_gainSelectionBox;
 
-    Gtk::GLArea          m_glarea;
-    CameraView           m_cameraView;
+    Gtk::Frame                      m_previewSelFrame;
+    PreviewCamComboBox              m_previewCamSelBox;
 
-    Gtk::Box             m_cameraListVbox;
-    CameraListView       m_cameraListView;
-    CameraDiscoverButton m_refreshCamerasBtn;
+    Gtk::GLArea                     m_glarea;
+    CameraView                      m_cameraView;
 
-    Gtk::Frame           m_opFrame;
-    Gtk::Box             m_recordVbox;
-    Gtk::RadioButton     m_8bit;
-    Gtk::RadioButton     m_12bit;
-    Gtk::RadioButton     m_isp;
-    Gtk::RadioButton     m_raw;
-    RecordButton         m_recordBtn;
-    PreviewButton        m_previewBtn;
-    StillButton          m_stillBtn;
+    Gtk::Box                        m_cameraListVbox;
+    CameraListView                  m_cameraListView;
+    CameraDiscoverButton            m_refreshCamerasBtn;
 
-    Gtk::Button          m_rotationPicker;
+    Gtk::Frame                      m_opFrame;
+    Gtk::Box                        m_recordVbox;
+    Gtk::RadioButton                m_8bit;
+    Gtk::RadioButton                m_12bit;
+    RecordButton                    m_recordBtn;
+    PreviewButton                   m_previewBtn;
+    StillButton                     m_stillBtn;
   };
 }

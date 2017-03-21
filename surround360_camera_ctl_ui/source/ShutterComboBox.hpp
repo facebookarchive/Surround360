@@ -10,17 +10,21 @@
 
 #include <gtkmm.h>
 
+#include <atomic>
+
 #include "ShutterListModel.hpp"
 
 namespace surround360 {
   class ShutterComboBox : public Gtk::ComboBox {
   public:
     ShutterComboBox();
-    void configureSpeeds(const float fps);
+    void configureSpeeds(const float maxShutterMs);
     void on_changed();
 
   protected:
-    ShutterListModel             m_shutterSpeedModel;
-    Glib::RefPtr<Gtk::ListStore> m_refTreeModel;
+    ShutterListModel              m_shutterSpeedModel;
+    Glib::RefPtr<Gtk::ListStore>  m_refTreeModel;
+    std::atomic<bool>             m_canUpdate;
+    bool                          m_isFirstConfig;
   };
 }

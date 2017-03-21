@@ -16,5 +16,5 @@ CameraConfig& CameraConfig::get() {
 }
 
 CameraConfig::CameraConfig()
-  : bits(8), triggerMode(0) {
+  : bits(12), triggerMode(0), frameInterval(1.0f) {
 }

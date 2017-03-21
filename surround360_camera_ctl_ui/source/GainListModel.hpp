@@ -10,17 +10,15 @@
 
 #include <gtkmm.h>
 
-#include "FpsListModel.hpp"
-
 namespace surround360 {
-  class FramerateComboBox : public Gtk::ComboBox {
+  class GainListModel : public Gtk::TreeModel::ColumnRecord {
   public:
-    FramerateComboBox();
-    void configureFps();
-    void on_changed() override;
+    GainListModel() {
+      add(m_name);
+      add(m_gain);
+    }
 
-  protected:
-    FpsListModel                 m_fpsModel;
-    Glib::RefPtr<Gtk::ListStore> m_refTreeModel;
+    Gtk::TreeModelColumn<Glib::ustring> m_name;
+    Gtk::TreeModelColumn<float>  m_gain;
   };
 }

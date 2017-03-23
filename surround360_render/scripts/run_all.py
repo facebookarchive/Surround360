@@ -241,6 +241,7 @@ if __name__ == "__main__":
     unpack_extra_params = ""
     if save_raw:
       raw_dir = dest_dir + "/raw"
+      os.system("mkdir -p " + raw_dir)
       unpack_extra_params += " --output_raw_dir " + raw_dir
       if os.path.isdir(raw_dir) and len([f for f in os.listdir(raw_dir) if not f.startswith('.')]) > 0:
         print "ERROR: raw directory not empty!\n"

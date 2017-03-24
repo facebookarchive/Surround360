@@ -12,6 +12,7 @@
 #include <functional>
 #include <stack>
 #include <string>
+#include <sstream>
 
 #ifndef WIN32
 #define _stricmp strcasecmp
@@ -801,8 +802,13 @@ static Value DeserializeValue(std::string &str, bool *had_error,
     else if (has_e || has_dot) {
       char *end_char;
       errno = 0;
-      double d = strtod(temp_val.c_str(), &end_char);
-      if ((errno != 0) || (*end_char != '\0')) {
+      //double d = strtod(temp_val.c_str(), &end_char);
+      double d;
+      std::istringstream istr(temp_val);
+      istr.imbue(std::locale("en_US.utf8"));
+      istr >> d; 
+      
+      if ((errno != 0) /*|| (*end_char != '\0')*/) {
         // invalid conversion or out of range
         *had_error = true;
         return Value();

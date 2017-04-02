@@ -135,6 +135,9 @@ public:
   // for debugging
   virtual Mat getFlowLtoR() { return Mat(); }
   virtual Mat getFlowRtoL() { return Mat(); }
+
+  virtual void setFlowLtoR(const Mat& flow) = 0;
+  virtual void setFlowRtoL(const Mat& flow) = 0;
 };
 
 // this is a base class for novel view generators that work by reduction to optical flow.
@@ -164,6 +167,9 @@ public:
 
   Mat getFlowLtoR() { return flowLtoR; }
   Mat getFlowRtoL() { return flowRtoL; }
+
+  void setFlowLtoR(const Mat& flow) { flowLtoR = flow; }
+  void setFlowRtoL(const Mat& flow) { flowRtoL = flow; }
 };
 
 // the name "asymmetric" here refers to the idea that we compute an optical flow from

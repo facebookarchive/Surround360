@@ -9,12 +9,66 @@
 
 #pragma once
 
-#include <algorithm>
+#include <vector>
 
 #include <Eigen/Geometry>
+
+#include <glog/logging.h>
+
+#ifndef WIN32
+
 #include <folly/dynamic.h>
 #include <folly/FileUtil.h>
 #include <folly/json.h>
+
+using folly::dynamic;
+
+#else // WIN32
+
+#ifndef M_PI
+#define M_PI EIGEN_PI
+#endif
+
+// windows doesn't need the full rig i/o functionality
+#define SUPPRESS_RIG_IO
+
+// dynamic is an interposer that mimics folly::dynamic
+
+#include <boost/property_tree/json_parser.hpp>
+
+struct dynamic : public boost::property_tree::ptree {
+  dynamic(const boost::property_tree::ptree& tree) : boost::property_tree::ptree(tree) {}
+
+  dynamic operator[](const char* key) const {
+    return get_child(key);
+  }
+
+  dynamic operator[](const std::size_t index) const {
+    auto it = begin();
+    for (int i = 0; i < index; ++i) {
+      CHECK(it != end());
+      ++it;
+    }
+    return it->second;
+  }
+
+  std::string getString() const {
+    return get_value<std::string>();
+  }
+
+  double asDouble() const {
+    return get_value<double>();
+  }
+
+  friend std::ostream& operator<<(std::ostream& s, const dynamic& dyn) {
+    for (const auto& pair : dyn) {
+      s << pair.first << "->" << pair.second.get_value<std::string>() << ", ";
+    }
+    return s;
+  }
+};
+
+#endif // WIN32
 
 namespace surround360 {
 
@@ -25,7 +79,7 @@ struct Camera {
   using Matrix3 = Eigen::Matrix<Real, 3, 3>;
   using Ray = Eigen::ParametrizedLine<Real, 3>;
   using Rig = std::vector<Camera>;
-  static const int kNearInfinity = 1e6;
+  static const Camera::Real kNearInfinity;
 
   // member variables
   enum struct Type { FTHETA, RECTILINEAR } type;
@@ -45,8 +99,8 @@ struct Camera {
 
   // construction and de/serialization
   Camera(const Type type, const Vector2& resolution, const Vector2& focal);
-  Camera(const folly::dynamic& json);
-  folly::dynamic serialize() const;
+  Camera(const dynamic& json);
+  dynamic serialize() const;
   static Rig loadRig(const std::string& filename);
   static void saveRig(const std::string& filename, const Rig& rig);
   static Camera createRescaledCamera(const Camera& cam, const float scale);
@@ -237,13 +291,13 @@ struct Camera {
   }
 
   template <typename V>
-  static folly::dynamic serializeVector(const V& v) {
-    return folly::dynamic(v.data(), v.data() + v.size());
+  static dynamic serializeVector(const V& v) {
+    return dynamic(v.data(), v.data() + v.size());
   }
 
   template <int kSize>
   static Eigen::Matrix<Real, kSize, 1> deserializeVector(
-      const folly::dynamic& json) {
+      const dynamic& json) {
     CHECK_EQ(kSize, json.size()) << "bad vector" << json;
     Eigen::Matrix<Real, kSize, 1> result;
     for (int i = 0; i < kSize; ++i) {
@@ -261,7 +315,7 @@ struct Camera {
     }
   }
 
-  static Type deserializeType(const folly::dynamic& json) {
+  static Type deserializeType(const dynamic& json) {
     for (int i = 0; ; ++i) {
       if (serializeType(Type(i)) == json.getString()) {
         return Type(i);

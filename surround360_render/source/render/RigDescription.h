@@ -29,6 +29,8 @@ struct RigDescription {
   Camera::Rig rigSideOnly;
   RigDescription(const string& filename);
 
+  RigDescription(const Camera::Rig& rig);
+
   // find the camera that is closest to pointing in the provided direction
   // ignore those with excessive distance from the camera axis to the rig center
   const Camera& findCameraByDirection(

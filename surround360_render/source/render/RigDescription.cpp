@@ -15,8 +15,11 @@ using namespace cv;
 using namespace std;
 using namespace surround360::util;
 
-RigDescription::RigDescription(const string& filename) {
-  rig = Camera::loadRig(filename);
+RigDescription::RigDescription(const string& filename)
+    : RigDescription(Camera::loadRig(filename)) {
+}
+
+RigDescription::RigDescription(const Camera::Rig& rig) {
   for (const Camera& camera : rig) {
     if (camera.group.find("side") != string::npos) {
       rigSideOnly.emplace_back(camera);

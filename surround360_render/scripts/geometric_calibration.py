@@ -36,6 +36,7 @@ COLMAP_EXTRACT_TEMPLATE = """
 {COLMAP_DIR}/feature_extractor
 --General.image_path {IMAGE_PATH}
 --General.database_path {COLMAP_DB_PATH}
+--ExtractionOptions.gpu_index 0
 """
 
 COLMAP_MATCH_TEMPLATE = """

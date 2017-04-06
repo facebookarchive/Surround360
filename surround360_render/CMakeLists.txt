@@ -15,6 +15,8 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR})
 INCLUDE_DIRECTORIES(/usr/local/include/eigen3)
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   # required for clang, including AppleClang
   LINK_DIRECTORIES(/usr/local/lib)
@@ -90,8 +92,7 @@ FILE(GLOB optical_flow_SRC "source/optical_flow/*.cpp")
 FILE(GLOB render_SRC "source/render/*.cpp")
 FILE(GLOB util_SRC "source/util/*.cpp")
 
-ADD_LIBRARY(
-  LibVrCamera
+ADD_LIBRARY(LibVrCamera
   source/util/SystemUtil.cpp
   ${calibration_SRC}
   ${optical_flow_SRC}
@@ -198,6 +199,12 @@ TARGET_LINK_LIBRARIES(
   LibJSON
   glog
   gflags
+
+#   folly
+#   ceres
+#   LibJSON
+  ${OpenCV_LIBS}
+  ${PLATFORM_SPECIFIC_LIBS}
 )
 
 ### TestOpticalFlow ###
@@ -498,11 +505,12 @@ TARGET_LINK_LIBRARIES(
   LibJSON
   gflags
   glog
-  folly
   boost_filesystem
   boost_system
   double-conversion
+  folly
+  ${CERES_LIBRARIES}
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
-  ${CERES_LIBRARIES}
 )
+

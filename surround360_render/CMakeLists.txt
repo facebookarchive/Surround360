@@ -2,6 +2,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 
 PROJECT(Surround360Render CXX)
 
+OPTION(USE_SCANNER "Enable using Scanner for distributed rendering" ON)
+
 FIND_PACKAGE(OpenCV)
 FIND_PACKAGE(Ceres REQUIRED)
 
@@ -99,6 +101,12 @@ ADD_LIBRARY(LibVrCamera
   ${render_SRC}
   ${util_SRC}
 )
+# TARGET_LINK_LIBRARIES(LibVrCamera
+#   folly
+#   ceres
+#   LibJSON
+#   ${OpenCV_LIBS}
+#   ${PLATFORM_SPECIFIC_LIBS})
 TARGET_COMPILE_FEATURES(LibVrCamera PRIVATE cxx_range_for)
 
 ### Raw2Rgb ###
@@ -514,3 +522,16 @@ TARGET_LINK_LIBRARIES(
   ${PLATFORM_SPECIFIC_LIBS}
 )
 
+
+IF (USE_SCANNER)
+  SET(SCANNER_PATH "~/repos/scanner/")
+  include(${SCANNER_PATH}/cmake/Util/Op.cmake)
+  build_op(
+    LIB_NAME surround360kernels
+    CPP_SRCS source/scanner_kernels/project_spherical_kernel_cpu.cpp
+    PROTO_SRC source/scanner_kernels/surround360.proto)
+  target_link_libraries(surround360kernels PUBLIC
+    LibVrCamera
+    folly
+    ${OpenCV_LIBS})
+ENDIF()

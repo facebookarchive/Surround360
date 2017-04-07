@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package surround360.proto;
+
+message ProjectSphericalArgs {
+  int32 eqr_height = 1;
+  int32 eqr_width = 2;
+  string camera_rig_path = 3;
+}

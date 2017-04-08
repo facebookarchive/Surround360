@@ -7,3 +7,8 @@ message ProjectSphericalArgs {
   int32 eqr_width = 2;
   string camera_rig_path = 3;
 }
+
+message TemporalOpticalFlowArgs {
+  int32 overlap_image_width = 1;
+  string flow_algo = 2;
+}

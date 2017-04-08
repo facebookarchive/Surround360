@@ -528,7 +528,10 @@ IF (USE_SCANNER)
   include(${SCANNER_PATH}/cmake/Util/Op.cmake)
   build_op(
     LIB_NAME surround360kernels
-    CPP_SRCS source/scanner_kernels/project_spherical_kernel_cpu.cpp
+    CPP_SRCS
+    source/scanner_kernels/project_spherical_kernel_cpu.cpp
+    source/scanner_kernels/temporal_optical_flow_kernel_cpu.cpp
+
     PROTO_SRC source/scanner_kernels/surround360.proto)
   target_link_libraries(surround360kernels PUBLIC
     LibVrCamera

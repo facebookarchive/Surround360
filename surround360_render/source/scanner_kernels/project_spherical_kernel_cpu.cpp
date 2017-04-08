@@ -13,33 +13,6 @@ using namespace scanner;
 
 namespace surround360 {
 
-namespace {
-// measured in radians from forward
-float approximateFov(const Camera& camera, const bool vertical) {
-  Camera::Vector2 a = camera.principal;
-  Camera::Vector2 b = camera.principal;
-  if (vertical) {
-    a.y() = 0;
-    b.y() = camera.resolution.y();
-  } else {
-    a.x() = 0;
-    b.x() = camera.resolution.x();
-  }
-  return acos(max(
-      camera.rig(a).direction().dot(camera.forward()),
-      camera.rig(b).direction().dot(camera.forward())));
-}
-
-// measured in radians from forward
-float approximateFov(const Camera::Rig& rig, const bool vertical) {
-  float result = 0;
-  for (const auto& camera : rig) {
-    result = std::max(result, approximateFov(camera, vertical));
-  }
-  return result;
-}
-}
-
 class ProjectSphericalKernelCPU : public VideoKernel {
  public:
   ProjectSphericalKernelCPU(const Kernel::Config& config)

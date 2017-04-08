@@ -1,4 +1,6 @@
-#include "render/NovelView.h"
+#include "render/RigDescription.h"
+#include "optical_flow/NovelView.h"
+#include "util/MathUtil.h"
 #include "source/scanner_kernels/surround360.pb.h"
 
 #include "scanner/api/kernel.h"
@@ -10,6 +12,9 @@ using namespace scanner;
 
 namespace surround360 {
 
+using namespace optical_flow;
+using namespace math_util;
+
 class TemporalOpticalFlowKernelCPU : public VideoKernel {
  public:
   TemporalOpticalFlowKernelCPU(const Kernel::Config& config)
@@ -18,7 +23,9 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
         work_item_size_(config.work_item_size) {
     args_.ParseFromArray(config.args.data(), config.args.size());
 
-    overlap_image_width_ = args_.overlap_image_width();
+    rig_.reset(new RigDescription(args_.camera_rig_path()));
+
+    overlap_image_width_ = -1;
     novel_view_gen_.reset(
         new NovelViewGeneratorAsymmetricFlow(args_.flow_algo()));
   }
@@ -30,6 +37,20 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
     prev_overlap_image_r_ = cv::Mat();
   }
 
+  void new_frame_info() override {
+    const int numCams = 14;
+    const float cameraRingRadius = rig_->getRingRadius();
+    const float camFovHorizontalDegrees =
+        2 * approximateFov(rig_->rigSideOnly, false) * (180 / M_PI);
+    const float fovHorizontalRadians = toRadians(camFovHorizontalDegrees);
+    const float overlapAngleDegrees =
+        (camFovHorizontalDegrees * float(numCams) - 360.0) / float(numCams);
+    const int camImageWidth = frame_info_.width();
+    const int camImageHeight = frame_info_.height();
+    overlap_image_width_ =
+        float(camImageWidth) * (overlapAngleDegrees / camFovHorizontalDegrees);
+  }
+
   void execute(const BatchedColumns& input_columns,
                BatchedColumns& output_columns) override {
     auto& left_frame_col = input_columns[0];
@@ -37,13 +58,14 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
     auto& right_frame_col = input_columns[2];
     auto& right_frame_info_col = input_columns[3];
     check_frame_info(device_, left_frame_info_col);
+    assert(overlap_image_width_ != -1);
 
-    i32 input_count = (i32)frame_col.rows.size();
+    i32 input_count = (i32)left_frame_col.rows.size();
     size_t output_image_width = frame_info_.width() - overlap_image_width_;
     size_t output_image_height = frame_info_.height();
     size_t output_image_size =
         output_image_width * output_image_height * 2 * sizeof(float);
-    u8 *output_block = new_block_buffer(
+    u8 *output_block_buffer = new_block_buffer(
         device_, output_image_size * input_count * 2, input_count * 2);
 
     // Output frame info
@@ -80,8 +102,8 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
 
       u8* left_output = output_block_buffer + output_image_size * (2 * i);
       u8* right_output = output_block_buffer + output_image_size * (2 * i + 1);
-      auto& left_flow = novel_view_gen_->getFlowLtoR();
-      auto& right_flow = novel_view_gen_->getFlowRtoL();
+      const auto& left_flow = novel_view_gen_->getFlowLtoR();
+      const auto& right_flow = novel_view_gen_->getFlowRtoL();
       for (i32 r = 0; r < left_flow.rows; ++r) {
         memcpy(left_output + r * output_image_width * sizeof(float) * 2,
                left_flow.data + left_flow.step * r,
@@ -107,10 +129,9 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
   std::unique_ptr<RigDescription> rig_;
   DeviceHandle device_;
   i32 work_item_size_;
-  bool is_reset_ = true;
+  int overlap_image_width_;
 
   std::unique_ptr<NovelViewGenerator> novel_view_gen_;
-  int camIdx_;
   cv::Mat prev_frame_flow_l_to_r_;
   cv::Mat prev_frame_flow_r_to_l_;
   cv::Mat prev_overlap_image_l_;
@@ -127,3 +148,4 @@ REGISTER_KERNEL(TemporalOpticalFlow, TemporalOpticalFlowKernelCPU)
     .device(DeviceType::CPU)
     .num_devices(1);
 }
+

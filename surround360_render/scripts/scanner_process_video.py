@@ -55,6 +55,60 @@ def start_subprocess(name, cmd):
   current_process.name = name
   current_process.communicate()
 
+
+def project_images(db, videos, videos_idx, render_params):
+  in_columns = ["index", "frame", "frame_info", "camera_index"]
+  input_op = db.ops.Input(in_columns)
+
+  args = db.protobufs.ProjectSphericalArgs()
+  args.eqr_width = render_params["EQR_WIDTH"]
+  args.eqr_height = render_params["EQR_HEIGHT"]
+  args.camera_rig_path = render_params["RIG_JSON_FILE"]
+  op = db.ops.ProjectSpherical(inputs=[(input_op, in_columns[1:])], args=args)
+
+  tasks = []
+  sampler_args = db.protobufs.AllSamplerArgs()
+  sampler_args.warmup_size = 0
+  sampler_args.sample_size = 32
+
+  for i, (vid, vid_idx) in enumerate(zip(videos.tables(),
+                                         videos_idx.tables())):
+    task = db.protobufs.Task()
+    task.output_table_name = vid.name() + str(i)
+
+    sample = task.samples.add()
+    sample.table_name = vid.name()
+    sample.column_names.extend([c.name() for c in vid.columns()])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    sample = task.samples.add()
+    sample.table_name = vid_idx.name()
+    sample.column_names.extend(['camera_index'])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    tasks.append(task)
+
+  return db.run(tasks, op, 'surround360_spherical', force=True)
+
+
+def compute_temporal_flow(db, overlap, render_params):
+  in_columns = ["index",
+                "frame_left", "frame_info_left",
+                "frame_right", "frame_info_right"]
+  input_op = db.ops.Input(in_columns)
+
+  args = db.protobufs.TemporalOpticalFlow()
+  args.flow_algo = render_params["SIDE_FLOW_ALGORITHM"]
+  args.camera_rig_path = render_params["RIG_JSON_FILE"]
+  op = db.ops.TemporalOpticalFlow(inputs=[(input_op, in_columns[1:])],
+                                  args=args)
+
+  # NOTE(apoms): WIP
+  pass
+
+
 if __name__ == "__main__":
   signal.signal(signal.SIGTERM, signal_term_handler)
 
@@ -206,42 +260,7 @@ if __name__ == "__main__":
           print(render_params)
           sys.stdout.flush()
 
-
-      in_columns = ["index", "frame", "frame_info", "camera_index"]
-      input_op = db.ops.Input(in_columns)
-
-      args = db.protobufs.ProjectSphericalArgs()
-      args.eqr_width = render_params["EQR_WIDTH"]
-      args.eqr_height = render_params["EQR_HEIGHT"]
-      args.camera_rig_path = render_params["RIG_JSON_FILE"]
-      op = db.ops.ProjectSpherical(inputs=[(input_op, in_columns[1:])], args=args)
-
-      tasks = []
-      sampler_args = db.protobufs.AllSamplerArgs()
-      sampler_args.warmup_size = 0
-      sampler_args.sample_size = 32
-
-      for i, (vid, vid_idx) in enumerate(zip(videos.tables(),
-                                             videos_idx.tables())):
-          task = db.protobufs.Task()
-          task.output_table_name = vid.name() + str(i)
-
-          sample = task.samples.add()
-          sample.table_name = vid.name()
-          sample.column_names.extend([c.name() for c in vid.columns()])
-          sample.sampling_function = "All"
-          sample.sampling_args = sampler_args.SerializeToString()
-
-          sample = task.samples.add()
-          sample.table_name = vid_idx.name()
-          sample.column_names.extend(['camera_index'])
-          sample.sampling_function = "All"
-          sample.sampling_args = sampler_args.SerializeToString()
-
-          tasks.append(task)
-          print(task)
-
-      out_col = db.run(tasks, op, 'surround360_spherical', force=True)
+      out_col = project_images(db, videos, videos_idx)
       t1 = out_col.tables(0)
       for fi, tup in t1.load(['projected_frame', 'frame_info']):
         frame_info = db.protobufs.FrameInfo()

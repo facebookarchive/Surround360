@@ -9,6 +9,6 @@ message ProjectSphericalArgs {
 }
 
 message TemporalOpticalFlowArgs {
-  int32 overlap_image_width = 1;
-  string flow_algo = 2;
+  string flow_algo = 1;
+  string camera_rig_path = 2;
 }

@@ -61,7 +61,7 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
     assert(overlap_image_width_ != -1);
 
     i32 input_count = (i32)left_frame_col.rows.size();
-    size_t output_image_width = frame_info_.width() - overlap_image_width_;
+    size_t output_image_width = overlap_image_width_;
     size_t output_image_height = frame_info_.height();
     size_t output_image_size =
         output_image_width * output_image_height * 2 * sizeof(float);
@@ -79,9 +79,9 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
                                        output_frame_info.ByteSize());
 
     for (i32 i = 0; i < input_count; ++i) {
-      cv::Mat left_input(frame_info_.height(), frame_info_.width(), CV_8UC3,
+      cv::Mat left_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
                          input_columns[0].rows[i].buffer);
-      cv::Mat right_input(frame_info_.height(), frame_info_.width(), CV_8UC3,
+      cv::Mat right_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
                           input_columns[0].rows[i].buffer);
 
       cv::Mat left_overlap_input =
@@ -148,4 +148,3 @@ REGISTER_KERNEL(TemporalOpticalFlow, TemporalOpticalFlowKernelCPU)
     .device(DeviceType::CPU)
     .num_devices(1);
 }
-

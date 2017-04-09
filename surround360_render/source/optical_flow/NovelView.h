@@ -133,6 +133,12 @@ public:
     const LazyNovelViewBuffer& lazyBuffer) = 0;
 
   // for debugging
+  virtual Mat getImageL() { return Mat(); }
+  virtual Mat getImageR() { return Mat(); }
+
+  virtual void setImageL(const Mat& image) = 0;
+  virtual void setImageR(const Mat& image) = 0;
+
   virtual Mat getFlowLtoR() { return Mat(); }
   virtual Mat getFlowRtoL() { return Mat(); }
 
@@ -164,6 +170,12 @@ public:
     const bool invertT);
 
   pair<Mat, Mat> combineLazyNovelViews(const LazyNovelViewBuffer& lazyBuffer);
+
+  Mat getImageL() { return imageL; }
+  Mat getImageR() { return imageR; }
+
+  void setImageL(const Mat& image) { imageL = image; }
+  void setImageR(const Mat& image) { imageR = image; }
 
   Mat getFlowLtoR() { return flowLtoR; }
   Mat getFlowRtoL() { return flowRtoL; }

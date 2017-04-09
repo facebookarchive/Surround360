@@ -80,9 +80,9 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
 
     for (i32 i = 0; i < input_count; ++i) {
       cv::Mat left_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                         input_columns[0].rows[i].buffer);
+                         left_frame_col.rows[i].buffer);
       cv::Mat right_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                          input_columns[0].rows[i].buffer);
+                          right_frame_col.rows[i].buffer);
 
       cv::Mat left_overlap_input =
           left_input(cv::Rect(left_input.cols - overlap_image_width_, 0,

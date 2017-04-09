@@ -12,3 +12,12 @@ message TemporalOpticalFlowArgs {
   string flow_algo = 1;
   string camera_rig_path = 2;
 }
+
+message RenderStereoPanoramaChunkArgs {
+  int32 eqr_height = 1;
+  int32 eqr_width = 2;
+  string camera_rig_path = 3;
+  string flow_algo = 4;
+  float zero_parallax_dist = 5;
+  float interpupilary_dist = 6;
+}

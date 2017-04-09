@@ -132,6 +132,63 @@ def compute_temporal_flow(db, overlap, render_params):
   return db.run(tasks, op, 'surround360_flow', force=True)
 
 
+def render_stereo_panorama_chunks(db, overlap, flow, render_params):
+  in_columns = ["index",
+                "projected_left", "frame_info_left",
+                "flow_left", "flow_info_left",
+                "projected_right", "frame_info_right",
+                "flow_right", "flow_info_right"]
+  input_op = db.ops.Input(in_columns)
+
+  args = db.protobufs.RenderStereoPanoramaChunkArgs()
+  args.eqr_width = render_params["EQR_WIDTH"]
+  args.eqr_height = render_params["EQR_HEIGHT"]
+  args.camera_rig_path = render_params["RIG_JSON_FILE"]
+  args.flow_algo = render_params["SIDE_FLOW_ALGORITHM"]
+  args.zero_parallax_dist = 10000
+  args.interpupilary_dist = 6.4
+  op = db.ops.RenderStereoPanoramaChunk(inputs=[(input_op, in_columns[1:])],
+                                        args=args)
+
+  tasks = []
+  sampler_args = db.protobufs.AllSamplerArgs()
+  sampler_args.warmup_size = 0
+  sampler_args.sample_size = 32
+
+  for left_cam_idx in range(0, 14):
+    right_cam_idx = left_cam_idx + 1 if left_cam_idx != 13 else 1
+    task = db.protobufs.Task()
+    task.output_table_name = 'surround360_chunk_{:d}'.format(left_cam_idx)
+
+    sample = task.samples.add()
+    sample.table_name = overlap.tables(left_cam_idx).name()
+    sample.column_names.extend(['index', 'projected_frame', 'frame_info'])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    sample = task.samples.add()
+    sample.table_name = flow.tables(left_cam_idx).name()
+    sample.column_names.extend(['flow_left', 'frame_info_left'])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    sample = task.samples.add()
+    sample.table_name = overlap.tables(right_cam_idx).name()
+    sample.column_names.extend(['projected_frame', 'frame_info'])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    sample = task.samples.add()
+    sample.table_name = flow.tables(left_cam_idx).name()
+    sample.column_names.extend(['flow_right', 'frame_info_right'])
+    sample.sampling_function = "All"
+    sample.sampling_args = sampler_args.SerializeToString()
+
+    tasks.append(task)
+
+  return db.run(tasks, op, 'surround360_chunk', force=True)
+
+
 if __name__ == "__main__":
   signal.signal(signal.SIGTERM, signal_term_handler)
 
@@ -284,29 +341,49 @@ if __name__ == "__main__":
           sys.stdout.flush()
 
       proj_col = project_images(db, videos, videos_idx, render_params)
-      t1 = proj_col.tables(0)
-      for fi, tup in t1.load(['projected_frame', 'frame_info']):
-        frame_info = db.protobufs.FrameInfo()
-        frame_info.ParseFromString(tup[1])
+      if save_debug_images:
+        t1 = proj_col.tables(0)
+        for fi, tup in t1.load(['projected_frame', 'frame_info']):
+           frame_info = db.protobufs.FrameInfo()
+           frame_info.ParseFromString(tup[1])
 
-        frame = np.frombuffer(tup[0], dtype=np.uint8).reshape(
-          frame_info.height,
-          frame_info.width,
-          4)
-        scipy.misc.toimage(frame[:,:,0:3]).save('test.png')
+           frame = np.frombuffer(tup[0], dtype=np.uint8).reshape(
+             frame_info.height,
+             frame_info.width,
+             4)
+           scipy.misc.toimage(frame[:,:,0:3]).save('test.png')
 
       flow_col = compute_temporal_flow(db, proj_col, render_params)
-      t1 = flow_col.tables(0)
-      for fi, tup in t1.load(['flow_left', 'frame_info_left']):
-        frame_info = db.protobufs.FrameInfo()
-        frame_info.ParseFromString(tup[1])
+      if save_debug_images:
+        t1 = flow_col.tables(0)
+        for fi, tup in t1.load(['flow_left', 'frame_info_left']):
+          frame_info = db.protobufs.FrameInfo()
+          frame_info.ParseFromString(tup[1])
 
-        frame = np.frombuffer(tup[0], dtype=np.float32).reshape(
-          frame_info.height,
-          frame_info.width,
-          2)
-        scipy.misc.toimage(frame[:,:,0]).save('flow_test_horiz.png')
-        scipy.misc.toimage(frame[:,:,1]).save('flow_test_vert.png')
+          frame = np.frombuffer(tup[0], dtype=np.float32).reshape(
+            frame_info.height,
+            frame_info.width,
+            2)
+          frame = np.append(frame, np.zeros((frame_info.height, frame_info.width, 1)), axis=2)
+          scipy.misc.toimage(frame[:,:,:]).save('flow_test.png')
+
+      chunk_col = render_stereo_panorama_chunks(db, proj_col, flow_col, render_params)
+      if True:
+        panos = [None for _ in range(min_frame, max_frame + 1)]
+        for table in chunk_col.tables():
+          for fi, tup in table.load(['chunk_left', 'frame_info_left']):
+            frame_info = db.protobufs.FrameInfo()
+            frame_info.ParseFromString(tup[1])
+
+            frame = np.frombuffer(tup[0], dtype=np.uint8).reshape(
+              frame_info.height,
+              frame_info.width,
+              4)
+            if panos[fi] is None:
+              panos[fi] = frame
+            else:
+              panos[fi] = np.hstack((panos[fi], frame))
+        scipy.misc.toimage(panos[1][:,:,0:3]).save('pano_test.png')
 
   end_time = timer()
 

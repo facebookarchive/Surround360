@@ -21,3 +21,12 @@ message RenderStereoPanoramaChunkArgs {
   float zero_parallax_dist = 5;
   float interpupilary_dist = 6;
 }
+
+message ConcatPanoramaChunksArgs {
+  int32 eqr_height = 1;
+  int32 eqr_width = 2;
+  string camera_rig_path = 3;
+  float zero_parallax_dist = 4;
+  float interpupilary_dist = 5;
+  bool left = 6;
+}

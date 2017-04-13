@@ -74,9 +74,11 @@ int main(int argc, char *argv[]) {
     footageFiles.emplace_back(binFile);
   }
 
-  set<uint32_t> serialNumbers;
+  set<uint32_t> serialNumbers[footageFiles.size()];
 
-  for (auto& footageFile : footageFiles) {
+  for (int fileIndex = 0; fileIndex < footageFiles.size(); ++fileIndex) {
+    auto& footageFile = footageFiles[fileIndex];
+
     LOG(INFO) << "Reading " << footageFile.getFilename() << "...";
 
     footageFile.open();
@@ -120,8 +122,11 @@ int main(int argc, char *argv[]) {
           for (int frameIndex = startFrame; frameIndex <= endFrame; ++frameIndex) {
             auto frame = footageFile.getFrame(frameIndex, cameraIndex);
             const auto serial = reinterpret_cast<const uint32_t*>(frame)[1];
-            if (serialNumbers.find(serial) == serialNumbers.end()) {
-              serialNumbers.insert(serial);
+
+            LOG(INFO) << "Looking for serial number " << serial;
+
+            if (serialNumbers[fileIndex].count(serial) == 0) {
+              serialNumbers[fileIndex].insert(serial);
               makeCameraDir(FLAGS_output_dir, serial);
 
               if (FLAGS_output_raw_dir != "") {
@@ -183,10 +188,17 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Merge serialNumbers[1+] into serialNumbers[0]
+  for (int fileIndex = 1; fileIndex < footageFiles.size(); ++fileIndex) {
+    serialNumbers[0].insert(
+      serialNumbers[fileIndex].begin(),
+      serialNumbers[fileIndex].end());
+  }
+
   // Rename output directories from serial number to camN, sorted by serial
   // number
   size_t ordinal = 0;
-  for (auto& serial : serialNumbers) {
+  for (auto& serial : serialNumbers[0]) {
     ostringstream oldDir, newDir;
     oldDir << FLAGS_output_dir << "/" << serial;
     newDir << FLAGS_output_dir << "/cam" << ordinal;

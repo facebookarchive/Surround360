@@ -148,8 +148,13 @@ const size_t BinaryFootageFile::getNumberOfCameras() const {
 }
 
 const size_t BinaryFootageFile::getNumberOfFrames() const {
-  const size_t kSingleFrameSize = getFrameSize();
   const size_t kNumCameras = getNumberOfCameras();
+
+  if (kNumCameras == 0) {
+    return 0;
+  }
+
+  const size_t kSingleFrameSize = getFrameSize();
   const size_t kPageSize = 4096;
   return (mappingSize - kPageSize) / kSingleFrameSize / kNumCameras;
 }

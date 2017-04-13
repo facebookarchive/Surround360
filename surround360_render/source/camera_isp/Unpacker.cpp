@@ -83,6 +83,12 @@ int main(int argc, char *argv[]) {
     using futureType = future<void>;
     vector<futureType> taskHandles;
     const int numCameras = footageFile.getNumberOfCameras();
+
+    if (numCameras == 0) {
+      LOG(INFO) << "No cameras found...";
+      continue;
+    }
+
     vector<uint32_t> cameraIndexToSerial(numCameras);
 
     const int endFrameMax = footageFile.getNumberOfFrames() - 1;

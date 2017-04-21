@@ -219,12 +219,30 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   sudo apt-get install libtinfo-dev libjpeg-dev
 ```
 
-* (to use accelerated ISP) Install Halide
+* (to use accelerated ISP) Install LLVM
+```
+  cd ~
+  svn co https://llvm.org/svn/llvm-project/llvm/branches/release_37 llvm3.7
+  svn co https://llvm.org/svn/llvm-project/cfe/branches/release_37 llvm3.7/tools/clang
+  cd llvm3.7
+  mkdir build
+  cd build
+  cmake -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_TARGETS_TO_BUILD="X86;ARM;NVPTX;AArch64;Mips;PowerPC" -DLLVM_ENABLE_ASSERTIONS=ON -DCMAKE_BUILD_TYPE=Release ..
+  make -j8
+  export LLVM_CONFIG=$HOME/llvm3.7/build/bin/llvm-config
+  export CLANG=$HOME/llvm3.7/build/bin/clang
+```
+
+* (to use accelerated ISP) Install Halide (last known version to work from Mar 15 2017)
 ```
   cd ~
   git clone https://github.com/halide/Halide.git
+  cd Halide
+  git checkout 970f749
+  mkdir cmake_build
+  cd cmake_build
+  cmake -DLLVM_DIR=$HOME/llvm3.7/build/share/llvm/cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_VERSION=37 -DWARNINGS_AS_ERRORS=OFF ..
 ```
-  see README file inside Halide directory for installation instructions, including LLVM dependency. Follow steps in use "Building Halide with cmake". If the make step throws errors about unused variables, add the option ```-DWARNINGS_AS_ERRORS=OFF``` to the cmake command
 
 ## Compiling the Surround 360 Rendering Software
 

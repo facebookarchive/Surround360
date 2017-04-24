@@ -9,12 +9,13 @@ BlackLevel
 
 
 Vignette rolloff
-   3 channel vector value [r, g, b]
+   5x3 matrix
 
-       This is the center to edge fall off in the range 0.0, 1.0 where
-       1.0 is 100% fall off. Usually this value is around 10% to 20%.
-       It is not unusual to to have each of the channels roll off at
-       different rates to handle chromatic vignetting effects.
+       Per-channel 4th order Bezier surface control points, separable on H and V orientations.
+       The control points spread uniformly on the image. Each pixel in the image is scaled
+       by the corresponding value of the Bezier surface at that location.
+       It is not unusual to have each of the channels roll off at different rates to 
+       handle chromatic vignetting effects.
 
 
 WhiteBalanceGain
@@ -76,6 +77,15 @@ contrast
 
       1.0 means no contrast gain.  Values greater than one increase
       contrast.
+
+low/high key boost
+   3 channel vector value [r, g, b]
+   
+      Boosts low/high key colors, effectively increasing the color difference on the dark/bright
+      areas of the image. It applies a 4-point Bezier curve between 0.0 and 0.5 (low key) or
+      0.5 and 1.0 (high key).
+      Both low/high key default to 0.0 (= flat, no change), and they can range between 
+      -0.1666 and 0.1666 (-1/6 and 1/6).
 
 gamma
    3 channel vector value [r, g, b]

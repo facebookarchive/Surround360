@@ -50,7 +50,7 @@ RENDER_COMMAND_TEMPLATE = """
 --final_eqr_height {FINAL_EQR_HEIGHT}
 --interpupilary_dist 6.4
 --zero_parallax_dist 10000
---sharpenning {SHARPENNING}
+--sharpening {SHARPENNING}
 {EXTRA_FLAGS}
 """
 

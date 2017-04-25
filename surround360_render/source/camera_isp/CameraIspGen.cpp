@@ -571,9 +571,9 @@ class CameraIspGen
       Param<float> clampMaxR,
       Param<float> clampMaxG,
       Param<float> clampMaxB,
-      Param<float> sharpenningR,
-      Param<float> sharpenningG,
-      Param<float> sharpenningB,
+      Param<float> sharpeningR,
+      Param<float> sharpeningG,
+      Param<float> sharpeningB,
       Param<float> sharpeningSupport,
       Param<float> noiseCore,
       ImageParam ccm,
@@ -583,9 +583,9 @@ class CameraIspGen
       int outputBpp) {
 
     this->target = target;
-    Expr sR = 1.0f + cast<float>(sharpenningR);
-    Expr sG = 1.0f + cast<float>(sharpenningG);
-    Expr sB = 1.0f + cast<float>(sharpenningB);
+    Expr sR = 1.0f + cast<float>(sharpeningR);
+    Expr sG = 1.0f + cast<float>(sharpeningG);
+    Expr sB = 1.0f + cast<float>(sharpeningB);
 
     // This is the ISP pipeline
     Func vignettingGain("vignettingGain");
@@ -665,9 +665,9 @@ int main(int argc, char **argv) {
   Param<float> clampMaxR("clampMaxR");
   Param<float> clampMaxG("clampMaxG");
   Param<float> clampMaxB("clampMaxB");
-  Param<float> sharpenningR("sharpenningR");
-  Param<float> sharpenningG("sharpenningG");
-  Param<float> sharpenningB("sharpenninngB");
+  Param<float> sharpeningR("sharpeningR");
+  Param<float> sharpeningG("sharpeningG");
+  Param<float> sharpeningB("sharpeningB");
   Param<float> sharpeningSupport("sharpeningSupport");
   Param<float> noiseCore("noiseCore");
   ImageParam ccm(Float(32), 2, "ccm");
@@ -696,7 +696,7 @@ int main(int argc, char **argv) {
       blackLevelR, blackLevelG, blackLevelB,
       whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
       clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-      sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
+      sharpeningR, sharpeningG, sharpeningB, sharpeningSupport, noiseCore,
       ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   Func cameraIspFast =
@@ -705,7 +705,7 @@ int main(int argc, char **argv) {
         blackLevelR, blackLevelG, blackLevelB,
         whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
         clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-        sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore,
+        sharpeningR, sharpeningG, sharpeningB, sharpeningSupport, noiseCore,
         ccm, toneTable, BGR, bayerPattern, FLAGS_output_bpp);
 
   std::vector<Argument> args = {
@@ -713,7 +713,7 @@ int main(int argc, char **argv) {
     blackLevelR, blackLevelG, blackLevelB,
     whiteBalanceGainR, whiteBalanceGainG, whiteBalanceGainB,
     clampMinR, clampMinG, clampMinB, clampMaxR, clampMaxG, clampMaxB,
-    sharpenningR, sharpenningG, sharpenningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};
+    sharpeningR, sharpeningG, sharpeningB, sharpeningSupport, noiseCore, ccm, toneTable, BGR, bayerPattern};
 
   // Compile the pipelines
   // Use to cameraIsp.print_loop_nest() here to debug loop unrolling

@@ -52,7 +52,7 @@ DEFINE_double(interpupilary_dist,         6.4,            "separation of eyes fo
 DEFINE_int32(side_alpha_feather_size,     100,            "alpha feather for projection of side cameras to spherical coordinates");
 DEFINE_int32(std_alpha_feather_size,      31,             "alpha feather for all other purposes. must be odd");
 DEFINE_bool(save_debug_images,            false,          "if true, lots of debug images are generated");
-DEFINE_double(sharpenning,                0.0f,           "0.0 to 1.0 amount of sharpenning");
+DEFINE_double(sharpening,                 0.0f,           "0.0 to 1.0 amount of sharpening");
 DEFINE_bool(enable_top,                   false,          "is there a top camera?");
 DEFINE_bool(enable_bottom,                false,          "are there two bottom cameras?");
 DEFINE_bool(enable_pole_removal,          false,          "if true, pole removal masks are used; if false, primary bottom camera is used");
@@ -692,7 +692,7 @@ void sharpenThread(Mat* sphericalImage) {
   iirLowPass<WrapBoundary<float>, ReflectBoundary<float>, Vec3b>(
     *sphericalImage, 0.25f, lowPassSphericalImage, wrapB, reflectB);
   sharpenWithIirLowPass<Vec3b>(
-    *sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpenning);
+    *sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpening);
 }
 
 // If the un-padded height is odd and targetHeight is even, we can't do equal
@@ -899,7 +899,7 @@ void renderStereoPanorama() {
   }
 
   const double startSharpenTime = getCurrTimeSec();
-  if (FLAGS_sharpenning > 0.0f) {
+  if (FLAGS_sharpening > 0.0f) {
     VLOG(1) << "Sharpening";
     std::thread sharpenThreadL(sharpenThread, &sphericalImageL);
     std::thread sharpenThreadR(sharpenThread, &sphericalImageR);

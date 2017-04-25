@@ -23,7 +23,7 @@ WhiteBalanceGain
 
        Nominally the red and blue channels are usually around 2x gain
        to the green channels. Strictly speaking this should be
-       computed using a global white balance algrotihm.
+       computed using a global white balance algorithm.
 
 
 stuckPixelThreshold
@@ -51,20 +51,20 @@ denoiseRadius
     Single value
 
       Radius for noise reduction 3 or 4 is reasonable.  1 will be fast but will leave low frequency noise behind.
- 
+
 ccm
    3x3 matrix  [[m00, m01, m01], ..., [m20, m21, m22]]
 
-       An identity leaves the color unchanged. This matrix shold
+       An identity leaves the color unchanged. This matrix should
        calculated from a color calibration session. It usually best if
-       the rows sume unity to conserve energy.
+       the rows sum to unity to conserve energy.
 
-sharpenning
+sharpening
    3 channel vector value [r, g, b]
 
-       1.0 means no sharpenning. Below 1.o means blurring and values
-       greater than 1.0 will sharpen the image.  Execessive
-       sharpenning will cause "ringing."
+       1.0 means no sharpening. Below 1.o means blurring and values
+       greater than 1.0 will sharpen the image. Excessive
+       sharpening will cause "ringing."
 
 saturation
     Single value
@@ -92,7 +92,7 @@ gamma
 
       Raises the pixel value to the power of the gamma value. 0.454545
       is the  classic 2.2 gamma  used to to  move from linear  sRGB to
-      gamm corrected sRGB.
+      gamma corrected sRGB.
 
 
 

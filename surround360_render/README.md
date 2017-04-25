@@ -100,9 +100,9 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   see https://github.com/facebook/folly
 
 * Install folly (method 2 - OS X only):
-<pre>
+```
   brew install folly
-</pre>
+```
 
 * Install Ceres (method 1 - Linux only):
   see http://ceres-solver.org/installation.html
@@ -112,6 +112,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   cd ~
   git clone https://ceres-solver.googlesource.com/ceres-solver
   cd ceres-solver
+  git checkout 85c6b5c
   mkdir ceres-bin
   cd ceres-bin
   cmake ..
@@ -145,6 +146,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   cd ~
   git clone https://github.com/Itseez/opencv.git
   cd opencv
+  git checkout f109c01
   cmake -DWITH_IPP=OFF
   make
   sudo make install
@@ -155,6 +157,7 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
   cd ~
   git clone https://github.com/Itseez/opencv.git
   cd opencv
+  git checkout f109c01
   cmake -DWITH_IPP=OFF \
   -DPYTHON2_PACKAGES_PATH=/usr/local/lib/python2.7/site-packages \
   -DPYTHON2_LIBRARIES=/usr/local/Cellar/python/2.7.13/Frameworks/Python.framework/Versions/2.7/bin \

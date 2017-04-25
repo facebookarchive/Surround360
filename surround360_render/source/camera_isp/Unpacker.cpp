@@ -98,6 +98,7 @@ int main(int argc, char *argv[]) {
     int endFrame = FLAGS_frame_count == 0
       ? endFrameMax
       : startFrame + FLAGS_frame_count - 1;
+    const int frameCount = endFrame - startFrame + 1;
 
     if (startFrame > endFrameMax) {
       stringstream ss;
@@ -174,7 +175,7 @@ int main(int argc, char *argv[]) {
 
             if (cameraIndex == 0) {
               const int percentDoneCurr =
-                (frameIndex - startFrame + 1) * 100 / FLAGS_frame_count;
+                (frameIndex - startFrame + 1) * 100 / frameCount;
               LOG_IF(INFO, percentDoneCurr != percentDonePrev)
                 << "Percent done " << percentDoneCurr << "%";
               percentDonePrev = percentDoneCurr;

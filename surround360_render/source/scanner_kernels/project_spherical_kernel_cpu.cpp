@@ -35,15 +35,14 @@ class ProjectSphericalKernelCPU : public VideoKernel {
   void execute(const BatchedColumns& input_columns,
                BatchedColumns& output_columns) override {
     auto& frame_col = input_columns[0];
-    auto& frame_info_col = input_columns[1];
-    auto& camera_id_col = input_columns[2];
-    check_frame_info(device_, frame_info_col);
+    auto& camera_id_col = input_columns[1];
+    check_frame(device_, frame_col[0]);
 
     if (is_reset_) {
       // Use the new camera id to update the spherical projection parameters
       is_reset_ = false;
 
-      camIdx_ = *((int*)camera_id_col.rows[0].buffer);
+      camIdx_ = *((int*)camera_id_col[0].buffer);
       const Camera& camera = rig_->rigSideOnly[camIdx_];
 
       // the negative sign here is so the camera array goes clockwise
@@ -55,40 +54,25 @@ class ProjectSphericalKernelCPU : public VideoKernel {
       bottomAngle_ = -vRadians_ / 2;
     }
 
-    i32 input_count = (i32)frame_col.rows.size();
+    i32 input_count = (i32)num_rows(frame_col);
     size_t output_image_width = args_.eqr_width() * hRadians_ / (2 * M_PI);
     size_t output_image_height = args_.eqr_height() * vRadians_ / M_PI;
     size_t output_image_size = output_image_width * output_image_height * 4;
-    u8 *output_block =
-        new_block_buffer(device_, output_image_size * input_count, input_count);
-
-    // Output frame info
-    scanner::proto::FrameInfo output_frame_info;
-    output_frame_info.set_width(output_image_width);
-    output_frame_info.set_height(output_image_height);
-    output_frame_info.set_channels(4);
-    u8 *output_frame_info_buffer =
-        new_block_buffer(device_, output_frame_info.ByteSize(), input_count);
-    output_frame_info.SerializeToArray(output_frame_info_buffer,
-                                       output_frame_info.ByteSize());
+    FrameInfo info(output_image_height, output_image_width, 4, FrameType::U8);
+    std::vector<Frame*> output_frames = new_frames(device_, info, input_count);
 
     for (i32 i = 0; i < input_count; ++i) {
-      cv::Mat input(frame_info_.height(), frame_info_.width(), CV_8UC3,
-                    input_columns[0].rows[i].buffer);
+      cv::Mat input = frame_to_mat(frame_col[i].as_const_frame());
       cv::Mat tmp;
       cv::cvtColor(input, tmp, CV_BGR2BGRA);
 
-      cv::Mat projection_image(output_image_height, output_image_width, CV_8UC4,
-                               output_block + i * output_image_size);
+      cv::Mat projection_image = frame_to_mat(output_frames[i]);
 
       surround360::warper::bicubicRemapToSpherical(
           projection_image, tmp, rig_->rigSideOnly[camIdx_], leftAngle_,
           rightAngle_, topAngle_, bottomAngle_);
 
-      output_columns[0].rows.push_back(
-          Row{projection_image.data, output_image_size});
-      output_columns[1].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
+      insert_frame(output_columns[0], output_frames[i]);
     }
   }
 
@@ -110,8 +94,9 @@ class ProjectSphericalKernelCPU : public VideoKernel {
 };
 
 REGISTER_OP(ProjectSpherical)
-    .inputs({"frame", "frame_info", "camera_id"})
-    .outputs({"projected_frame", "frame_info"});
+    .frame_input("frame")
+    .input("camera_id")
+    .frame_output("projected_frame");
 
 REGISTER_KERNEL(ProjectSpherical, ProjectSphericalKernelCPU)
     .device(DeviceType::CPU)

@@ -25,7 +25,7 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
 
     rig_.reset(new RigDescription(args_.camera_rig_path()));
 
-    num_chunks_ = config.input_columns.size() / 2;
+    num_chunks_ = config.input_columns.size();
   }
 
   void new_frame_info() override {
@@ -57,47 +57,36 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
 
   void execute(const BatchedColumns& input_columns,
                BatchedColumns& output_columns) override {
-    check_frame_info(device_, input_columns[1]);
+    check_frame(device_, input_columns[0][0]);
 
-    i32 input_count = (i32)input_columns[0].rows.size();
+    i32 input_count = (i32)num_rows(input_columns[0]);
     size_t output_image_width = frame_info_.width() * num_chunks_;
     size_t output_image_height = frame_info_.height();
+    output_image_width += (output_image_width % 2);
+    output_image_height += (output_image_height % 2);
     size_t output_image_size =
         output_image_width * output_image_height * 3;
-    u8 *output_block_buffer = new_block_buffer(
-        device_, output_image_size * input_count, input_count);
-
-    // Output frame info
-    scanner::proto::FrameInfo output_frame_info;
-    output_frame_info.set_width(output_image_width);
-    output_frame_info.set_height(output_image_height);
-    output_frame_info.set_channels(3);
-    u8 *output_frame_info_buffer = new_block_buffer(
-        device_, output_frame_info.ByteSize(), input_count);
-    output_frame_info.SerializeToArray(output_frame_info_buffer,
-                                       output_frame_info.ByteSize());
+    FrameInfo info(output_image_height, output_image_width, 3, FrameType::U8);
+    std::vector<Frame*> output_frames = new_frames(device_, info, input_count);
 
     std::vector<cv::Mat> pano_chunks(num_chunks_, Mat());
     cv::Mat pano;
     for (i32 i = 0; i < input_count; ++i) {
       for (i32 c = 0; c < num_chunks_; ++c) {
-        auto &chunk_col = input_columns[c * 2];
-        pano_chunks[c] = cv::Mat(frame_info_.height(), frame_info_.width(),
-                                 CV_8UC4, chunk_col.rows[i].buffer);
-        cv::cvtColor(pano_chunks[c], pano_chunks[c], CV_BGRA2BGR);
+        auto &chunk_col = input_columns[c];
+        cv::cvtColor(frame_to_mat(chunk_col[i].as_const_frame()),
+                     pano_chunks[c], CV_BGRA2BGR);
       }
       pano = stackHorizontal(pano_chunks);
       pano = offsetHorizontalWrap(pano, zeroParallaxNovelViewShiftPixels_);
 
-      u8 *output = output_block_buffer + output_image_size * i;
+      u8 *output = output_frames[i]->data;
       for (i32 r = 0; r < pano.rows; ++r) {
         memcpy(output + r * output_image_width * sizeof(char) * 3,
                pano.data + pano.step * r, pano.cols * sizeof(char) * 3);
       }
 
-      output_columns[0].rows.push_back(Row{output, output_image_size});
-      output_columns[1].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
+      insert_frame(output_columns[0], output_frames[i]);
     }
   }
 
@@ -112,7 +101,7 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
 
 REGISTER_OP(ConcatPanoramaChunks)
     .variadic_inputs()
-    .outputs({"panorama", "frame_info"});
+    .frame_output("panorama");
 
 REGISTER_KERNEL(ConcatPanoramaChunks, ConcatPanoramaChunksKernelCPU)
     .device(DeviceType::CPU)

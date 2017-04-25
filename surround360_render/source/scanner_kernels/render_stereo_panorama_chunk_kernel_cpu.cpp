@@ -76,40 +76,23 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
   void execute(const BatchedColumns& input_columns,
                BatchedColumns& output_columns) override {
     auto& left_frame_col = input_columns[0];
-    auto& left_frame_info_col = input_columns[1];
-    auto& left_flow_col = input_columns[2];
-    auto& left_flow_info_col = input_columns[3];
-
-    auto& right_frame_col = input_columns[4];
-    auto& right_frame_info_col = input_columns[5];
-    auto& right_flow_col = input_columns[6];
-    auto& right_flow_info_col = input_columns[7];
-    check_frame_info(device_, left_frame_info_col);
+    auto& left_flow_col = input_columns[1];
+    auto& right_frame_col = input_columns[2];
+    auto& right_flow_col = input_columns[3];
+    check_frame(device_, left_frame_col[0]);
     assert(overlap_image_width_ != -1);
 
-    i32 input_count = (i32)left_frame_col.rows.size();
+    i32 input_count = (i32)num_rows(left_frame_col);
     size_t output_image_width = num_novel_views_;
     size_t output_image_height = frame_info_.height();
     size_t output_image_size =
         output_image_width * output_image_height * 4;
-    u8 *output_block_buffer = new_block_buffer(
-        device_, output_image_size * input_count * 2, input_count * 2);
-
-    // Output frame info
-    scanner::proto::FrameInfo output_frame_info;
-    output_frame_info.set_width(output_image_width);
-    output_frame_info.set_height(output_image_height);
-    output_frame_info.set_channels(3);
-    u8 *output_frame_info_buffer = new_block_buffer(
-        device_, output_frame_info.ByteSize(), input_count * 2);
-    output_frame_info.SerializeToArray(output_frame_info_buffer,
-                                       output_frame_info.ByteSize());
+    FrameInfo info(output_image_height, output_image_width, 4, FrameType::U8);
+    std::vector<Frame*> frames = new_frames(device_, info, input_count * 2);
 
     for (i32 i = 0; i < input_count; ++i) {
-      cv::Mat left_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                         left_frame_col.rows[i].buffer);
-      cv::Mat right_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                          right_frame_col.rows[i].buffer);
+      cv::Mat left_input = frame_to_mat(left_frame_col[i].as_const_frame());
+      cv::Mat right_input = frame_to_mat(right_frame_col[i].as_const_frame());
       cv::Mat left_overlap_input =
           left_input(cv::Rect(left_input.cols - overlap_image_width_, 0,
                               overlap_image_width_, left_input.rows));
@@ -118,10 +101,8 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
                                overlap_image_width_, right_input.rows));
 
 
-      cv::Mat left_flow(frame_info_.height(), overlap_image_width_, CV_32FC2,
-                        left_flow_col.rows[i].buffer);
-      cv::Mat right_flow(frame_info_.height(), overlap_image_width_, CV_32FC2,
-                         right_flow_col.rows[i].buffer);
+      cv::Mat left_flow = frame_to_mat(left_flow_col[i].as_const_frame());
+      cv::Mat right_flow = frame_to_mat(right_flow_col[i].as_const_frame());
 
       // Initialize NovelViewGenerator with images and flow since we are
       // bypassing the prepare method
@@ -134,8 +115,8 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
       const cv::Mat& chunkL = lazyNovelChunksLR.first;
       const cv::Mat& chunkR = lazyNovelChunksLR.second;
 
-      u8* left_output = output_block_buffer + output_image_size * (2 * i);
-      u8* right_output = output_block_buffer + output_image_size * (2 * i + 1);
+      u8* left_output = frames[2 * i]->data;
+      u8* right_output = frames[2 * i + 1]->data;
       for (i32 r = 0; r < chunkL.rows; ++r) {
         memcpy(left_output + r * output_image_width * sizeof(char) * 4,
                chunkL.data + chunkL.step * r,
@@ -145,14 +126,8 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
                chunkR.cols * sizeof(char) * 4);
       }
 
-      output_columns[0].rows.push_back(
-          Row{left_output, output_image_size});
-      output_columns[1].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
-      output_columns[2].rows.push_back(
-          Row{right_output, output_image_size});
-      output_columns[3].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
+      insert_frame(output_columns[0], frames[2 * i]);
+      insert_frame(output_columns[1], frames[2 * i + 1]);
     }
   }
 
@@ -170,11 +145,12 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
 };
 
 REGISTER_OP(RenderStereoPanoramaChunk)
-    .inputs({"projected_frame_left", "frame_info_left", "flow_left",
-             "flow_info_left", "projected_framed_right", "frame_info_right",
-             "flow_right", "flow_info_right"})
-    .outputs({"chunk_left", "frame_info_left", "chunk_right",
-              "frame_info_right"});
+    .frame_input("left_projected_frame")
+    .frame_input("left_flow")
+    .frame_input("right_projected_frame")
+    .frame_input("right_flow")
+    .frame_output("left_chunk")
+    .frame_output("right_chunk");
 
 REGISTER_KERNEL(RenderStereoPanoramaChunk, RenderStereoPanoramaChunkKernelCPU)
     .device(DeviceType::CPU)

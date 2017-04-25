@@ -9,6 +9,7 @@
 #include "opencv2/stitching/detail/matchers.hpp"
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
+#include "ceres/types.h"
 
 #include "GeometricCalibration.h"
 #include "Camera.h"
@@ -40,6 +41,7 @@ DEFINE_double(perturb_principals,     0,        "pertub principals (pixels)");
 DEFINE_int64(experiments,             1,        "calibrate multiple times");
 DEFINE_bool(discard_outside_fov,      true,     "discard matches outside fov");
 DEFINE_bool(save_debug_images,        false,  "save intermediate images");
+//#define FLAGS_save_debug_images false
 
 // is the stem expected to be the camera id? i.e. the path is of the form:
 //   <frame index>/ ... /<camera id>.<extension>
@@ -767,6 +769,10 @@ void solve(
     std::vector<Camera::Vector3>& rotations,
     std::vector<Trace>& traces) {
   ceres::Solver::Options options;
+  options.linear_solver_type = ceres::ITERATIVE_SCHUR;
+  options.preconditioner_type = ceres::SCHUR_JACOBI;
+  options.num_threads = 32;
+  options.num_linear_solver_threads = 32;
   options.use_inner_iterations = true;
   options.max_num_iterations = 500;
   options.minimizer_progress_to_stdout = false;
@@ -804,13 +810,13 @@ void refine(
   triangulateTraces(traces, keypointMap, cameras);
 
   // visualization for debugging
-  showMatches(
-    cameras,
-    keypointMap,
-    overlaps,
-    traces,
-    debugDir,
-    pass);
+  // showMatches(
+  //   cameras,
+  //   keypointMap,
+  //   overlaps,
+  //   traces,
+  //   debugDir,
+  //   pass);
 
   // read camera parameters from cameras
   std::vector<Camera::Vector3> positions;

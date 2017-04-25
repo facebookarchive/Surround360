@@ -54,35 +54,21 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
   void execute(const BatchedColumns& input_columns,
                BatchedColumns& output_columns) override {
     auto& left_frame_col = input_columns[0];
-    auto& left_frame_info_col = input_columns[1];
-    auto& right_frame_col = input_columns[2];
-    auto& right_frame_info_col = input_columns[3];
-    check_frame_info(device_, left_frame_info_col);
+    auto& right_frame_col = input_columns[1];
+    check_frame(device_, left_frame_col[0]);
     assert(overlap_image_width_ != -1);
 
-    i32 input_count = (i32)left_frame_col.rows.size();
+    i32 input_count = (i32)num_rows(left_frame_col);
     size_t output_image_width = overlap_image_width_;
     size_t output_image_height = frame_info_.height();
     size_t output_image_size =
         output_image_width * output_image_height * 2 * sizeof(float);
-    u8 *output_block_buffer = new_block_buffer(
-        device_, output_image_size * input_count * 2, input_count * 2);
-
-    // Output frame info
-    scanner::proto::FrameInfo output_frame_info;
-    output_frame_info.set_width(output_image_width);
-    output_frame_info.set_height(output_image_height);
-    output_frame_info.set_channels(2);
-    u8 *output_frame_info_buffer = new_block_buffer(
-        device_, output_frame_info.ByteSize(), input_count * 2);
-    output_frame_info.SerializeToArray(output_frame_info_buffer,
-                                       output_frame_info.ByteSize());
+    FrameInfo info(output_image_height, output_image_width, 2, FrameType::F32);
+    std::vector<Frame*> frames = new_frames(device_, info, input_count * 2);
 
     for (i32 i = 0; i < input_count; ++i) {
-      cv::Mat left_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                         left_frame_col.rows[i].buffer);
-      cv::Mat right_input(frame_info_.height(), frame_info_.width(), CV_8UC4,
-                          right_frame_col.rows[i].buffer);
+      cv::Mat left_input = frame_to_mat(left_frame_col[i].as_const_frame());
+      cv::Mat right_input = frame_to_mat(right_frame_col[i].as_const_frame());
 
       cv::Mat left_overlap_input =
           left_input(cv::Rect(left_input.cols - overlap_image_width_, 0,
@@ -95,13 +81,13 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
                                prev_frame_flow_l_to_r_, prev_frame_flow_r_to_l_,
                                prev_overlap_image_l_, prev_overlap_image_r_);
 
-      prev_overlap_image_l_ = left_overlap_input;
-      prev_overlap_image_r_ = right_overlap_input;
+      left_overlap_input.copyTo(prev_overlap_image_l_);
+      right_overlap_input.copyTo(prev_overlap_image_r_);
       prev_frame_flow_l_to_r_ = novel_view_gen_->getFlowLtoR();
       prev_frame_flow_r_to_l_ = novel_view_gen_->getFlowRtoL();
 
-      u8* left_output = output_block_buffer + output_image_size * (2 * i);
-      u8* right_output = output_block_buffer + output_image_size * (2 * i + 1);
+      u8* left_output = frames[2 * i]->data;
+      u8* right_output = frames[2 * i + 1]->data;
       const auto& left_flow = novel_view_gen_->getFlowLtoR();
       const auto& right_flow = novel_view_gen_->getFlowRtoL();
       for (i32 r = 0; r < left_flow.rows; ++r) {
@@ -113,14 +99,8 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
                right_flow.cols * sizeof(float) * 2);
       }
 
-      output_columns[0].rows.push_back(
-          Row{left_output, output_image_size});
-      output_columns[1].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
-      output_columns[2].rows.push_back(
-          Row{right_output, output_image_size});
-      output_columns[3].rows.push_back(
-          Row{output_frame_info_buffer, output_frame_info.ByteSize()});
+      insert_frame(output_columns[0], frames[2 * i]);
+      insert_frame(output_columns[1], frames[2 * i + 1]);
     }
   }
 
@@ -139,10 +119,10 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
 };
 
 REGISTER_OP(TemporalOpticalFlow)
-    .inputs({"projected_frame_left", "frame_info_left", "projeted_frame_right",
-             "frame_info_right"})
-    .outputs({"flow_left", "frame_info_left", "flow_right",
-              "frame_info_right"});
+    .frame_input("left_projected_frame")
+    .frame_input("right_projected_frame")
+    .frame_output("left_flow")
+    .frame_output("right_flow");
 
 REGISTER_KERNEL(TemporalOpticalFlow, TemporalOpticalFlowKernelCPU)
     .device(DeviceType::CPU)

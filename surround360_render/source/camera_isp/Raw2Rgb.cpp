@@ -403,6 +403,8 @@ int main(int argc, char* argv[]) {
         FLAGS_input_image_path,
         CV_LOAD_IMAGE_GRAYSCALE | CV_LOAD_IMAGE_ANYDEPTH);
 
+  LOG(INFO) << "Camera path " << FLAGS_input_image_path;
+
   if (inputImage.cols > 2 && inputImage.rows > 2) {
     const uint8_t depth = inputImage.type() & CV_MAT_DEPTH_MASK;
 

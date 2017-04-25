@@ -192,6 +192,7 @@ if __name__ == "__main__":
       render_params["FINAL_EQR_HEIGHT"]             = 6144
     elif quality == "8k":
       render_params["SHARPENNING"]                  = 0.25
+      render_params["SHARPENNING"]                  = 0.0
       render_params["EQR_WIDTH"]                    = 8400
       render_params["EQR_HEIGHT"]                   = 4096
       render_params["FINAL_EQR_WIDTH"]              = 8192

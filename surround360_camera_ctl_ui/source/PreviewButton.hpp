@@ -16,9 +16,7 @@ namespace surround360 {
   public:
     PreviewButton();
     bool isPreviewing();
-
-  protected:
-    void on_clicked() override;
+    void setPreviewing(bool isPreviewing);
 
   private:
     bool m_previewing;

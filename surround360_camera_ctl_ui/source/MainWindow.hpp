@@ -26,6 +26,7 @@ namespace surround360 {
 
   private:
     void connectSignals();
+    void startPreview();
     void updatePreviewParams();
     void takeNameDialog();
     void fpsSelectorClicked();

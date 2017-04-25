@@ -156,6 +156,10 @@ MainWindow::MainWindow()
   cout << "initial shutter: " << cfg.shutter << endl;
   cout << "initial gain: " << cfg.gain << endl;
   cout << "initial bits: " << cfg.bits << endl;
+  
+  m_previewBtn.set_sensitive(true);
+  m_recordBtn.set_sensitive(false);
+  m_stillBtn.set_sensitive(false);
 
   show_all();
 }
@@ -170,6 +174,7 @@ void MainWindow::connectSignals() {
   m_timelapseSpin.signal_value_changed().connect(sigc::mem_fun(*this, &MainWindow::timelapseSpinChanged));
   m_shutterSelectionBox.signal_changed().connect(sigc::mem_fun(this, &MainWindow::updatePreviewParams));
   m_gainSelectionBox.signal_changed().connect(sigc::mem_fun(this, &MainWindow::updatePreviewParams));
+  m_previewBtn.signal_clicked().connect(sigc::mem_fun(this, &MainWindow::startPreview));
   m_recordBtn.signal_clicked().connect(sigc::mem_fun(this, &MainWindow::takeNameDialog));
   m_stillBtn.signal_clicked().connect(sigc::mem_fun(this, &MainWindow::singleTakeDialog));
   m_8bit.signal_toggled().connect(sigc::mem_fun(this, &MainWindow::bitSelectorClicked));
@@ -183,7 +188,23 @@ void MainWindow::updatePreviewParams() {
   ctl.updateCameraParams(cfg.shutter, cfg.fps, cfg.frameInterval, cfg.gain, cfg.bits);
 }
 
+void startPreview() {
+  auto& ctl = CameraController::get();
+
+  if (!m_previewBtn.isPreviewing()) {
+    ctl.startProducer(1);
+    ctl.startConsumers(2);
+    m_previewBtn.setPreviewing(true);
+    m_previewBtn.set_sensitive(false);
+    m_recordBtn.set_sensitive(true);
+    m_stillBtn.set_sensitive(true);
+  }
+}
+
 void MainWindow::takeNameDialog() {
+  m_previewBtn.set_sensitive(false);
+  m_stillBtn.set_sensitive(false);
+    
   if (m_recordBtn.get_active()) {
     vector<string> dirnames(2);
     for (auto k = 0; k < dirnames.size(); ++k) {
@@ -236,6 +257,7 @@ void MainWindow::takeNameDialog() {
     m_8bit.set_sensitive(true);
     m_12bit.set_sensitive(true);
     m_shutterSelectionBox.set_sensitive(true);
+    m_stillBtn.set_sensitive(true);
   }
 }
 

@@ -26,12 +26,6 @@ bool PreviewButton::isPreviewing() {
   return m_previewing;
 }
 
-void PreviewButton::on_clicked() {
-  CameraController& controller = CameraController::get();
-
-  if (!m_previewing) {
-    controller.startProducer(1);
-    controller.startConsumers(2);
-    m_previewing = true;
-  }
+void PreviewButton::setPreviewing(bool isPreviewing) {
+  m_previewing = isPreviewing;
 }

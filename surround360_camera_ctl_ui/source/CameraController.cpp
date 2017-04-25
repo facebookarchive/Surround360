@@ -257,9 +257,9 @@ void CameraController::cameraProducer(const uint32_t id) {
   const size_t camerasPerProducer = m_camera.size() / m_producerCount;
   const size_t cameraOffset = id * camerasPerProducer;
   const int lastCamera = std::min(cameraOffset + camerasPerProducer, m_camera.size());
-  uint32_t frameCount = 0;
   uint32_t frameNumber = 0;
   vector<fc::Image> frame(m_camera.size());
+  vector<uint32_t> frameCount(m_camera.size());
   vector<uint32_t> frameCounter(m_camera.size());
   vector<uint32_t> prevFrameCounter(m_camera.size());
   fc::Image previewFrame;
@@ -321,7 +321,7 @@ void CameraController::cameraProducer(const uint32_t id) {
     }
 
     // The main frame grab loop
-    for (auto i = cameraOffset; i < lastCamera; ++i, ++frameCount) {
+    for (auto i = cameraOffset; i < lastCamera; ++i) {
       const int cid = i % m_consumerCount; // ping-pong between output threads
 
       FramePacket* nextFrame = nullptr;
@@ -340,7 +340,7 @@ void CameraController::cameraProducer(const uint32_t id) {
           cerr << "camera " << i << " dropped " << (frameCounter[i] - prevFrameCounter[i]) << " frames" << endl;
         }
 
-        if (frameCount % m_frameInterval > 0) {
+        if ((++frameCount[i]) % m_frameInterval > 0) {
           continue;
         }
 

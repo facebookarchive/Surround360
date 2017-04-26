@@ -155,6 +155,11 @@ def run_step(step, cmd, verbose, dryrun, file_runtimes, num_steps, step_count=[0
 
 def list_only_files(src_dir): return filter(lambda f: f[0] != ".", [f for f in listdir(src_dir) if isfile(join(src_dir, f))])
 
+def exit_with_error(message):
+  print message
+  sys.stdout.flush()
+  exit(1)
+
 if __name__ == "__main__":
   signal.signal(signal.SIGTERM, signal_term_handler)
 
@@ -202,12 +207,6 @@ if __name__ == "__main__":
   config_dir = dest_dir + "/config"
   os.system("mkdir -p " + config_dir)
 
-  isp_dir = config_dir + "/isp"
-  if not os.path.isdir(isp_dir):
-    print "ERROR: No color adjustment files not found in " + isp_dir + "\n"
-    sys.stdout.flush()
-    exit(1)
-
   file_camera_rig = "camera_rig.json"
   path_file_camera_rig = config_dir + "/" + file_camera_rig
   if not os.path.isfile(path_file_camera_rig):
@@ -235,6 +234,7 @@ if __name__ == "__main__":
   ### unpack step ###
 
   if steps_unpack:
+    isp_dir = config_dir + "/isp"
     rgb_dir = dest_dir + "/rgb"
     os.system("mkdir -p " + rgb_dir)
     binary_files = [join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.bin')]
@@ -244,9 +244,11 @@ if __name__ == "__main__":
       os.system("mkdir -p " + raw_dir)
       unpack_extra_params += " --output_raw_dir " + raw_dir
       if os.path.isdir(raw_dir) and len([f for f in os.listdir(raw_dir) if not f.startswith('.')]) > 0:
-        print "ERROR: raw directory not empty!\n"
-        sys.stdout.flush()
-        exit(1)
+        exit_with_error("ERROR: raw directory not empty!")
+    else:
+      # Only check for ISP files here. We could still unpack RAWs without them
+      if not os.path.isdir(isp_dir):
+        exit_with_error("ERROR: No color adjustment files not found in " + isp_dir)
 
     unpack_params = {
       "SURROUND360_RENDER_DIR": surround360_render_dir,
@@ -260,22 +262,18 @@ if __name__ == "__main__":
     unpack_command = UNPACK_COMMAND_TEMPLATE.replace("\n", " ").format(**unpack_params)
     run_step("unpack", unpack_command, verbose, dryrun, file_runtimes, num_steps)
 
-  # If unpack not in list of steps, we get frame count from raw directory
-  cam0_image_dir = dest_dir + "/rgb/cam0"
-  if int(frame_count) == 0:
-    if os.path.isdir(cam0_image_dir):
-      frame_count = len(os.listdir(cam0_image_dir))
-    else:
-      print "No raw images in " + cam0_image_dir
-      exit(1)
-
-  file_runtimes.write("total frames: " + str(frame_count) + "\n")
-
-  end_frame = int(start_frame) + int(frame_count) - 1
-
   ### render step ###
 
   if steps_render:
+    # Check if we have images in rgb directory
+    cam0_image_dir = dest_dir + "/rgb/cam0"
+    if not os.path.isdir(cam0_image_dir) or os.listdir(cam0_image_dir) == []:
+      exit_with_error("ERROR: No RGB images in " + cam0_image_dir)
+
+    frame_count = len(os.listdir(cam0_image_dir))
+    file_runtimes.write("total frames: " + str(frame_count) + "\n")
+    end_frame = int(start_frame) + int(frame_count) - 1
+
     render_extra_params = ""
 
     if enable_top:

@@ -135,12 +135,6 @@ int main(int argc, char *argv[]) {
               }
             }
 
-            const string fname(FLAGS_isp_dir + "/" + to_string(serial) + ".json");
-            ifstream ifs(fname, ios::in);
-            json = string(
-              (istreambuf_iterator<char>(ifs)),
-              (istreambuf_iterator<char>()));
-
             const auto width = footageFile.getMetadata().width;
             const auto height = footageFile.getMetadata().height;
 
@@ -149,29 +143,11 @@ int main(int argc, char *argv[]) {
               : RawConverter::convert12Frame(frame, width, height);
 
             if (FLAGS_output_raw_dir != "") {
-              const string filenameRaw =
-                createFilename(FLAGS_output_raw_dir, serial, frameIndex, ".tiff");
+              const string filenameRaw = createFilename(
+                FLAGS_output_raw_dir, serial, frameIndex, ".tiff");
               Mat rawImage(height, width, CV_16UC1, upscaled->data());
               imwriteExceptionOnFail(filenameRaw, rawImage, util::tiffParams);
             }
-
-            const int imageSize = width * height * 3 * sizeof(uint16_t);
-            auto coloredImage = make_unique<vector<uint8_t>>(imageSize);
-
-            static const bool kFast = false;
-            static const int kOutputBpp = 16;
-            CameraIspPipe isp(json, kFast, kOutputBpp);
-            isp.setBitsPerPixel(footageFile.getBitsPerPixel());
-            isp.enableToneMap();
-            isp.loadImage(reinterpret_cast<uint8_t*>(upscaled->data()), width, height);
-            isp.setup();
-            isp.initPipe();
-            isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()));
-
-            Mat outputImage(height, width, CV_16UC3, coloredImage->data());
-            const string filename =
-              createFilename(FLAGS_output_dir, serial, frameIndex, ".png");
-            imwriteExceptionOnFail(filename, outputImage);
 
             if (cameraIndex == 0) {
               const int percentDoneCurr =
@@ -179,6 +155,39 @@ int main(int argc, char *argv[]) {
               LOG_IF(INFO, percentDoneCurr != percentDonePrev)
                 << "Percent done " << percentDoneCurr << "%";
               percentDonePrev = percentDoneCurr;
+            }
+
+            const string fname(
+              FLAGS_isp_dir + "/" + to_string(serial) + ".json");
+            ifstream ispJsonStream(fname, ios::in);
+
+            // If ISP file not found, do not throw and exit, we can still unpack
+            // raws
+            if (!ispJsonStream) {
+              LOG(INFO) << "Cannot convert to RGB, file not found: " << fname;
+            } else {
+              json = string(
+                (istreambuf_iterator<char>(ispJsonStream)),
+                (istreambuf_iterator<char>()));
+
+              const int imageSize = width * height * 3 * sizeof(uint16_t);
+              auto coloredImage = make_unique<vector<uint8_t>>(imageSize);
+
+              static const bool kFast = false;
+              static const int kOutputBpp = 16;
+              CameraIspPipe isp(json, kFast, kOutputBpp);
+              isp.setBitsPerPixel(footageFile.getBitsPerPixel());
+              isp.enableToneMap();
+              isp.loadImage(
+                  reinterpret_cast<uint8_t*>(upscaled->data()), width, height);
+              isp.setup();
+              isp.initPipe();
+              isp.getImage(reinterpret_cast<uint8_t*>(coloredImage->data()));
+
+              Mat outputImage(height, width, CV_16UC3, coloredImage->data());
+              const string filename =
+                createFilename(FLAGS_output_dir, serial, frameIndex, ".png");
+              imwriteExceptionOnFail(filename, outputImage);
             }
           }});
       taskHandles.push_back(move(taskHandle));

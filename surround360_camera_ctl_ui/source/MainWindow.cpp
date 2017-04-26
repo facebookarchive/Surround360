@@ -188,7 +188,7 @@ void MainWindow::updatePreviewParams() {
   ctl.updateCameraParams(cfg.shutter, cfg.fps, cfg.frameInterval, cfg.gain, cfg.bits);
 }
 
-void startPreview() {
+void MainWindow::startPreview() {
   auto& ctl = CameraController::get();
 
   if (!m_previewBtn.isPreviewing()) {

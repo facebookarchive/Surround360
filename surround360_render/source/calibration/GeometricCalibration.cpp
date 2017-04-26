@@ -892,12 +892,12 @@ int main(int argc, char* argv[]) {
 
   std::string outputDir =
     FLAGS_output_json.substr(0, FLAGS_output_json.find_last_of('/'));
-  system(std::string("mkdir -p " + outputDir).c_str());
+  system(std::string("mkdir -p \"" + outputDir + "\"").c_str());
 
   std::string debugDir = "";
   if (FLAGS_save_debug_images) {
     debugDir = outputDir + "/debug";
-    system(std::string("mkdir -p " + debugDir).c_str());
+    system(std::string("mkdir -p \"" + debugDir + "\"").c_str());
   }
 
   if (FLAGS_unit_test) {

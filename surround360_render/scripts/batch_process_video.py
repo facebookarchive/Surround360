@@ -28,16 +28,16 @@ def signal_term_handler(signal, frame):
 RENDER_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestRenderStereoPanorama
 --logbuflevel -1
---log_dir {LOG_DIR}
+--log_dir "{LOG_DIR}"
 --stderrthreshold 0
 --v {VERBOSE_LEVEL}
---rig_json_file {RIG_JSON_FILE}
---imgs_dir {SRC_DIR}/rgb
+--rig_json_file "{RIG_JSON_FILE}"
+--imgs_dir "{SRC_DIR}/rgb"
 --frame_number {FRAME_ID}
---output_data_dir {SRC_DIR}
---prev_frame_data_dir {PREV_FRAME_DIR}
---output_cubemap_path {OUT_CUBE_DIR}/cube_{FRAME_ID}.png
---output_equirect_path {OUT_EQR_DIR}/eqr_{FRAME_ID}.png
+--output_data_dir "{SRC_DIR}"
+--prev_frame_data_dir "{PREV_FRAME_DIR}"
+--output_cubemap_path "{OUT_CUBE_DIR}/cube_{FRAME_ID}.png"
+--output_equirect_path "{OUT_EQR_DIR}/eqr_{FRAME_ID}.png"
 --cubemap_format {CUBEMAP_FORMAT}
 --side_flow_alg {SIDE_FLOW_ALGORITHM}
 --polar_flow_alg {POLAR_FLOW_ALGORITHM}
@@ -112,9 +112,9 @@ if __name__ == "__main__":
 
   start_time = timer()
 
-  os.system("mkdir -p " + out_eqr_frames_dir)
-  os.system("mkdir -p " + out_cube_frames_dir)
-  os.system("mkdir -p " + flow_dir)
+  os.system("mkdir -p \"" + out_eqr_frames_dir + "\"")
+  os.system("mkdir -p \"" + out_cube_frames_dir + "\"")
+  os.system("mkdir -p \"" + flow_dir + "\"")
 
   brightness_adjust_path = root_dir + "/brightness_adjust.txt"
   frame_range = range(min_frame, max_frame + 1)
@@ -129,9 +129,9 @@ if __name__ == "__main__":
     debug_frame_dir = debug_dir + "/" + frame_to_process
     flow_images_dir = debug_frame_dir + "/flow_images"
     projections_dir = debug_frame_dir + "/projections"
-    os.system("mkdir -p " + flow_dir + "/" + frame_to_process)
-    os.system("mkdir -p " + flow_images_dir)
-    os.system("mkdir -p " + projections_dir)
+    os.system("mkdir -p \"" + flow_dir + "/" + frame_to_process + "\"")
+    os.system("mkdir -p \"" + flow_images_dir + "\"")
+    os.system("mkdir -p \"" + projections_dir + "\"")
 
     prev_frame_dir = format(i - 1, "06d")
     render_params = {
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     }
 
     if resume or not is_first_frame:
-      render_params["PREV_FRAME_DIR"] = prev_frame_dir
+      render_params["PREV_FRAME_DIR"] = "\"" + prev_frame_dir + "\""
 
     if save_debug_images:
       render_params["EXTRA_FLAGS"] += " --save_debug_images"
@@ -170,7 +170,7 @@ if __name__ == "__main__":
       render_params["EXTRA_FLAGS"] += " --enable_bottom"
       if enable_pole_removal:
         render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
-        render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
+        render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir \"" + root_dir + "/pole_masks\""
 
     if quality == "3k":
       render_params["SHARPENNING"]                  = 0.25
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     start_subprocess("render", render_command)
 
     if DELETE_OLD_FLOW_FILES and not is_first_frame:
-      rm_old_flow_command = "rm " + flow_dir + "/" + prev_frame_dir + "/*"
+      rm_old_flow_command = "rm \"" + flow_dir + "/" + prev_frame_dir + "/*\""
 
       if verbose:
         print rm_old_flow_command
@@ -218,7 +218,7 @@ if __name__ == "__main__":
       subprocess.call(rm_old_flow_command, shell=True)
 
     if DELETE_OLD_FLOW_IMAGES and not is_first_frame:
-      rm_old_flow_images_command = "rm " + debug_dir + "/" + prev_frame_dir + "/flow_images/*"
+      rm_old_flow_images_command = "rm \"" + debug_dir + "/" + prev_frame_dir + "/flow_images/*\""
 
       if verbose:
         print rm_old_flow_images_command

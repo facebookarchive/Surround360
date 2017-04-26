@@ -33,10 +33,10 @@ FRAME_NUM_DIGITS = 6
 PREVIEW_COMMAND_TEMPLATE = """
 time {SURROUND360_RENDER_DIR}/bin/TestHyperPreview
 --logbuflevel -1 --stderrthreshold 0 --v 0
---log_dir {DEST_DIR}/logs
---rig_json_file {RIG_JSON_FILE}
---binary_prefix {BINARY_PREFIX}
---preview_dest {DEST_DIR}/eqr_preview
+--log_dir "{DEST_DIR}/logs"
+--rig_json_file "{RIG_JSON_FILE}"
+--binary_prefix "{BINARY_PREFIX}"
+--preview_dest "{DEST_DIR}/eqr_preview"
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --eqr_width {EQR_WIDTH}
@@ -49,12 +49,12 @@ FFMPEG_COMMAND_TEMPLATE = """
 time ffmpeg
 -y
 -framerate 30
--i {DEST_DIR}/eqr_preview/%06d.jpg
+-i "{DEST_DIR}/eqr_preview/%06d.jpg"
 -pix_fmt yuv420p
 -c:v libx264
 -crf 20
 -preset ultrafast
-{DEST_DIR}/{VIDEO_NAME}preview.mp4
+"{DEST_DIR}/{VIDEO_NAME}preview.mp4"
 """
 
 @conditional_decorator(USE_GOOEY, Gooey(program_name=TITLE, image_dir=os.path.dirname(script_dir) + "/res/img"))

@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 
   const string outputDir =
     FLAGS_output_dir.empty() ? FLAGS_input_dir + "/output" : FLAGS_output_dir;
-  system(string("mkdir -p " + outputDir).c_str());
+  system(string("mkdir -p \"" + outputDir + "\"").c_str());
 
   Mat vignettePatchMask;
 
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     const string imageId = stringSplit(imageFilename, '.')[0];
 
     const string imageDir = outputDir + "/" + imageId;
-    system(string("mkdir -p " + imageDir).c_str());
+    system(string("mkdir -p \"" + imageDir + "\"").c_str());
 
     const string imagePath = chartsDir + "/" + imageFilename;
     Mat raw = imreadExceptionOnFail(

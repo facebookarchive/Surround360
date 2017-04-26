@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
   }
 
   if (FLAGS_output_data_dir != "") {
-    system(string("mkdir -p " + FLAGS_output_data_dir).c_str());
+    system(string("mkdir -p \"" + FLAGS_output_data_dir + "\"").c_str());
   }
 
   int stepDebugImages = 0;

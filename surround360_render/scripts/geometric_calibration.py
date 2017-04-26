@@ -46,10 +46,10 @@ COLMAP_MATCH_TEMPLATE = """
 GEOMETRIC_CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/GeometricCalibration
 --json {RIG_JSON}
---output_json {OUTPUT_JSON}
---matches {MATCHES_JSON}
+--output_json "{OUTPUT_JSON}"
+--matches "{MATCHES_JSON}"
 --pass_count {PASS_COUNT}
---log_dir {LOG_DIR}
+--log_dir "{LOG_DIR}"
 --logbuflevel -1
 --stderrthreshold 0
 {FLAGS_EXTRA}
@@ -201,7 +201,7 @@ if __name__ == "__main__":
   features_db_to_json(colmap_db_path, matches_json)
 
   log_dir = re.escape(data_dir + "/logs")
-  os.system("mkdir -p " + log_dir)
+  os.system("mkdir -p \"" + log_dir + "\"")
 
   os.chdir(data_dir)
 

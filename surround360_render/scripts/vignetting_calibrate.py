@@ -22,10 +22,10 @@ TITLE = "Surround 360 - Vignetting Calibration"
 
 ACQUISITION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestVignettingDataAcquisition
---input_dir {INPUT_DIR}
---output_dir {OUTPUT_DIR}
---isp_json {ISP_JSON}
---log_dir {LOG_DIR}
+--input_dir "{INPUT_DIR}"
+--output_dir "{OUTPUT_DIR}"
+--isp_json "{ISP_JSON}"
+--log_dir "{LOG_DIR}"
 --logbuflevel -1
 --stderrthreshold 0
 {FLAGS_EXTRA}
@@ -33,10 +33,10 @@ ACQUISITION_COMMAND_TEMPLATE = """
 
 CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestVignettingCalibration
---data_path {DATA_PATH}
---output_dir {OUTPUT_DIR}
---test_image_path {TEST_IMAGE_PATH}
---test_isp_path {TEST_ISP_PATH}
+--data_path "{DATA_PATH}"
+--output_dir "{OUTPUT_DIR}"
+--test_image_path "{TEST_IMAGE_PATH}"
+--test_isp_path "{TEST_ISP_PATH}"
 --image_width {IMAGE_WIDTH}
 --image_height {IMAGE_HEIGHT}
 --logbuflevel -1
@@ -105,7 +105,7 @@ if __name__ == "__main__":
   start_time = timer()
 
   isp_new_dir = data_dir + "/isp_new"
-  os.system("mkdir -p " + isp_new_dir)
+  os.system("mkdir -p \"" + isp_new_dir + "\"")
 
   flags_extra = ""
   if save_debug_images:
@@ -141,7 +141,7 @@ if __name__ == "__main__":
       sys.exit()
 
     dir_calibration = input_dir + "/calibration"
-    filename = list_tiff(input_dir + "/charts")[0];
+    filename = list_tiff(input_dir + "/charts")[0]
 
     if not file_exists(filename, file_runtimes):
       sys.exit()
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     run_step("calibration", calibration_command, file_runtimes)
 
     isp_out = dir_calibration + "/isp_out.json"
-    isp_updated = isp_new_dir + "/" + os.path.basename(isp_json);
+    isp_updated = isp_new_dir + "/" + os.path.basename(isp_json)
     os.rename(isp_out, isp_updated)
 
   save_step_runtime(file_runtimes, "TOTAL", timer() - start_time)

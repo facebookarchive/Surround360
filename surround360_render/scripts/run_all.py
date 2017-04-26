@@ -45,11 +45,11 @@ FRAME_NUM_DIGITS = 6
 UNPACK_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/Unpacker
 --logbuflevel -1
---log_dir {ROOT_DIR}/logs
+--log_dir "{ROOT_DIR}/logs"
 --stderrthreshold 0
---isp_dir {ISP_DIR}
---output_dir {ROOT_DIR}/rgb
---bin_list {BIN_LIST}
+--isp_dir "{ISP_DIR}"
+--output_dir "{ROOT_DIR}/rgb"
+--bin_list "{BIN_LIST}"
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 {FLAGS_UNPACK_EXTRA}
@@ -58,15 +58,15 @@ UNPACK_COMMAND_TEMPLATE = """
 RENDER_COMMAND_TEMPLATE = """
 python {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
 --flow_alg {FLOW_ALG}
---root_dir {ROOT_DIR}
---surround360_render_dir {SURROUND360_RENDER_DIR}
+--root_dir "{ROOT_DIR}"
+--surround360_render_dir "{SURROUND360_RENDER_DIR}"
 --quality {QUALITY}
 --start_frame {START_FRAME}
 --end_frame {END_FRAME}
 --cubemap_width {CUBEMAP_WIDTH}
 --cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
---rig_json_file {RIG_JSON_FILE}
+--rig_json_file "{RIG_JSON_FILE}"
 {FLAGS_RENDER_EXTRA}
 """
 
@@ -74,7 +74,7 @@ FFMPEG_COMMAND_TEMPLATE = """
 ffmpeg
 -framerate 30
 -start_number {START_NUMBER}
--i {ROOT_DIR}/eqr_frames/eqr_%06d.png
+-i "{ROOT_DIR}/eqr_frames/eqr_%06d.png"
 -pix_fmt yuv420p
 -c:v libx264
 -crf 10
@@ -82,7 +82,7 @@ ffmpeg
 -tune fastdecode
 -bf 0
 -refs 3
--preset fast {MP4_PATH}
+-preset fast "{MP4_PATH}"
 {FLAGS_FFMPEG_EXTRA}
 """
 
@@ -177,7 +177,7 @@ if __name__ == "__main__":
   enable_pole_removal       = args["enable_pole_removal"]
   save_debug_images         = args["save_debug_images"]
   save_raw                  = args["save_raw"]
-  dryrun                    = args["dryrun"];
+  dryrun                    = args["dryrun"]
   steps_unpack              = args["steps_unpack"]
   steps_render              = args["steps_render"]
   steps_ffmpeg              = args["steps_ffmpeg"]
@@ -199,13 +199,13 @@ if __name__ == "__main__":
     sys.stderr.write("Cannot use enable_pole_removal if enable_bottom is not used")
     exit(1)
 
-  os.system("mkdir -p " + dest_dir + "/logs")
+  os.system("mkdir -p \"" + dest_dir + "/logs\"")
 
   print "Checking required files..."
 
   res_default_dir = surround360_render_dir + "/res"
   config_dir = dest_dir + "/config"
-  os.system("mkdir -p " + config_dir)
+  os.system("mkdir -p \"" + config_dir + "\"")
 
   file_camera_rig = "camera_rig.json"
   path_file_camera_rig = config_dir + "/" + file_camera_rig
@@ -213,14 +213,14 @@ if __name__ == "__main__":
     print "WARNING: Calibration file not found. Using default file.\n"
     sys.stdout.flush()
     path_file_camera_rig_default = res_default_dir + "/config/" + file_camera_rig
-    os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
+    os.system("cp \"" + path_file_camera_rig_default + "\" \"" + path_file_camera_rig + "\"")
 
   pole_masks_dir = dest_dir + "/pole_masks"
   if not os.path.isdir(pole_masks_dir):
     print "WARNING: Pole masks not found. Using default files.\n"
     sys.stdout.flush()
     pole_masks_default_dir = res_default_dir + "/pole_masks"
-    os.system("cp -R " + pole_masks_default_dir + " " + pole_masks_dir)
+    os.system("cp -R \"" + pole_masks_default_dir + "\" \"" + pole_masks_dir + "\"")
 
   # Open file (unbuffered)
   file_runtimes = open(dest_dir + "/runtimes.txt", 'w', 0)
@@ -236,18 +236,18 @@ if __name__ == "__main__":
   if steps_unpack:
     isp_dir = config_dir + "/isp"
     rgb_dir = dest_dir + "/rgb"
-    os.system("mkdir -p " + rgb_dir)
+    os.system("mkdir -p \"" + rgb_dir + "\"")
     binary_files = [join(data_dir, f) for f in os.listdir(data_dir) if f.endswith('.bin')]
     unpack_extra_params = ""
     if save_raw:
       raw_dir = dest_dir + "/raw"
-      os.system("mkdir -p " + raw_dir)
-      unpack_extra_params += " --output_raw_dir " + raw_dir
+      os.system("mkdir -p \"" + raw_dir + "\"")
+      unpack_extra_params += " --output_raw_dir \"" + raw_dir + "\""
       if os.path.isdir(raw_dir) and len([f for f in os.listdir(raw_dir) if not f.startswith('.')]) > 0:
         exit_with_error("ERROR: raw directory not empty!")
     else:
       # Only check for ISP files here. We could still unpack RAWs without them
-      if not os.path.isdir(isp_dir):
+      if not os.path.isdir(isp_dir) or os.listdir(isp_dir) == []:
         exit_with_error("ERROR: No color adjustment files not found in " + isp_dir)
 
     unpack_params = {

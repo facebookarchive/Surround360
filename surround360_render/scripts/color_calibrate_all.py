@@ -25,15 +25,15 @@ TITLE = "Surround 360 - Color Calibration"
 
 COLOR_CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/TestColorCalibration
---image_path {IMAGE_PATH}
+--image_path "{IMAGE_PATH}"
 --illuminant {ILLUMINANT}
---isp_passthrough_path {ISP_JSON}
+--isp_passthrough_path "{ISP_JSON}"
 --num_squares_w {NUM_SQUARES_W}
 --num_squares_h {NUM_SQUARES_H}
 --min_area_chart_perc {MIN_AREA_CHART_PERC}
 --max_area_chart_perc {MAX_AREA_CHART_PERC}
---output_data_dir {OUTPUT_DIR}
---log_dir {LOG_DIR}
+--output_data_dir "{OUTPUT_DIR}"
+--log_dir "{LOG_DIR}"
 --logbuflevel -1
 --stderrthreshold 0
 {FLAGS_EXTRA}
@@ -122,10 +122,10 @@ if __name__ == "__main__":
     out_dir = args["output_dir"]
   else:
     out_dir = data_dir + "/output"
-  os.system("mkdir -p " + out_dir)
+  os.system("mkdir -p \"" + out_dir + "\"")
 
   isp_dir = data_dir + "/isp"
-  os.system("mkdir -p " + isp_dir)
+  os.system("mkdir -p \"" + isp_dir + "\"")
 
   file_runtimes = open(out_dir + "/runtimes.txt", 'w', 0)
   start_time = timer()
@@ -176,13 +176,13 @@ if __name__ == "__main__":
     step = "black_level_adjusted"
 
     NUM_CHANNELS = 3
-    black_levels = [[] for j in range(NUM_CHANNELS)];
+    black_levels = [[] for j in range(NUM_CHANNELS)]
 
     for i in range(len(out_dirs)):
-      black_level = json.loads(open(out_dirs[i] + "/black_level.txt").read())
+      black_level = json.loads(open("\"" + out_dirs[i] + "/black_level.txt\"").read())
       print_and_save(file_runtimes, camera_names[i] + ": " + str(black_level) + "\n")
       for j in range(NUM_CHANNELS):
-        black_levels[j].append(black_level[j]);
+        black_levels[j].append(black_level[j])
       out_dirs[i] += "_" + step
 
     black_level_median = [median(black_levels[j]) for j in range(NUM_CHANNELS)]
@@ -220,8 +220,8 @@ if __name__ == "__main__":
     intercepts = json.loads(open(out_dirs[i] + "/intercept_x.txt").read())
     print_and_save(file_runtimes, camera_names[i] + ": " + str(intercepts) + "\n")
 
-    intercept_x_max = max(intercept_x_max, max(intercepts[0]));
-    intercept_x_min = min(intercept_x_min, min(intercepts[1]));
+    intercept_x_max = max(intercept_x_max, max(intercepts[0]))
+    intercept_x_min = min(intercept_x_min, min(intercepts[1]))
 
   text_intercepts = ("Intercept Xmin max: " + str(intercept_x_max) + ", " +
                      "Intercept Xmax min: " + str(intercept_x_min) + "\n")
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     isp_dst = isp_dir + "/isp" + camera_number + ".json"
 
     print "Copying " + isp_src + " to " + isp_dst + "..."
-    os.system("cp " + isp_src + " " + isp_dst)
+    os.system("cp \"" + isp_src + "\" \"" + isp_dst + "\"")
 
     flags_extra = " --update_clamps --clamp_min " + str(intercept_x_max) + " --clamp_max " + str(intercept_x_min)
     color_calibrate_params = {

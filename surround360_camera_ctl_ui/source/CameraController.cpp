@@ -283,7 +283,7 @@ void CameraController::cameraProducer(const uint32_t id) {
   m_camera[m_masterCameraIndex]->toggleStrobeOut(m_pinStrobe, true);
 
   m_running = true;
-  m_paramUpdatePending = false;
+  m_paramUpdatePending = true;
   pthread_barrier_wait(&startBarrier);
 
   while (m_keepRunning) {

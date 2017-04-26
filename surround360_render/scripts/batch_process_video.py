@@ -123,7 +123,7 @@ if __name__ == "__main__":
     frame_to_process = format(i, "06d")
     is_first_frame = (i == min_frame)
 
-    print "----------- [Render] processing frame:", frame_to_process
+    print "----------- [Render] processing frame ", i, " of ", max_frame
     sys.stdout.flush()
 
     debug_frame_dir = debug_dir + "/" + frame_to_process

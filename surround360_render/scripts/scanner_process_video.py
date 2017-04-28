@@ -237,7 +237,7 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   job = Job(columns = [panorama_left, panorama_right],
             name = 'surround360_pano_both')
 
-  return db.run(job, force=True, pipeline_instances_per_node=1)
+  return db.run(job, force=True)
 
 def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
                                     start, end):
@@ -310,8 +310,7 @@ def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
 
   job = Job(columns = [panorama_left, panorama_right],
             name = 'surround360_pano_both')
-  return db.run(job, pipeline_instances_per_node=1,
-                force=True)
+  return db.run(job, force=True)
 
 
 def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, start, end):
@@ -361,7 +360,7 @@ def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, s
               name = 'surround360_chunk_{:d}'.format(i))
     jobs.append(job)
 
-  return db.run(jobs, force=True,pipeline_instances_per_node=1)
+  return db.run(jobs, force=True)
 
 
 def fused_flow_and_stereo_chunk(db, overlap, render_params):
@@ -550,8 +549,8 @@ if __name__ == "__main__":
           sys.stdout.flush()
 
       visualize = False
-      fused_4 = True # Fused project, flow, stereo chunk, and pano
-      fused_3 = False # Fused project, flow, and stereo chunk
+      fused_4 = False # Fused project, flow, stereo chunk, and pano
+      fused_3 = True # Fused project, flow, and stereo chunk
       fused_2 = False # Fused flow and stereo chunk
       fused_1 = False # Nothing fused
       if fused_4:

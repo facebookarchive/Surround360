@@ -49,6 +49,7 @@ namespace surround360 {
     Glib::RefPtr<Gtk::Adjustment>   m_timelapseAdjustment;
     Gtk::SpinButton                 m_timelapseSpin;
     Gtk::Label                      m_timelapseLabelSeconds;
+    int                             m_fpsMin;
 
     Gtk::Frame                      m_shutterFrame;
     ShutterComboBox                 m_shutterSelectionBox;

@@ -75,6 +75,10 @@ MainWindow::MainWindow()
 
   m_fpsFrame.add(m_fpsVbox);
   m_controlVbox.add(m_fpsFrame);
+  
+  pair<float, float> fpsMinMax =
+    ctl.getPropertyMinMax(PointGreyCamera::CameraProperty::FRAME_RATE);
+  m_fpsMin = ceil(fpsMinMax.first);
 
   // configure shutter selection frame and combo box
   m_shutterFrame.set_label("Shutter");
@@ -293,7 +297,7 @@ void MainWindow::singleTakeDialog() {
 // If timelapse, we set fps to 10fps and get every N-th frame
 void MainWindow::fpsSelectorClicked() {
   auto& cfg = CameraConfig::get();
-  auto newFps = m_24fps.get_active() ? 24 : (m_30fps.get_active() ? 30 : 10);
+  auto newFps = m_24fps.get_active() ? 24 : (m_30fps.get_active() ? 30 : m_fpsMin);
   const int newFrameInterval = m_timelapse.get_active()
     ? (m_timelapseSpin.get_value_as_int() * newFps) : 1;
 
@@ -304,7 +308,7 @@ void MainWindow::fpsSelectorClicked() {
 
     auto& ctl = CameraController::get();
     if (m_timelapse.get_active()) {
-      cout << "Setting timelapse every " << newFrameInterval << " seconds" << endl;
+      cout << "Setting timelapse every " << (newFrameInterval / m_fpsMin) << " seconds" << endl;
     } else {
       cout << "Setting FPS to " << newFps << endl;
     }
@@ -322,16 +326,15 @@ void MainWindow::fpsSelectorClicked() {
 
 void MainWindow::timelapseSpinChanged() {
   m_timelapse.set_active();
-  static const auto kNewFps = 10;
-  const int newFrameInterval = m_timelapseSpin.get_value_as_int() * kNewFps;
+  const int newFrameInterval = m_timelapseSpin.get_value_as_int() * m_fpsMin;
 
   auto& cfg = CameraConfig::get();
-  if (cfg.fps != kNewFps || newFrameInterval != cfg.frameInterval) {
-    cfg.fps = kNewFps;
+  if (cfg.fps != m_fpsMin || newFrameInterval != cfg.frameInterval) {
+    cfg.fps = m_fpsMin;
     cfg.frameInterval = newFrameInterval;
 
     auto& ctl = CameraController::get();
-    cout << "Setting timelapse every " << (newFrameInterval / kNewFps) << " seconds" << endl;
+    cout << "Setting timelapse every " << (newFrameInterval / m_fpsMin) << " seconds" << endl;
 
     ctl.updateCameraParams(
       cfg.shutter, cfg.fps, cfg.frameInterval, cfg.gain, cfg.bits);

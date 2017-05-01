@@ -371,7 +371,7 @@ Vec3f findBlackLevel(
   }
 
   // Dilate black hole mask to help contour detection
-  static const int kDilationSize = 1;
+  static const int kDilationSize = 5;
   Mat element = getStructuringElement(
     MORPH_RECT,
     Size(2 * kDilationSize + 1, 2 * kDilationSize + 1),

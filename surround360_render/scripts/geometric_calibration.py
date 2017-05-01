@@ -33,18 +33,18 @@ TITLE = "Surround 360 - Geometric Calibration"
 
 COLMAP_EXTRACT_TEMPLATE = """
 {COLMAP_DIR}/feature_extractor
---General.image_path {IMAGE_PATH}
---General.database_path {COLMAP_DB_PATH}
+--General.image_path "{IMAGE_PATH}"
+--General.database_path "{COLMAP_DB_PATH}"
 """
 
 COLMAP_MATCH_TEMPLATE = """
 {COLMAP_DIR}/exhaustive_matcher
---General.database_path {COLMAP_DB_PATH}
+--General.database_path "{COLMAP_DB_PATH}"
 """
 
 GEOMETRIC_CALIBRATION_COMMAND_TEMPLATE = """
 {SURROUND360_RENDER_DIR}/bin/GeometricCalibration
---json {RIG_JSON}
+--json "{RIG_JSON}"
 --output_json "{OUTPUT_JSON}"
 --matches "{MATCHES_JSON}"
 --pass_count {PASS_COUNT}

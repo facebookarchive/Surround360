@@ -229,9 +229,9 @@ if __name__ == "__main__":
 
   thread_list = []
   for i in range(len(out_dirs)):
-    camera_number = re.findall("cam(\d+)", camera_names[i])[0]
+    serial_number = re.findall("(\d+)", camera_names[i])[0]
     isp_src = out_dirs[i] + "/isp_out.json"
-    isp_dst = isp_dir + "/isp" + camera_number + ".json"
+    isp_dst = isp_dir + "/" + serial_number + ".json"
 
     print "Copying " + isp_src + " to " + isp_dst + "..."
     os.system("cp \"" + isp_src + "\" \"" + isp_dst + "\"")

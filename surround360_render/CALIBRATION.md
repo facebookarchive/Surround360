@@ -20,7 +20,7 @@ The steps below describe the color calibration process for a set of cameras from
 
 * Under the known illuminant, place the MacBeth chart and the SpyderCUBE in front of a camera and take a picture using our camera control software. An example image can found in /surround360_render/res/example_data/color_calibration_input.png. Repeat for each camera.
 
-* Save the images inside a directory called "charts". For this example, we are assuming they are under ~/Desktop/color_calibration/charts/cam[0-16].tiff. Go to /surround360_render and run the following command:
+* Save the images inside a directory called "charts". For this example, we are assuming they are under ~/Desktop/color_calibration/charts/<serial_number>.tiff. Go to /surround360_render and run the following command:
 <pre>
 python scripts/color_calibrate_all.py \
 --data_dir ~/Desktop/color_calibration \
@@ -43,7 +43,7 @@ The steps below describe the calibration process for a set of cameras.
 
 * Under a uniform and constant illuminant, place the grayscale chart in front of a camera and take as many pictures as desired (recommended more than 20) using our camera control software so as to cover the entire image region with samples of the chart in all positions. An example image can found in /surround360_render/res/example_data/vignetting_calibration_sample.tiff. Repeat for each camera.
 
-* Save the set of images for each camera inside a directory called "charts". For this example, we acquired 100 images per camera, for 17 cameras, and we placed them under ~/Desktop/vignetting_calibration/cam[0-16]/charts/[0-99].tiff. Note the file structure, where each camera has its own directory. We also assume that color calibration has been run on these cameras, and we already have a directory ~/Desktop/vignetting_calibration/isp with each camera's ISP json config file. Go to /surround360_render and run the following command:
+* Save the set of RAW images for each camera inside a directory called "charts". For this example, we acquired 100 images per camera, for 17 cameras, and we placed them under ~/Desktop/vignetting_calibration/<serial_number>/charts/[000000-000099].tiff. Note the file structure, where each camera has its own directory. We also assume that color calibration has been run on these cameras, and we already have a directory ~/Desktop/vignetting_calibration/isp with each camera's ISP json config file. Go to /surround360_render and run the following command:
 <pre>
 python scripts/vignetting_calibrate.py \
 --data_dir ~/Desktop/vignetting_calibration \

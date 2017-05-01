@@ -11,6 +11,9 @@ import os
 import subprocess
 import sys
 import time
+
+from os import listdir
+from os.path import isdir, isfile, join
 from timeit import default_timer as timer
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -44,13 +47,17 @@ CALIBRATION_COMMAND_TEMPLATE = """
 {FLAGS_EXTRA}
 """
 
+def list_dirs_numbers(src_dir):
+  return filter(
+    lambda f: f.isdigit(),
+    [f for f in listdir(src_dir) if isdir(join(src_dir, f))])
+
 def list_tiff(src_dir): return [os.path.join(src_dir, fn) for fn in next(os.walk(src_dir))[2] if fn.endswith('.tiff')]
 
 def parse_args():
   parse_type = argparse.ArgumentParser
   parser = parse_type(description=TITLE, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('--data_dir',             help='directory containing calibration images and ISP config files', required=True)
-  parser.add_argument('--num_cams',             help='number of cameras', required=False, default=17)
   parser.add_argument('--image_width',          help='image width', required=False, default=2048)
   parser.add_argument('--image_height',         help='image height', required=False, default=2048)
   parser.add_argument('--load_data',            help='skip acquisition step and load data containing locations and RGB medians ', action='store_true')
@@ -91,7 +98,6 @@ def file_exists(file_path, file_runtimes):
 if __name__ == "__main__":
   args = parse_args()
   data_dir          = args["data_dir"]
-  num_cams          = args["num_cams"]
   image_width       = args["image_width"]
   image_height      = args["image_height"]
   load_data         = args["load_data"]
@@ -111,16 +117,16 @@ if __name__ == "__main__":
   if save_debug_images:
     flags_extra += " --save_debug_images"
 
-  for i in range(int(num_cams)):
-    input_dir = data_dir + "/cam" + str(i)
+  for serial_number in list_dirs_numbers(data_dir):
+    input_dir = data_dir + "/" + serial_number
     dir_acquisition = input_dir + "/acquisition"
-    isp_json = data_dir + "/isp/isp" + str(i) + ".json"
+    isp_json = data_dir + "/isp/" + serial_number + ".json"
 
     if not file_exists(isp_json, file_runtimes):
       sys.exit()
 
     if not load_data:
-      print "[cam" + str(i) + "] Generating data for vignetting correction..."
+      print "[" + serial_number + "] Generating data for vignetting correction..."
 
       acquisition_params = {
         "SURROUND360_RENDER_DIR": surround360_render_dir,
@@ -133,7 +139,7 @@ if __name__ == "__main__":
       acquisition_command = ACQUISITION_COMMAND_TEMPLATE.replace("\n", " ").format(**acquisition_params)
       run_step("acquisition", acquisition_command, file_runtimes)
 
-    print "[cam" + str(i) + "] Computing vignetting..."
+    print "[" + serial_number + "] Computing vignetting..."
 
     data_json_file = dir_acquisition + "/data.json"
 

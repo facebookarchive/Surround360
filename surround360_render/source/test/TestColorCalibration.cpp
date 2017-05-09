@@ -11,6 +11,7 @@
 #include <iterator>
 #include <string>
 #include <vector>
+#include <iterator>
 
 #include "CameraIsp.h"
 #ifdef USE_HALIDE

@@ -208,11 +208,12 @@ def render_stereo_panorama_chunks(db, overlap, flow, render_params):
 
 def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   num_cams = 14
+  item_size = 10
   left_inputs = []
   right_inputs = []
   print(chunks)
   for c in range(num_cams):
-    left_chunk, right_chunk = chunks[c].as_op().all(item_size=50)
+    left_chunk, right_chunk = chunks[c].as_op().all(item_size=item_size)
     left_inputs.append(left_chunk)
     right_inputs.append(right_chunk)
 
@@ -220,22 +221,17 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   args = db.protobufs.ConcatPanoramaChunksArgs()
   args.eqr_width = render_params["EQR_WIDTH"]
   args.eqr_height = render_params["EQR_HEIGHT"]
-  args.camera_rig_path = render_params["RIG_JSON_FILE"]
-  args.zero_parallax_dist = 10000
-  args.interpupilary_dist = 6.4
-  args.left = is_left
-  panorama_left = db.ops.ConcatPanoramaChunks(*left_inputs, args=args)
-
-  args = db.protobufs.ConcatPanoramaChunksArgs()
-  args.eqr_width = render_params["EQR_WIDTH"]
-  args.eqr_height = render_params["EQR_HEIGHT"]
+  args.final_eqr_width = render_params["FINAL_EQR_WIDTH"]
+  args.final_eqr_height = render_params["FINAL_EQR_HEIGHT"]
   args.camera_rig_path = render_params["RIG_JSON_FILE"]
   args.zero_parallax_dist = 10000
   args.interpupilary_dist = 6.4
   args.left = False
-  panorama_right = db.ops.ConcatPanoramaChunks(*right_inputs, args=args)
-  job = Job(columns = [panorama_left, panorama_right],
-            name = 'surround360_pano_both')
+  panorama= db.ops.ConcatPanoramaChunks(*(left_inputs + right_inputs),
+                                        args=args)
+
+  job = Job(columns = [panorama],
+            name = 'surround360_pano')
 
   return db.run(job, force=True)
 
@@ -315,15 +311,20 @@ def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
 
 def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, start, end):
   jobs = []
-  item_size = 11
+  warmup_size = 1
+  item_size = 15
   for i in range(len(videos.tables())):
     left_cam_idx = i
     right_cam_idx = (left_cam_idx + 1) % len(videos.tables())
 
-    left_frame = videos.tables(left_cam_idx).as_op().range(start, end, item_size = item_size)
-    left_cam_idx = videos_idx.tables(left_cam_idx).as_op().range(start, end, item_size = item_size)
-    right_frame = videos.tables(right_cam_idx).as_op().range(start, end, item_size = item_size)
-    right_cam_idx = videos_idx.tables(right_cam_idx).as_op().range(start, end, item_size = item_size)
+    left_frame = videos.tables(left_cam_idx).as_op().range(
+      start, end, item_size=item_size, warmup_size=warmup_size)
+    left_cam_idx = videos_idx.tables(left_cam_idx).as_op().range(
+      start, end, item_size=item_size, warmup_size=warmup_size)
+    right_frame = videos.tables(right_cam_idx).as_op().range(
+      start, end, item_size=item_size, warmup_size=warmup_size)
+    right_cam_idx = videos_idx.tables(right_cam_idx).as_op().range(
+      start, end, item_size=item_size, warmup_size=warmup_size)
 
     args = db.protobufs.ProjectSphericalArgs()
     args.eqr_width = render_params["EQR_WIDTH"]
@@ -572,6 +573,7 @@ if __name__ == "__main__":
                                                  True)
         print('Concat', timer() - concat_start)
         chunk_col[0].profiler().write_trace('fused3.trace')
+        pano_col.profiler().write_trace('fused3_concat.trace')
       elif fused_2:
         proj_start = timer()
         proj_col = project_images(db, videos, videos_idx, render_params)
@@ -601,11 +603,12 @@ if __name__ == "__main__":
         chunk_col = render_stereo_panorama_chunks(db, proj_col, flow_col, render_params)
 
       png_start = timer()
-      pano_col = db.table('surround360_pano_both')
+      pano_col = db.table('surround360_pano')
       # left_table = pano_col[0]
       # right_table = pano_col[1]
       if visualize:
-        left_table.columns('panorama').save_mp4('pano_test.mp4')
+        pano_col.columns('panorama').save_mp4('pano_test.mp4',
+                                              scale=(2048, 2048))
       print('To png', timer() - png_start)
 
   end_time = timer()

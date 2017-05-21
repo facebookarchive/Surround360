@@ -11,6 +11,21 @@
 using namespace scanner;
 
 namespace surround360 {
+namespace {
+void padToheight(Mat& unpaddedImage, const int targetHeight) {
+  const int paddingAbove = (targetHeight - unpaddedImage.rows) / 2;
+  const int paddingBelow = targetHeight - unpaddedImage.rows - paddingAbove;
+  cv::copyMakeBorder(
+    unpaddedImage,
+    unpaddedImage,
+    paddingAbove,
+    paddingBelow,
+    0,
+    0,
+    BORDER_CONSTANT,
+    Scalar(0.0, 0.0, 0.0));
+}
+}
 
 using namespace optical_flow;
 using namespace math_util;
@@ -25,7 +40,7 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
 
     rig_.reset(new RigDescription(args_.camera_rig_path()));
 
-    num_chunks_ = config.input_columns.size();
+    num_chunks_ = config.input_columns.size() / 2;
   }
 
   void new_frame_info() override {
@@ -60,8 +75,8 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
     check_frame(device_, input_columns[0][0]);
 
     i32 input_count = (i32)num_rows(input_columns[0]);
-    size_t output_image_width = frame_info_.width() * num_chunks_;
-    size_t output_image_height = frame_info_.height();
+    size_t output_image_width = (size_t)args_.final_eqr_width();
+    size_t output_image_height = (size_t)args_.final_eqr_height();
     output_image_width += (output_image_width % 2);
     output_image_height += (output_image_height % 2);
     size_t output_image_size =
@@ -69,21 +84,46 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
     FrameInfo info(output_image_height, output_image_width, 3, FrameType::U8);
     std::vector<Frame*> output_frames = new_frames(device_, info, input_count);
 
-    std::vector<cv::Mat> pano_chunks(num_chunks_, Mat());
-    cv::Mat pano;
+    std::vector<cv::Mat> left_pano_chunks(num_chunks_, Mat());
+    std::vector<cv::Mat> right_pano_chunks(num_chunks_, Mat());
+    cv::Mat left_pano;
+    cv::Mat right_pano;
     for (i32 i = 0; i < input_count; ++i) {
       for (i32 c = 0; c < num_chunks_; ++c) {
-        auto &chunk_col = input_columns[c];
-        cv::cvtColor(frame_to_mat(chunk_col[i].as_const_frame()),
-                     pano_chunks[c], CV_BGRA2BGR);
+        auto &left_chunk_col = input_columns[c];
+        cv::cvtColor(frame_to_mat(left_chunk_col[i].as_const_frame()),
+                     left_pano_chunks[c], CV_BGRA2BGR);
+
+        auto &right_chunk_col = input_columns[num_chunks_ + c];
+        cv::cvtColor(frame_to_mat(right_chunk_col[i].as_const_frame()),
+                     right_pano_chunks[c], CV_BGRA2BGR);
       }
-      pano = stackHorizontal(pano_chunks);
-      pano = offsetHorizontalWrap(pano, zeroParallaxNovelViewShiftPixels_);
+      left_pano = stackHorizontal(left_pano_chunks);
+      left_pano =
+          offsetHorizontalWrap(left_pano, zeroParallaxNovelViewShiftPixels_);
+
+      right_pano = stackHorizontal(right_pano_chunks);
+      right_pano =
+          offsetHorizontalWrap(right_pano, -zeroParallaxNovelViewShiftPixels_);
+
+      padToheight(left_pano, args_.eqr_height());
+      padToheight(right_pano, args_.eqr_height());
+
+      resize(left_pano, left_pano,
+             Size(args_.final_eqr_width(), args_.final_eqr_height() / 2), 0, 0,
+             INTER_CUBIC);
+      resize(right_pano, right_pano,
+             Size(args_.final_eqr_width(), args_.final_eqr_height() / 2), 0, 0,
+             INTER_CUBIC);
+
+      cv::Mat stereo_equirect =
+          stackVertical(vector<cv::Mat>({left_pano, right_pano}));
 
       u8 *output = output_frames[i]->data;
-      for (i32 r = 0; r < pano.rows; ++r) {
+      for (i32 r = 0; r < stereo_equirect.rows; ++r) {
         memcpy(output + r * output_image_width * sizeof(char) * 3,
-               pano.data + pano.step * r, pano.cols * sizeof(char) * 3);
+               stereo_equirect.data + stereo_equirect.step * r,
+               stereo_equirect.cols * sizeof(char) * 3);
       }
 
       insert_frame(output_columns[0], output_frames[i]);

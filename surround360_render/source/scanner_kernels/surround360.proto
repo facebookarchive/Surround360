@@ -25,6 +25,8 @@ message RenderStereoPanoramaChunkArgs {
 message ConcatPanoramaChunksArgs {
   int32 eqr_height = 1;
   int32 eqr_width = 2;
+  int32 final_eqr_height = 7;
+  int32 final_eqr_width = 8;
   string camera_rig_path = 3;
   float zero_parallax_dist = 4;
   float interpupilary_dist = 5;

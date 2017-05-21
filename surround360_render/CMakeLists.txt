@@ -6,7 +6,9 @@ OPTION(USE_SCANNER "Enable using Scanner for distributed rendering" ON)
 
 FIND_PACKAGE(OpenCV)
 FIND_PACKAGE(Ceres REQUIRED)
+FIND_PACKAGE(Boost REQUIRED)
 
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/util)
@@ -513,6 +515,7 @@ TARGET_LINK_LIBRARIES(
   LibJSON
   gflags
   glog
+  -L${Boost_LIBRARY_DIRS}
   boost_filesystem
   boost_system
   double-conversion

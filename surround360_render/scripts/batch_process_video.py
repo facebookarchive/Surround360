@@ -82,6 +82,7 @@ if __name__ == "__main__":
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
   parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
+  parser.add_argument('--cores', default=-1)
   parser.set_defaults(save_debug_images=False)
   parser.set_defaults(enable_top=False)
   parser.set_defaults(enable_bottom=False)

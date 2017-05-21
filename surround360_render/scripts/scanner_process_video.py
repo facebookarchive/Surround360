@@ -233,7 +233,8 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   job = Job(columns = [panorama],
             name = 'surround360_pano')
 
-  return db.run(job, force=True)
+  return db.run(job, force=True,
+                pipeline_instances_per_node=render_params["CORES"])
 
 def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
                                     start, end):
@@ -361,7 +362,8 @@ def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, s
               name = 'surround360_chunk_{:d}'.format(i))
     jobs.append(job)
 
-  return db.run(jobs, force=True)
+  return db.run(jobs, force=True,
+                pipeline_instances_per_node=render_params["CORES"])
 
 
 def fused_flow_and_stereo_chunk(db, overlap, render_params):
@@ -415,6 +417,7 @@ if __name__ == "__main__":
   parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
   parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
   parser.add_argument('--verbose', dest='verbose', action='store_true')
+  parser.add_argument('--cores', default=-1, type=int)
   parser.set_defaults(save_debug_images=False)
   parser.set_defaults(enable_top=False)
   parser.set_defaults(enable_bottom=False)
@@ -462,6 +465,7 @@ if __name__ == "__main__":
       "POLAR_FLOW_ALGORITHM": flow_alg,
       "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
       "EXTRA_FLAGS": "",
+      "CORES": args["cores"]
   }
 
 
@@ -514,8 +518,11 @@ if __name__ == "__main__":
   db_start = timer()
   with Database() as db:
       print('DB', timer() - db_start)
-      db.load_op('build/lib/libsurround360kernels.so',
-                 'build/source/scanner_kernels/surround360_pb2.py')
+      db.load_op(
+        os.path.join(surround360_render_dir,
+                     'build/lib/libsurround360kernels.so'),
+        os.path.join(surround360_render_dir,
+                     'build/source/scanner_kernels/surround360_pb2.py'))
 
       if not db.has_collection(collection_name):
           print "----------- [Render] loading surround360 collection"

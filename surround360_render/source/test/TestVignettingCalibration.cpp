@@ -382,7 +382,7 @@ int main(int argc, char** argv) {
 
     cameraIspTest.setup();
     cameraIspTest.loadImage(rawTest);
-    cameraIsp.getImage(rawTestIspOut);
+    cameraIspTest.getImage(rawTestIspOut);
     const string rawTestIspOutFilename = outputDir + "/test_out_rgb.png";
     imwriteExceptionOnFail(rawTestIspOutFilename, rawTestIspOut);
   }

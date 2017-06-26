@@ -9,7 +9,10 @@
 
 #include "SystemUtil.h"
 
+#ifdef LINUX
 #include <execinfo.h>
+#endif
+
 #include <signal.h>
 
 #include <exception>
@@ -29,6 +32,9 @@ namespace util {
 using namespace std;
 
 void printStacktrace() {
+#ifdef _WINDOWS
+    LOG(ERROR)<<"Stack trace not currently supported on Windows";
+#else
   const size_t maxStackDepth = 128;
   void* stack[maxStackDepth];
   size_t stackDepth = backtrace(stack, maxStackDepth);
@@ -37,6 +43,7 @@ void printStacktrace() {
     LOG(ERROR) << stackStrings[i];
   }
   free(stackStrings);
+#endif
 }
 
 void terminateHandler() {
@@ -61,7 +68,9 @@ void terminateHandler() {
 }
 
 void sigHandler(int signal) {
+#ifndef _WINDOWS
   LOG(ERROR) << strsignal(signal);
+#endif
   printStacktrace();
   abort();
 }
@@ -79,6 +88,7 @@ void initSurround360(int argc, char** argv) {
   // setup signal and termination handlers
   set_terminate(terminateHandler);
 
+#ifndef _WINDOWS
   // terminate process: terminal line hangup
   signal(SIGHUP, sigHandler);
 
@@ -114,6 +124,7 @@ void initSurround360(int argc, char** argv) {
 
   // terminate process: software termination signal
   signal(SIGTERM, sigHandler);
+#endif
 }
 
 } // namespace util

@@ -58,6 +58,10 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/thirdparty/supereasyjson)
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR})
 
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_definitions("-DLINUX")
+endif()
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   # required for clang, including AppleClang
   LINK_DIRECTORIES(/usr/local/lib)

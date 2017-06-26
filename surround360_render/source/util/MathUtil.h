@@ -9,6 +9,9 @@
 
 #pragma once
 
+#ifdef _WINDOWS
+#define _USE_MATH_DEFINES
+#endif
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>

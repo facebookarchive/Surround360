@@ -18,8 +18,6 @@
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
-#include <folly/FileUtil.h>
-#include <folly/json.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -42,18 +40,34 @@ void saveToJson(
     const vector<Vec3f>& medians,
     const string& filename) {
 
-  folly::dynamic serialized = folly::dynamic::array;
+    json::Array serialized;
   for (int i = 0; i < locations.size(); ++i) {
     const Point2f& loc = locations[i];
     const Vec3f& median = medians[i];
-    folly::dynamic properties =
-      folly::dynamic::object
-        ("image_id", imageIds[i])
-        ("location", folly::dynamic::array(loc.x, loc.y))
-        ("rgbmedian", folly::dynamic::array(median[0], median[1], median[2]));
+    json::Object properties;
+    
+    properties["image_id"]=imageIds[i];
+
+    json::Array location;
+
+    location.push_back(loc.x);
+    location.push_back(loc.y);
+
+    properties["location"]=location;
+
+    json::Array rgbmedian;
+
+    rgbmedian.push_back(median[0]);
+    rgbmedian.push_back(median[1]);
+    rgbmedian.push_back(median[2]);
+
+    properties["rgbmedian"]=rgbmedian;
     serialized.push_back(properties);
   }
-  folly::writeFile(folly::toPrettyJson(serialized), filename.c_str());
+
+  std::ofstream out(filename);
+  out<<json::Serialize(serialized);
+  out.close();
 }
 
 int main(int argc, char** argv) {

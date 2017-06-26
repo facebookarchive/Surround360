@@ -1,10 +1,9 @@
 #include <iostream>
 #include <unordered_map>
 #include <random>
+#include <array>
 #define BOOST_FILESYSTEM_NO_DEPRECATED
 #include <boost/filesystem.hpp>
-#include <folly/FileUtil.h>
-#include <folly/json.h>
 #include "opencv2/opencv.hpp"
 #include "opencv2/stitching/detail/matchers.hpp"
 #include "ceres/ceres.h"
@@ -61,16 +60,16 @@ void buildCameraIndexMaps(const Camera::Rig& rig) {
 
 std::string getCameraIdFromPath(const boost::filesystem::path& image) {
   if (kStemIsCameraId) {
-    return image.stem().native();
+    return image.stem().string();
   }
-  return image.parent_path().filename().native();
+  return image.parent_path().filename().string();
 }
 
 int getFrameIndexFromPath(const boost::filesystem::path& image) {
   if (kStemIsCameraId) {
-    return std::stoi(image.begin()->native());
+    return std::stoi(image.begin()->string());
   }
-  return std::stoi(image.stem().native());
+  return std::stoi(image.stem().string());
 }
 
 bool hasCameraIndex(const boost::filesystem::path& image) {
@@ -87,14 +86,19 @@ std::string makeArtificialPath(int frame, const std::string id) {
 }
 
 cv::Mat loadImage(const boost::filesystem::path& path) {
-  return cv::imread((FLAGS_frames / path).native());
+  return cv::imread((FLAGS_frames / path).string());
 }
 
-folly::dynamic parseJsonFile(const std::string& path) {
-  std::string json;
-  folly::readFile(path.c_str(), json);
-  CHECK(!json.empty()) << "could not read JSON file: " << path;
-  return folly::parseJson(json);
+json::Value parseJsonFile(const std::string& path) {
+    std::string json;
+
+    std::ifstream fileStream(path);
+    std::stringstream stream;
+
+    stream<<fileStream.rdbuf();
+    json=stream.str();
+
+    return json::Deserialize(json);
 }
 
 template <typename V>
@@ -139,20 +143,20 @@ struct Keypoint {
 
 using KeypointMap = std::unordered_map<std::string, std::vector<Keypoint>>;
 
-KeypointMap loadKeypointMap(const folly::dynamic& parsed) {
+KeypointMap loadKeypointMap(const json::Value &parsed) {
   std::unordered_map<std::string, std::vector<Keypoint>> result;
 
-  for (const auto& image : parsed["images"].items()) {
-    const std::string path = image.first.getString();
+  for (const auto& image : parsed["images"].ToObject()) {
+    const std::string path = image.first;
     if (!hasCameraIndex(path)) {
       continue;
     }
     auto& keypoints = result[path];
-    for (const auto& keypoint : image.second) {
+    for (const auto& keypoint : image.second.ToArray()) {
       keypoints.emplace_back(
-        Camera::Vector2(keypoint["x"].asDouble(), keypoint["y"].asDouble()),
-        keypoint["scale"].asDouble(),
-        keypoint["orientation"].asDouble()
+        Camera::Vector2(keypoint["x"].ToDouble(), keypoint["y"].ToDouble()),
+        keypoint["scale"].ToDouble(),
+        keypoint["orientation"].ToDouble()
       );
     }
   }
@@ -186,21 +190,21 @@ struct Overlap {
   }
 };
 
-std::vector<Overlap> loadOverlaps(const folly::dynamic& parsed) {
+std::vector<Overlap> loadOverlaps(const json::Value &parsed) {
   std::vector<Overlap> result;
 
   size_t count = 0;
-  for (const auto& overlap : parsed["all_matches"]) {
-    std::string path0 = overlap["image1"].getString();
-    std::string path1 = overlap["image2"].getString();
+  for (const auto& overlap : parsed["all_matches"].ToArray()) {
+    std::string path0 = overlap["image1"].ToString();
+    std::string path1 = overlap["image2"].ToString();
     if (!hasCameraIndex(path0) || !hasCameraIndex(path1)) {
       continue;
     }
     result.emplace_back(path0, path1);
-    for (const auto& match : overlap["matches"]) {
+    for (const auto& match : overlap["matches"].ToArray()) {
       result.back().matches.push_back({{
-        size_t(match["idx1"].asInt()),
-        size_t(match["idx2"].asInt()) }});
+        size_t(match["idx1"].ToInt()),
+        size_t(match["idx2"].ToInt()) }});
     }
     count += 2 * result.back().matches.size();
   }

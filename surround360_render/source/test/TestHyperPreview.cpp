@@ -10,7 +10,13 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef _WINDOWS
+#include <io.h>
+#define open _open
+#define pread(x, y, z, w) _read(x, y, z)
+#else
 #include <unistd.h>
+#endif // _WINDOWS
 
 #include <algorithm>
 #include <fstream>
@@ -196,7 +202,7 @@ int main(int argc, char** argv) {
   uint32_t imageHeight;
   uint32_t nBits;
 
-  int fd[FLAGS_file_count];
+  std::vector<int> fd(FLAGS_file_count);
   vector<string> binFilenames;
   for (int i = 0; i < FLAGS_file_count; ++i) {
     string fileName(FLAGS_binary_prefix + "/" + to_string(i) + ".bin");
@@ -210,7 +216,7 @@ int main(int argc, char** argv) {
   }
 
   cameraCount = 0;
-  uint32_t timestamps[FLAGS_file_count];
+  std::vector<uint32_t> timestamps(FLAGS_file_count);
   for (uint32_t i = 0; i < FLAGS_file_count; ++i) {
     static const int kNbitsMetadata = 4096 * CHAR_BIT;
     std::vector<unsigned char> imgbufMetadata(kNbitsMetadata);
@@ -258,12 +264,12 @@ int main(int argc, char** argv) {
   void* outputPtr = outImage.ptr(0);
 
   // Read raw bytes and assemble them into images
-  off_t pos[FLAGS_file_count];
-  off_t posInit[FLAGS_file_count];
+  std::vector<off_t> pos(FLAGS_file_count);
+  std::vector<off_t> posInit(FLAGS_file_count);
 
   // Each bin file can have different number of frames
-  int frameCount[FLAGS_file_count];
-  size_t readCount[FLAGS_file_count];
+  std::vector<int> frameCount(FLAGS_file_count);
+  std::vector<size_t> readCount(FLAGS_file_count);
 
   // Total number of frames is properly updated later if FLAGS_frame_count is 0
   int totalFrameCount = FLAGS_frame_count * cameraCount;
@@ -355,7 +361,7 @@ int main(int argc, char** argv) {
       // Check if we reached EOF (read returns 0)
       if (readCount[idx] == 0) {
         // Check if all the files have reached EOF
-        if (!std::all_of(readCount, readCount + FLAGS_file_count, [](int x){ return x == 0; })) {
+        if (!std::all_of(readCount.begin(), readCount.begin() + FLAGS_file_count, [](int x){ return x == 0; })) {
           continue;
         }
 

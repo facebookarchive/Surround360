@@ -22,8 +22,6 @@
 #include "VrCamException.h"
 
 #include "ceres/ceres.h"
-#include <folly/FileUtil.h>
-#include <folly/json.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -152,27 +150,28 @@ int main(int argc, char** argv) {
   //     "rgbmedian" : [rN, gN, bN]
   //   }
   //  ]
+  std::ifstream jsonFile(FLAGS_data_path);
+  std::string json((std::istreambuf_iterator<char>(jsonFile)),
+      std::istreambuf_iterator<char>());
 
-  string json;
-  folly::readFile(FLAGS_data_path.c_str(), json);
   if (json.empty()) {
     throw VrCamException("Failed to load JSON file: " + FLAGS_data_path);
   }
 
   vector<Point2f> vignetteMapLocs;
   vector<Vec3f> vignetteMapRGBValues;
-  folly::dynamic data = folly::parseJson(json);
+  json::Value data = json::Deserialize(json);
   static const int kNumChannels = 3;
   vector<float> minRGB(kNumChannels, INT_MAX);
   vector<float> maxRGB(kNumChannels, 0);
-  for (const auto& sample : data) {
-    const folly::dynamic loc = sample["location"];
-    const folly::dynamic median = sample["rgbmedian"];
-    vignetteMapLocs.push_back(Point2f(loc[0].asDouble(), loc[1].asDouble()));
+  for (const json::Value &sample : data.ToArray()) {
+    const json::Array loc = sample["location"].ToArray();
+    const json::Array median = sample["rgbmedian"].ToArray();
+    vignetteMapLocs.push_back(Point2f(loc[0].ToDouble(), loc[1].ToDouble()));
     const Vec3f v = Vec3f(
-      median[0].asDouble(),
-      median[1].asDouble(),
-      median[2].asDouble());
+      median[0].ToDouble(),
+      median[1].ToDouble(),
+      median[2].ToDouble());
     vignetteMapRGBValues.push_back(v);
 
     // Find min and max of each channel as we load data

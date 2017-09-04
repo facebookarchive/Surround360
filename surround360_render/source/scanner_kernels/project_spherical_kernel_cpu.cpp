@@ -13,12 +13,11 @@ using namespace scanner;
 
 namespace surround360 {
 
-class ProjectSphericalKernelCPU : public VideoKernel {
+class ProjectSphericalKernelCPU : public BatchedKernel, public VideoKernel {
  public:
-  ProjectSphericalKernelCPU(const Kernel::Config& config)
-      : VideoKernel(config),
-        device_(config.devices[0]),
-        work_item_size_(config.work_item_size) {
+  ProjectSphericalKernelCPU(const KernelConfig& config)
+      : BatchedKernel(config),
+        device_(config.devices[0]) {
     args_.ParseFromArray(config.args.data(), config.args.size());
 
     // Initialize camera rig
@@ -80,7 +79,6 @@ class ProjectSphericalKernelCPU : public VideoKernel {
   surround360::proto::ProjectSphericalArgs args_;
   std::unique_ptr<RigDescription> rig_;
   DeviceHandle device_;
-  i32 work_item_size_;
   bool is_reset_ = true;
 
   float hRadians_;

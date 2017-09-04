@@ -15,12 +15,11 @@ namespace surround360 {
 using namespace optical_flow;
 using namespace math_util;
 
-class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
- public:
-  RenderStereoPanoramaChunkKernelCPU(const Kernel::Config& config)
-      : VideoKernel(config),
-        device_(config.devices[0]),
-        work_item_size_(config.work_item_size) {
+class RenderStereoPanoramaChunkKernelCPU : public BatchedKernel,
+                                           public VideoKernel {
+public:
+  RenderStereoPanoramaChunkKernelCPU(const KernelConfig &config)
+      : BatchedKernel(config), device_(config.devices[0]) {
     args_.ParseFromArray(config.args.data(), config.args.size());
 
     rig_.reset(new RigDescription(args_.camera_rig_path()));
@@ -135,7 +134,6 @@ class RenderStereoPanoramaChunkKernelCPU : public VideoKernel {
   surround360::proto::RenderStereoPanoramaChunkArgs args_;
   std::unique_ptr<RigDescription> rig_;
   DeviceHandle device_;
-  int work_item_size_;
   float fov_horizontal_radians_;
   int overlap_image_width_;
   int num_novel_views_;

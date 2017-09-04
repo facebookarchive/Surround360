@@ -30,12 +30,11 @@ void padToheight(Mat& unpaddedImage, const int targetHeight) {
 using namespace optical_flow;
 using namespace math_util;
 
-class ConcatPanoramaChunksKernelCPU : public VideoKernel {
+class ConcatPanoramaChunksKernelCPU : public BatchedKernel, public VideoKernel {
  public:
-  ConcatPanoramaChunksKernelCPU(const Kernel::Config& config)
-      : VideoKernel(config),
-        device_(config.devices[0]),
-        work_item_size_(config.work_item_size) {
+  ConcatPanoramaChunksKernelCPU(const KernelConfig& config)
+      : BatchedKernel(config),
+        device_(config.devices[0]) {
     args_.ParseFromArray(config.args.data(), config.args.size());
 
     rig_.reset(new RigDescription(args_.camera_rig_path()));
@@ -134,7 +133,6 @@ class ConcatPanoramaChunksKernelCPU : public VideoKernel {
     surround360::proto::ConcatPanoramaChunksArgs args_;
     std::unique_ptr<RigDescription> rig_;
     DeviceHandle device_;
-    int work_item_size_;
     int num_chunks_;
     float zeroParallaxNovelViewShiftPixels_;
 };

@@ -15,12 +15,11 @@ namespace surround360 {
 using namespace optical_flow;
 using namespace math_util;
 
-class TemporalOpticalFlowKernelCPU : public VideoKernel {
+class TemporalOpticalFlowKernelCPU : public BatchedKernel, public VideoKernel {
  public:
-  TemporalOpticalFlowKernelCPU(const Kernel::Config& config)
-      : VideoKernel(config),
-        device_(config.devices[0]),
-        work_item_size_(config.work_item_size) {
+  TemporalOpticalFlowKernelCPU(const KernelConfig& config)
+      : BatchedKernel(config),
+        device_(config.devices[0]) {
     args_.ParseFromArray(config.args.data(), config.args.size());
 
     rig_.reset(new RigDescription(args_.camera_rig_path()));
@@ -108,7 +107,6 @@ class TemporalOpticalFlowKernelCPU : public VideoKernel {
   surround360::proto::TemporalOpticalFlowArgs args_;
   std::unique_ptr<RigDescription> rig_;
   DeviceHandle device_;
-  i32 work_item_size_;
   int overlap_image_width_;
 
   std::unique_ptr<NovelViewGenerator> novel_view_gen_;

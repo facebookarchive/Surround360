@@ -213,7 +213,7 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   right_inputs = []
   print(chunks)
   for c in range(num_cams):
-    left_chunk, right_chunk = chunks[c].as_op().all(item_size=item_size)
+    left_chunk, right_chunk = chunks[c].as_op().all(task_size=item_size)
     left_inputs.append(left_chunk)
     right_inputs.append(right_chunk)
 
@@ -244,8 +244,8 @@ def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
   proj_frames = []
   for i in range(len(videos.tables())):
     left_cam_idx = i
-    frame = videos.tables(left_cam_idx).as_op().range(start, end, item_size = item_size)
-    cam_idx = videos_idx.tables(left_cam_idx).as_op().range(start, end, item_size = item_size)
+    frame = videos.tables(left_cam_idx).as_op().range(start, end, task_size=item_size)
+    cam_idx = videos_idx.tables(left_cam_idx).as_op().range(start, end, task_size=item_size)
 
     args = db.protobufs.ProjectSphericalArgs()
     args.eqr_width = render_params["EQR_WIDTH"]
@@ -313,19 +313,19 @@ def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
 def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, start, end):
   jobs = []
   warmup_size = 1
-  item_size = 15
+  item_size = 1 
   for i in range(len(videos.tables())):
     left_cam_idx = i
     right_cam_idx = (left_cam_idx + 1) % len(videos.tables())
 
     left_frame = videos.tables(left_cam_idx).as_op().range(
-      start, end, item_size=item_size, warmup_size=warmup_size)
+      start, end, task_size=item_size, warmup_size=warmup_size)
     left_cam_idx = videos_idx.tables(left_cam_idx).as_op().range(
-      start, end, item_size=item_size, warmup_size=warmup_size)
+      start, end, task_size=item_size, warmup_size=warmup_size)
     right_frame = videos.tables(right_cam_idx).as_op().range(
-      start, end, item_size=item_size, warmup_size=warmup_size)
+      start, end, task_size=item_size, warmup_size=warmup_size)
     right_cam_idx = videos_idx.tables(right_cam_idx).as_op().range(
-      start, end, item_size=item_size, warmup_size=warmup_size)
+      start, end, task_size=item_size, warmup_size=warmup_size)
 
     args = db.protobufs.ProjectSphericalArgs()
     args.eqr_width = render_params["EQR_WIDTH"]

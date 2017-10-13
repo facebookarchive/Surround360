@@ -245,6 +245,7 @@ If python-wxgtk2.8 not available (e.g. Ubuntu 16.04):
   mkdir cmake_build
   cd cmake_build
   cmake -DLLVM_DIR=$HOME/llvm3.7/build/share/llvm/cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_VERSION=37 -DWARNINGS_AS_ERRORS=OFF ..
+  make -j8
 ```
 
 ## Compiling the Surround 360 Rendering Software

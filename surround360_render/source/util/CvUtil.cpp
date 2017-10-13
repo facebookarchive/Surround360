@@ -50,6 +50,22 @@ void imwriteExceptionOnFail(
   }
 }
 
+Mat convert8bitTo16bit(const Mat& image8) {
+  Mat image16(image8.rows, image8.cols, CV_16U);
+
+  for (int y = 0; y < image8.rows; ++y) {
+    for (int x = 0; x < image8.cols; ++x) {
+      // Use the repeating high order bits in low order bits to
+      // correctly fill 15 bits.
+      image16.at<uint16_t>(y, x) =
+        (uint16_t(image8.at<uint8_t>(y, x)) << 8) |
+        (uint16_t(image8.at<uint8_t>(y, x)) & 0xff);
+    }
+  }
+
+  return image16;
+}
+
 Mat stackHorizontal(const std::vector<Mat>& images) {
   assert(!images.empty());
   if (images.size() == 1) {
@@ -131,6 +147,7 @@ Mat featherAlphaChannel(const Mat& src, int erodeSize) {
     cv::Size(2 * erodeSize + 1, 2 * erodeSize + 1),
     cv::Point(erodeSize, erodeSize) );
   erode(channels[3], channels[3], erosionKernel);
+
   // blur the eroded alpha channel
   GaussianBlur(channels[3], channels[3], Size(erodeSize, erodeSize), erodeSize / 2.0f);
 
@@ -242,23 +259,6 @@ Mat flattenLayersDeghostPreferBase(
   return mergedImage;
 }
 
-Mat addBrightnessAndClamp(const Mat& image, const float val) {
-
-  Mat adjustedImage(image.size(), CV_8UC4);
-  Vec4b color;
-  for (int y = 0; y < image.rows; ++y) {
-    for (int x = 0; x < image.cols; ++x) {
-      color = image.at<Vec4b>(y, x);
-      adjustedImage.at<Vec4b>(y, x) = Vec4b(
-        clamp<int>(int(float(color[0]) + val), 0, 255),
-        clamp<int>(int(float(color[1]) + val), 0, 255),
-        clamp<int>(int(float(color[2]) + val), 0, 255),
-        color[3]);
-    }
-  }
-  return adjustedImage;
-}
-
 vector<vector<float>> buildColorAdjustmentModel(
     const Mat& targetImage,
     const Mat& imageToAdjust) {
@@ -309,49 +309,54 @@ vector<vector<float>> buildColorAdjustmentModel(
     kStepSize,kPrintObjective);
 }
 
-// this function is somewhat low-level optimized, because it used a significant
-// amount of the total runtime.
-Mat applyColorAdjustmentModel(
-    const Mat& image,
-    const vector<vector<float>>& model) {
-
-  const static int kModelInputDim = 4;
-  const static int kModelOutputDim = 3;
-  vector<float> modelInput(kModelInputDim);
-  vector<float> modelOutput(kModelOutputDim);
-  modelInput[0] = 1.0;
-  static const float kOneOver255 = 1.0f / 255.0f;
-  Mat adjustedImage(image.size(), CV_8UC4);
-  Vec4b color;
-  for (int y = 0; y < image.rows; ++y) {
-    for (int x = 0; x < image.cols; ++x) {
-      color = image.at<Vec4b>(y, x);
-      modelInput[1] = float(color[0]) * kOneOver255;
-      modelInput[2] = float(color[1]) * kOneOver255;
-      modelInput[3] = float(color[2]) * kOneOver255;
-
-      applyLinearModelRdToRk(
-        kModelInputDim, kModelOutputDim, model, modelInput, modelOutput);
-
-      adjustedImage.at<Vec4b>(y, x) = Vec4b(
-        clamp<int>(int((float(color[0]) - modelOutput[0] * 255.0f)), 0, 255),
-        clamp<int>(int((float(color[1]) - modelOutput[1] * 255.0f)), 0, 255),
-        clamp<int>(int((float(color[2]) - modelOutput[2] * 255.0f)), 0, 255),
-        color[3]);
+void radialAlphaFade(Mat& img) {
+  CHECK_EQ(img.type(), CV_32FC4);
+  for (int y = 0; y < img.rows; ++y) {
+    for (int x = 0; x < img.cols; ++x) {
+      const float dx = x - float(img.cols) / 2.0f;
+      const float dy = y - float(img.rows) / 2.0f;
+      const float r =
+        sqrt(dx * dx + dy * dy) / float(std::min(img.rows, img.cols) / 2.0f);
+      const float alpha = max(0.0f, 1.0f - r);
+      img.at<Vec4f>(y, x)[3] *= alpha;
     }
   }
-  return adjustedImage;
 }
 
-Mat flattenLayersDeghostPreferBaseAdjustBrightness(
-    const Mat& bottomLayer,
-    const Mat& topLayer) {
+void topDownAlphaFade(Mat& img) {
+  CHECK_EQ(img.type(), CV_32FC4);
+  for (int y = 0; y < img.rows; ++y) {
+    const float alpha = y / float(img.rows);
+    for (int x = 0; x < img.cols; ++x) {
+      img.at<Vec4f>(y, x)[3] *= alpha;
+    }
+  }
+}
 
-  const vector<vector<float>> colorAdjustModel =
-    buildColorAdjustmentModel(bottomLayer, topLayer);
-  const Mat adjustedTop = applyColorAdjustmentModel(topLayer, colorAdjustModel);
+Mat flattenLayersAlphaSoftmax(
+    const vector<Mat>& layers,
+    const float softmaxCoef) {
 
-  return flattenLayersDeghostPreferBase(bottomLayer, adjustedTop);
+  for (const auto& img : layers) {
+    CHECK_EQ(img.type(), CV_32FC4);
+  }
+
+  Mat flattened(layers[0].size(), CV_32FC3);
+  for (int y = 0; y < flattened.rows; ++y) {
+    for (int x = 0; x < flattened.cols; ++x) {
+      float sumAlpha = 0.0f;
+      Vec3f sumColor(0.0f, 0.0f, 0.0f);
+      for (int imgIdx = 0; imgIdx < layers.size(); ++imgIdx) {
+        const Vec4f srcColor = layers[imgIdx].at<Vec4f>(y, x);
+        const float alpha =
+          expf(softmaxCoef * srcColor[3]) - 1.0f;
+        sumColor += alpha * Vec3f(srcColor[0], srcColor[1], srcColor[2]);
+        sumAlpha += alpha;
+      }
+      flattened.at<Vec3f>(y, x) = sumColor / sumAlpha;
+    }
+  }
+  return flattened;
 }
 
 } // namespace util

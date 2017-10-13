@@ -40,7 +40,7 @@ inline T clamp(const T& x, const T& a, const T& b) {
 
 template <typename T>
 inline T reflect(const T x, const T r) {
-  return x < T(0) ? -x : x >= r ? 2*r - x - 1 : x;
+  return x < T(0) ? -x : x >= r ? 2*r - x - 2 : x;
 }
 
 template <typename T>
@@ -192,14 +192,8 @@ public:
   BezierCurve() {}
 
   BezierCurve(std::vector<V> points) {
-    for (auto p = points.begin(); p != points.end(); p++) {
+    for (auto p : points) {
       points_.push_back(p);
-    }
-  }
-
-  void setPoint(const int i, const V p) {
-    if (0 <= i && i < points_.size()) {
-      points_[i] = p;
     }
   }
 
@@ -207,11 +201,8 @@ public:
     points_.push_back(p);
   }
 
-  V* getPoint(const int i) const {
-    if (0 <= i && i < points_.size()) {
-      return points_[i];
-    }
-    return NULL;
+  void clearPoints() {
+    points_.clear();
   }
 
   inline V operator()(const int i, const int j, const T t) const {

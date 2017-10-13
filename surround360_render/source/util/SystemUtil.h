@@ -6,6 +6,7 @@
 * LICENSE_render file in the root directory of this subproject. An additional grant
 * of patent rights can be found in the PATENTS file in the same directory.
 */
+
 #pragma once
 
 #include <assert.h>
@@ -19,6 +20,8 @@
 #include <thread>
 #include <vector>
 
+#include "CvUtil.h"
+#include "StringUtil.h"
 #include "VrCamException.h"
 
 namespace surround360 {
@@ -58,21 +61,22 @@ static void requireArgGeqZero(const int& argValue, const string& argName) {
 
 // return the current system time in seconds. reasonably high precision.
 static double getCurrTimeSec() {
-  return (double)(system_clock::now().time_since_epoch().count()) / 1000000.0;
+  return (double)(system_clock::now().time_since_epoch().count()) * system_clock::period::num / system_clock::period::den;
 }
 
 // scans srcDir for all files/folders, and return a vector of filenames (or full file
 // paths if fullPath is true)
 static vector<string> getFilesInDir(
     const string& srcDir,
-    const bool fullPath) {
+    const bool fullPath,
+    int numFilesToReturn = -1) {
 
   DIR* dir = opendir(srcDir.c_str());
   if (!dir) { return vector<string>(); }
 
   vector<string> out_file_names;
   dirent* dent;
-  while(true) {
+  while (true) {
     dent = readdir(dir);
     if (!dent) break;
     // skip hidden files and/or links to parent dir
@@ -82,8 +86,22 @@ static vector<string> getFilesInDir(
     } else {
       out_file_names.push_back(string(dent->d_name));
     }
+    if (--numFilesToReturn == 0) {
+      break;
+    }
   }
   return out_file_names;
+}
+
+static string getImageFileExtension(const string& imageDir) {
+  // figure out the file extension used by the images. This is complicated but
+  // it's all so we can iterate over the images in the right order.
+  // assumption: no weird mixtures of file extension
+  vector<string> imageFilenames = getFilesInDir(imageDir, false, 1);
+  assert(imageFilenames.size() > 0);
+  vector<string> firstFilenameParts = stringSplit(imageFilenames[0], '.');
+  assert(firstFilenameParts.size() == 2);
+  return firstFilenameParts[1];
 }
 
 // Thread functor wrapper.
@@ -98,6 +116,10 @@ struct Threadable {
   }
 };
 
+// wrapper for imreadExceptionOnFail( for use in std::threads
+static void imreadInStdThread(string path, int flags, Mat* dest) {
+  *dest = imreadExceptionOnFail(path, flags);
+}
 
 } // namespace util
 } // namespace surround360

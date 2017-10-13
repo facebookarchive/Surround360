@@ -6,6 +6,7 @@
 * LICENSE_render file in the root directory of this subproject. An additional grant
 * of patent rights can be found in the PATENTS file in the same directory.
 */
+
 #pragma once
 
 namespace surround360 {

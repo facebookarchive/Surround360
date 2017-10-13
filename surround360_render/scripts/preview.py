@@ -1,3 +1,10 @@
+# Copyright (c) 2016-present, Facebook, Inc.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE_render file in the root directory of this subproject. An additional grant
+# of patent rights can be found in the PATENTS file in the same directory.
+
 import argparse
 import datetime
 import json
@@ -26,28 +33,28 @@ FRAME_NUM_DIGITS = 6
 PREVIEW_COMMAND_TEMPLATE = """
 time {SURROUND360_RENDER_DIR}/bin/TestHyperPreview
 --logbuflevel -1 --stderrthreshold 0 --v 0
---log_dir {DEST_DIR}/logs
---rig_json_file {RIG_JSON_FILE}
---binary_prefix {BINARY_PREFIX}
---preview_dest {DEST_DIR}/eqr_preview
+--log_dir "{DEST_DIR}/logs"
+--rig_json_file "{RIG_JSON_FILE}"
+--binary_prefix "{BINARY_PREFIX}"
+--preview_dest "{DEST_DIR}/eqr_preview"
 --start_frame {START_FRAME}
 --frame_count {FRAME_COUNT}
 --eqr_width {EQR_WIDTH}
 --eqr_height {EQR_HEIGHT}
 --gamma {GAMMA}
- --disk_count 2
+ --file_count 2
 """
 
 FFMPEG_COMMAND_TEMPLATE = """
 time ffmpeg
 -y
 -framerate 30
--i {DEST_DIR}/eqr_preview/%06d.jpg
+-i "{DEST_DIR}/eqr_preview/%06d.jpg"
 -pix_fmt yuv420p
 -c:v libx264
 -crf 20
 -preset ultrafast
-{DEST_DIR}/{VIDEO_NAME}preview.mp4
+"{DEST_DIR}/{VIDEO_NAME}preview.mp4"
 """
 
 @conditional_decorator(USE_GOOEY, Gooey(program_name=TITLE, image_dir=os.path.dirname(script_dir) + "/res/img"))
@@ -98,7 +105,7 @@ if __name__ == "__main__":
 
   binary_files = [f for f in os.listdir(data_dir) if f.endswith('.bin')]
   binary_prefix = data_dir + "/" + os.path.commonprefix(binary_files)
-  disk_count = len(binary_files)
+  file_count = len(binary_files)
 
   os.system("mkdir -p " + dest_dir + "/logs")
   os.system("mkdir -p " + dest_dir + "/eqr_preview")
@@ -109,7 +116,7 @@ if __name__ == "__main__":
     "DEST_DIR": dest_dir,
     "START_FRAME": start_frame,
     "FRAME_COUNT": frame_count,
-    "DISK_COUNT": disk_count,
+    "FILE_COUNT": file_count,
     "RIG_JSON_FILE": rig_json_file,
     "EQR_WIDTH": eqr_width,
     "EQR_HEIGHT": eqr_height,

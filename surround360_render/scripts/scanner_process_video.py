@@ -1,4 +1,4 @@
-from scannerpy import Database, DeviceType, Job
+from scannerpy import Database, DeviceType, Job, BulkJob
 from scannerpy.stdlib import NetDescriptor, parsers, bboxes
 import numpy as np
 import argparse
@@ -209,15 +209,17 @@ def render_stereo_panorama_chunks(db, overlap, flow, render_params):
 def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   num_cams = 14
   item_size = 10
+  print(chunks)
+  assert num_cams == len(chunks)
+
   left_inputs = []
   right_inputs = []
-  print(chunks)
   for c in range(num_cams):
-    left_chunk, right_chunk = chunks[c].as_op().all(task_size=item_size)
+    left_chunk = db.ops.FrameInput()
+    right_chunk = db.ops.FrameInput()
     left_inputs.append(left_chunk)
     right_inputs.append(right_chunk)
 
-  jobs = []
   args = db.protobufs.ConcatPanoramaChunksArgs()
   args.eqr_width = render_params["EQR_WIDTH"]
   args.eqr_height = render_params["EQR_HEIGHT"]
@@ -227,14 +229,27 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
   args.zero_parallax_dist = 10000
   args.interpupilary_dist = 6.4
   args.left = False
-  panorama= db.ops.ConcatPanoramaChunks(*(left_inputs + right_inputs),
-                                        args=args)
+  panorama = db.ops.ConcatPanoramaChunks(
+    *(left_inputs + right_inputs),
+    args=args)
+  output_op = db.ops.Output(columns=[panorama])
 
-  job = Job(columns = [panorama],
-            name = 'surround360_pano')
+  op_args = {
+    output_op: 'surround360_pano'
+  }
+  for c in range(num_cams):
+    op_args[left_chunk[c]] = chunks[c].column('left_chunk')
+    op_args[right_chunk[c]] = chunks[c].column('right_chunk')
 
-  return db.run(job, force=True,
-                pipeline_instances_per_node=render_params["CORES"])
+  job = Job(op_args=op_args)
+  bulk_job = BulkJob(output=output_op, jobs=[job])
+
+  tables = db.run(
+    bulk_job, force=True,
+    work_packet_size=item_size,
+    io_packet_size=item_size,
+    pipeline_instances_per_node=render_params["CORES"])
+  return tables[0]
 
 def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
                                     start, end):
@@ -311,58 +326,75 @@ def fused_project_flow_chunk_concat(db, videos, videos_idx, render_params,
 
 
 def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, start, end):
+  warmup_size = 10
+  task_size = 100
+
+  left_frame = db.ops.FrameInput()
+  left_cam_idx = db.ops.Input()
+
+  right_frame = db.ops.FrameInput()
+  right_cam_idx = db.ops.Input()
+
+  args = db.protobufs.ProjectSphericalArgs()
+  args.eqr_width = render_params["EQR_WIDTH"]
+  args.eqr_height = render_params["EQR_HEIGHT"]
+  args.camera_rig_path = render_params["RIG_JSON_FILE"]
+  left_proj_frame = db.ops.ProjectSpherical(
+    frame = left_frame,
+    camera_id = left_cam_idx,
+    args=args)
+  right_proj_frame = db.ops.ProjectSpherical(
+    frame = right_frame,
+    camera_id = right_cam_idx,
+    args=args)
+
+  left_flow, right_flow = db.ops.TemporalOpticalFlow(
+    left_projected_frame = left_proj_frame,
+    right_projected_frame = right_proj_frame,
+    flow_algo = render_params["SIDE_FLOW_ALGORITHM"],
+    camera_rig_path = render_params["RIG_JSON_FILE"],
+    warmup = warmup_size)
+
+  left_chunk, right_chunk = db.ops.RenderStereoPanoramaChunk(
+    left_projected_frame = left_proj_frame,
+    left_flow = left_flow,
+    right_projected_frame = right_proj_frame,
+    right_flow = right_flow,
+    eqr_width = render_params["EQR_WIDTH"],
+    eqr_height = render_params["EQR_HEIGHT"],
+    camera_rig_path = render_params["RIG_JSON_FILE"],
+    flow_algo = render_params["SIDE_FLOW_ALGORITHM"],
+    zero_parallax_dist = 10000,
+    interpupilary_dist = 6.4)
+
+  left_chunk_sample = left_chunk.sample()
+  right_chunk_sample = right_chunk.sample()
+
+  output_op = db.ops.Output(columns=[left_chunk_sample, right_chunk_sample])
+
   jobs = []
-  warmup_size = 1
-  item_size = 1 
   for i in range(len(videos.tables())):
     left_cam_idx = i
     right_cam_idx = (left_cam_idx + 1) % len(videos.tables())
 
-    left_frame = videos.tables(left_cam_idx).as_op().range(
-      start, end, task_size=item_size, warmup_size=warmup_size)
-    left_cam_idx = videos_idx.tables(left_cam_idx).as_op().range(
-      start, end, task_size=item_size, warmup_size=warmup_size)
-    right_frame = videos.tables(right_cam_idx).as_op().range(
-      start, end, task_size=item_size, warmup_size=warmup_size)
-    right_cam_idx = videos_idx.tables(right_cam_idx).as_op().range(
-      start, end, task_size=item_size, warmup_size=warmup_size)
+    sample = db.sampler.range(start, end)
 
-    args = db.protobufs.ProjectSphericalArgs()
-    args.eqr_width = render_params["EQR_WIDTH"]
-    args.eqr_height = render_params["EQR_HEIGHT"]
-    args.camera_rig_path = render_params["RIG_JSON_FILE"]
-    left_proj_frame = db.ops.ProjectSpherical(
-      frame = left_frame,
-      camera_id = left_cam_idx,
-      args=args)
-    right_proj_frame = db.ops.ProjectSpherical(
-      frame = right_frame,
-      camera_id = right_cam_idx,
-      args=args)
-
-    left_flow, right_flow = db.ops.TemporalOpticalFlow(
-      left_projected_frame = left_proj_frame,
-      right_projected_frame = right_proj_frame,
-      flow_algo = render_params["SIDE_FLOW_ALGORITHM"],
-      camera_rig_path = render_params["RIG_JSON_FILE"])
-
-    left_chunk, right_chunk = db.ops.RenderStereoPanoramaChunk(
-      left_projected_frame = left_proj_frame,
-      left_flow = left_flow,
-      right_projected_frame = right_proj_frame,
-      right_flow = right_flow,
-      eqr_width = render_params["EQR_WIDTH"],
-      eqr_height = render_params["EQR_HEIGHT"],
-      camera_rig_path = render_params["RIG_JSON_FILE"],
-      flow_algo = render_params["SIDE_FLOW_ALGORITHM"],
-      zero_parallax_dist = 10000,
-      interpupilary_dist = 6.4)
-
-    job = Job(columns = [left_chunk.lossless(), right_chunk.lossless()],
-              name = 'surround360_chunk_{:d}'.format(i))
+    job = Job(op_args={
+      left_frame: videos.tables(left_cam_idx).column('frame'),
+      left_frame_idx: videos_idx.tables(left_cam_idx).column('camera_index'),
+      right_frame: videos.tables(right_cam_idx).column('frame'),
+      right_frame_idx: videos_idx.tables(right_cam_idx).column('camera_index'),
+      left_chunk_sample: sample,
+      right_chunk_sample: sample,
+      output_op: 'surround360_chunk_{:d}'.format(i),
+    })
     jobs.append(job)
 
-  return db.run(jobs, force=True,
+  bulk_job = BulkJob(output=output_op, jobs=jobs)
+
+  return db.run(bulk_job, force=True,
+                work_packet_size=10,
+                io_packet_size=task_size,
                 pipeline_instances_per_node=render_params["CORES"])
 
 
@@ -568,9 +600,8 @@ if __name__ == "__main__":
         pano_col.profiler().write_trace('fused4.trace')
       elif fused_3:
         flow_stereo_start = timer()
-        chunk_col = fused_project_flow_and_stereo_chunk(db, videos, videos_idx,
-                                                        render_params,
-                                                        min_frame, max_frame + 1)
+        chunk_col = fused_project_flow_and_stereo_chunk(
+          db, videos, videos_idx, render_params, min_frame, max_frame + 1)
         print(db.summarize())
         chunk_col = [db.table('surround360_chunk_{:d}'.format(i))
                               for i in range(14)]

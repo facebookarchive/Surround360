@@ -120,7 +120,8 @@ REGISTER_OP(TemporalOpticalFlow)
     .frame_input("left_projected_frame")
     .frame_input("right_projected_frame")
     .frame_output("left_flow")
-    .frame_output("right_flow");
+    .frame_output("right_flow")
+    .bounded_state();
 
 REGISTER_KERNEL(TemporalOpticalFlow, TemporalOpticalFlowKernelCPU)
     .device(DeviceType::CPU)

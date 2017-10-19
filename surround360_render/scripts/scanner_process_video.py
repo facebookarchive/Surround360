@@ -238,8 +238,8 @@ def concat_stereo_panorama_chunks(db, chunks, render_params, is_left):
     output_op: 'surround360_pano'
   }
   for c in range(num_cams):
-    op_args[left_chunk[c]] = chunks[c].column('left_chunk')
-    op_args[right_chunk[c]] = chunks[c].column('right_chunk')
+    op_args[left_inputs[c]] = chunks[c].column('left_chunk')
+    op_args[right_inputs[c]] = chunks[c].column('right_chunk')
 
   job = Job(op_args=op_args)
   bulk_job = BulkJob(output=output_op, jobs=[job])
@@ -370,20 +370,21 @@ def fused_project_flow_and_stereo_chunk(db, videos, videos_idx, render_params, s
   left_chunk_sample = left_chunk.sample()
   right_chunk_sample = right_chunk.sample()
 
-  output_op = db.ops.Output(columns=[left_chunk_sample, right_chunk_sample])
+  output_op = db.ops.Output(columns=[left_chunk_sample.lossless(),
+                                     right_chunk_sample.lossless()])
 
   jobs = []
   for i in range(len(videos.tables())):
-    left_cam_idx = i
-    right_cam_idx = (left_cam_idx + 1) % len(videos.tables())
+    left_idx = i
+    right_idx = (left_idx + 1) % len(videos.tables())
 
     sample = db.sampler.range(start, end)
 
     job = Job(op_args={
-      left_frame: videos.tables(left_cam_idx).column('frame'),
-      left_frame_idx: videos_idx.tables(left_cam_idx).column('camera_index'),
-      right_frame: videos.tables(right_cam_idx).column('frame'),
-      right_frame_idx: videos_idx.tables(right_cam_idx).column('camera_index'),
+      left_frame: videos.tables(left_idx).column('frame'),
+      left_cam_idx: videos_idx.tables(left_idx).column('camera_index'),
+      right_frame: videos.tables(right_idx).column('frame'),
+      right_cam_idx: videos_idx.tables(right_idx).column('camera_index'),
       left_chunk_sample: sample,
       right_chunk_sample: sample,
       output_op: 'surround360_chunk_{:d}'.format(i),
@@ -564,7 +565,7 @@ if __name__ == "__main__":
           collection, _ = db.ingest_video_collection(collection_name, paths,
                                                   force=True)
 
-          idx_table_names = []
+          idx_tables = []
           num_rows = collection.tables(0).num_rows()
           columns = ['camera_index']
           for c in range(0, len(paths)):
@@ -573,9 +574,8 @@ if __name__ == "__main__":
                   rows.append([struct.pack('i', c)])
               table_name = 'surround_cam_idx_{:d}'.format(c)
               db.new_table(table_name, columns, rows, force=True)
-              idx_table_names.append(table_name)
-          db.new_collection(idx_collection_name, idx_table_names,
-                            force=True)
+              idx_tables.append(db.table(table_name))
+          db.new_collection(idx_collection_name, idx_tables, force=True)
 
 
       videos = db.collection(collection_name)
@@ -588,7 +588,7 @@ if __name__ == "__main__":
           print(render_params)
           sys.stdout.flush()
 
-      visualize = False
+      visualize = True
       fused_4 = False # Fused project, flow, stereo chunk, and pano
       fused_3 = True # Fused project, flow, and stereo chunk
       fused_2 = False # Fused flow and stereo chunk
@@ -645,7 +645,7 @@ if __name__ == "__main__":
       # left_table = pano_col[0]
       # right_table = pano_col[1]
       if visualize:
-        pano_col.columns('panorama').save_mp4('pano_test.mp4',
+        pano_col.column('panorama').save_mp4('pano_test',
                                               scale=(2048, 2048))
       print('To png', timer() - png_start)
 

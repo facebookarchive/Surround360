@@ -517,7 +517,7 @@ struct PixFlow : public OpticalFlowInterface {
     float err = sqrtf((i0x - i1x) * (i0x - i1x) + (i0y - i1y) * (i0y - i1y))
       + smoothness * smoothnessCoef
       + verticalRegularizationCoef * fabsf(flowDir.y) / float(I0.cols)
-      + horizontalRegularizationCoef * fabsf(flowDir.x) / float(I0.cols);
+      + horizontalRegularizationCoef * fabsf(flowDir.x) / float(I0.rows);
 
     if (UseDirectionalRegularization) {
       Point2f bf = blurredFlow.at<Point2f>(y, x);

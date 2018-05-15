@@ -30,8 +30,6 @@ We provide a sample dataset for those who are interested in testing the renderin
 
 ## Join the Surround360 community
 
-* Website: https://facebook360.fb.com/facebook-surround-360/
-
 See the CONTRIBUTING file in each subdirectory for how to help out.
 
 ## License

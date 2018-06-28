@@ -10,7 +10,6 @@
 #pragma once
 
 #include <assert.h>
-#include <dirent.h>
 #include <math.h>
 
 #include <chrono>
@@ -19,6 +18,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <boost/filesystem.hpp>
 
 #include "CvUtil.h"
 #include "StringUtil.h"
@@ -71,25 +72,23 @@ static vector<string> getFilesInDir(
     const bool fullPath,
     int numFilesToReturn = -1) {
 
-  DIR* dir = opendir(srcDir.c_str());
-  if (!dir) { return vector<string>(); }
+  boost::filesystem::path dir(srcDir.c_str());
+
+  if(!boost::filesystem::is_directory(dir))
+  { return vector<string>();}
 
   vector<string> out_file_names;
-  dirent* dent;
-  while (true) {
-    dent = readdir(dir);
-    if (!dent) break;
-    // skip hidden files and/or links to parent dir
-    if (string(dent->d_name)[0] == '.') continue;
-    if (fullPath) {
-      out_file_names.push_back(srcDir + "/" + string(dent->d_name));
-    } else {
-      out_file_names.push_back(string(dent->d_name));
-    }
-    if (--numFilesToReturn == 0) {
-      break;
-    }
+  for(boost::filesystem::directory_entry & dent:boost::filesystem::directory_iterator(dir))
+  {
+      if(!boost::filesystem::is_regular_file(dent))
+          continue;
+
+      if(fullPath)
+          out_file_names.push_back(dent.path().string());
+      else
+          out_file_names.push_back(dent.path().relative_path().string());
   }
+
   return out_file_names;
 }
 

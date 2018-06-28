@@ -12,63 +12,14 @@
 #include <vector>
 
 #include <Eigen/Geometry>
-
+#include <json.h>
 #include <glog/logging.h>
 
-#ifndef WIN32
-
-#include <folly/dynamic.h>
-#include <folly/FileUtil.h>
-#include <folly/json.h>
-
-using folly::dynamic;
-
-#else // WIN32
-
-#ifndef M_PI
-#define M_PI EIGEN_PI
+#ifdef _WINDOWS
+#define _USE_MATH_DEFINES
 #endif
 
-// windows doesn't need the full rig i/o functionality
-#define SUPPRESS_RIG_IO
-
-// dynamic is an interposer that mimics folly::dynamic
-
-#include <boost/property_tree/json_parser.hpp>
-
-struct dynamic : public boost::property_tree::ptree {
-  dynamic(const boost::property_tree::ptree& tree) : boost::property_tree::ptree(tree) {}
-
-  dynamic operator[](const char* key) const {
-    return get_child(key);
-  }
-
-  dynamic operator[](const std::size_t index) const {
-    auto it = begin();
-    for (int i = 0; i < index; ++i) {
-      CHECK(it != end());
-      ++it;
-    }
-    return it->second;
-  }
-
-  std::string getString() const {
-    return get_value<std::string>();
-  }
-
-  double asDouble() const {
-    return get_value<double>();
-  }
-
-  friend std::ostream& operator<<(std::ostream& s, const dynamic& dyn) {
-    for (const auto& pair : dyn) {
-      s << pair.first << "->" << pair.second.get_value<std::string>() << ", ";
-    }
-    return s;
-  }
-};
-
-#endif // WIN32
+#include <math.h>
 
 namespace surround360 {
 
@@ -99,8 +50,9 @@ struct Camera {
 
   // construction and de/serialization
   Camera(const Type type, const Vector2& resolution, const Vector2& focal);
-  Camera(const dynamic& json);
-  dynamic serialize() const;
+  Camera(const json::Value &json);
+  json::Value serialize() const;
+
   static Rig loadRig(const std::string& filename);
   static void saveRig(const std::string& filename, const Rig& rig);
   static Camera createRescaledCamera(const Camera& cam, const float scale);
@@ -290,18 +242,21 @@ struct Camera {
     return sensorToCamera(sensor);
   }
 
-  template <typename V>
-  static dynamic serializeVector(const V& v) {
-    return dynamic(v.data(), v.data() + v.size());
+  template<typename V>
+  static json::Value serializeVector(const V& v) {
+      json::Array values;
+
+      for(size_t i=0; i<v.size(); ++i)
+          values.push_back(v[i]);
+      return values;
   }
 
   template <int kSize>
-  static Eigen::Matrix<Real, kSize, 1> deserializeVector(
-      const dynamic& json) {
-    CHECK_EQ(kSize, json.size()) << "bad vector" << json;
+  static Eigen::Matrix<Real, kSize, 1> deserializeVector(const json::Array &json) {
+    CHECK_EQ(kSize, json.size()) << "bad vector";
     Eigen::Matrix<Real, kSize, 1> result;
     for (int i = 0; i < kSize; ++i) {
-      result[i] = json[i].asDouble();
+      result[i] = json[i].ToDouble();
     }
     return result;
   }
@@ -315,9 +270,9 @@ struct Camera {
     }
   }
 
-  static Type deserializeType(const dynamic& json) {
+  static Type deserializeType(const json::Value &json) {
     for (int i = 0; ; ++i) {
-      if (serializeType(Type(i)) == json.getString()) {
+      if (serializeType(Type(i)) == json.ToString()) {
         return Type(i);
       }
     }

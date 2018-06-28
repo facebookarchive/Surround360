@@ -9,6 +9,12 @@
 
 #include "OpticalFlowVisualization.h"
 
+#ifdef _WINDOWS
+#define _USE_MATH_DEFINES
+#endif
+#include <math.h>
+
+
 namespace surround360 {
 namespace optical_flow {
 

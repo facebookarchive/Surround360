@@ -289,12 +289,6 @@ Check out our blog post about how rendering for Surround 360 works here:
 https://code.facebook.com/posts/265413023819735
 
 
-## Join the Surround 360 community
-
-* Website: https://facebook360.fb.com/facebook-surround-360/
-
-See the CONTRIBUTING file for how to help out.
-
 ## License
 
 The Surround 360 rendering code is BSD-licensed, as it appears in LICENSE_render.md under /surround360_render. We also provide an additional patent grant.

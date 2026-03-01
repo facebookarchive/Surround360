@@ -6,6 +6,7 @@
 * LICENSE_render file in the root directory of this subproject. An additional grant
 * of patent rights can be found in the PATENTS file in the same directory.
 */
+
 #pragma once
 
 #include "opencv2/imgproc.hpp"
@@ -54,25 +55,39 @@ static double pCurve(const double x) {
 }
 
 static void toLab(
+    const string& illuminant,
     const double r,
     const double g,
     const double b,
     double& L,
     double& A,
     double& B) {
-  static bool firstTimeThru = true;
-  static const double kD65White[3] = {0.950456, 1, 1.088754};
-  double rgbToXyz[3][3] = {
-    { 0.412453, 0.357580, 0.180423 },
-    { 0.212671, 0.715160, 0.072169 },
-    { 0.019334, 0.119193, 0.950227 } };
 
-  if (firstTimeThru) {
-    firstTimeThru = false;
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        rgbToXyz[i][j] = rgbToXyz[i][j] / kD65White[i];
-      }
+  // White point
+  // Ref: http://www.brucelindbloom.com/index.html?Eqn_ChromAdapt.html
+  vector<double> kWhite(3);
+
+  // Bradford-adapted matrix
+  // Ref: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+  vector<vector<double>> rgbToXyz(3, vector<double>(3));
+
+  if (illuminant == "D50") {
+    kWhite = {0.96422, 1.00000, 0.82521};
+    rgbToXyz = {
+      { 0.4360747, 0.3850649, 0.1430804 },
+      { 0.2225045, 0.7168786, 0.0606169 },
+      { 0.0139322, 0.0971045, 0.7141733 } };
+  } else if (illuminant == "D65") {
+    kWhite = {0.95047, 1.00000, 1.08883};
+    rgbToXyz = {
+      { 0.4124564, 0.3575761, 0.1804375 },
+      { 0.2126729, 0.7151522, 0.0721750 },
+      { 0.0193339, 0.1191920, 0.9503041 } };
+  }
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      rgbToXyz[i][j] = rgbToXyz[i][j] / kWhite[i];
     }
   }
 

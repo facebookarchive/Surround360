@@ -1,7 +1,0 @@
-Makefile
-bin/
-lib/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-local/

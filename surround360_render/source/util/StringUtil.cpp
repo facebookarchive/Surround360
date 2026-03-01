@@ -43,5 +43,11 @@ string stringJoin(const string& delim, const vector<string>& stringsToJoin) {
   return s;
 }
 
+string intToStringZeroPad(const int x, const int padlen) {
+  ostringstream ss;
+  ss << setw(padlen) << setfill('0') << x;
+  return ss.str();
+}
+
 } // namespace util
 } // namespace surround360

@@ -9,12 +9,13 @@ BlackLevel
 
 
 Vignette rolloff
-   3 channel vector value [r, g, b]
+   5x3 matrix
 
-       This is the center to edge fall off in the range 0.0, 1.0 where
-       1.0 is 100% fall off. Usually this value is around 10% to 20%.
-       It is not unusual to to have each of the channels roll off at
-       different rates to handle chromatic vignetting effects.
+       Per-channel 4th order Bezier surface control points, separable on H and V orientations.
+       The control points spread uniformly on the image. Each pixel in the image is scaled
+       by the corresponding value of the Bezier surface at that location.
+       It is not unusual to have each of the channels roll off at different rates to 
+       handle chromatic vignetting effects.
 
 
 WhiteBalanceGain
@@ -22,7 +23,7 @@ WhiteBalanceGain
 
        Nominally the red and blue channels are usually around 2x gain
        to the green channels. Strictly speaking this should be
-       computed using a global white balance algrotihm.
+       computed using a global white balance algorithm.
 
 
 stuckPixelThreshold
@@ -50,20 +51,20 @@ denoiseRadius
     Single value
 
       Radius for noise reduction 3 or 4 is reasonable.  1 will be fast but will leave low frequency noise behind.
- 
+
 ccm
    3x3 matrix  [[m00, m01, m01], ..., [m20, m21, m22]]
 
-       An identity leaves the color unchanged. This matrix shold
+       An identity leaves the color unchanged. This matrix should
        calculated from a color calibration session. It usually best if
-       the rows sume unity to conserve energy.
+       the rows sum to unity to conserve energy.
 
-sharpenning
+sharpening
    3 channel vector value [r, g, b]
 
-       1.0 means no sharpenning. Below 1.o means blurring and values
-       greater than 1.0 will sharpen the image.  Execessive
-       sharpenning will cause "ringing."
+       1.0 means no sharpening. Below 1.o means blurring and values
+       greater than 1.0 will sharpen the image. Excessive
+       sharpening will cause "ringing."
 
 saturation
     Single value
@@ -77,12 +78,21 @@ contrast
       1.0 means no contrast gain.  Values greater than one increase
       contrast.
 
+low/high key boost
+   3 channel vector value [r, g, b]
+   
+      Boosts low/high key colors, effectively increasing the color difference on the dark/bright
+      areas of the image. It applies a 4-point Bezier curve between 0.0 and 0.5 (low key) or
+      0.5 and 1.0 (high key).
+      Both low/high key default to 0.0 (= flat, no change), and they can range between 
+      -0.1666 and 0.1666 (-1/6 and 1/6).
+
 gamma
    3 channel vector value [r, g, b]
 
       Raises the pixel value to the power of the gamma value. 0.454545
       is the  classic 2.2 gamma  used to to  move from linear  sRGB to
-      gamm corrected sRGB.
+      gamma corrected sRGB.
 
 
 

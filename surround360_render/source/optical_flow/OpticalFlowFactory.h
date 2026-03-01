@@ -41,34 +41,15 @@ static OpticalFlowInterface* makeOpticalFlowByName(const string flowAlgName) {
     );
   }
 
-  if (flowAlgName == "pixflow_med") {
-    static const float kPyrScaleFactor                  = 0.95f;
-    static const float kSmoothnessCoef                  = 0.0001f;
-    static const float kVerticalRegularizationCoef      = 0.03f;
-    static const float kHorizontalRegularizationCoef    = 0.03f;
-    static const float kGradientStepSize                = 0.95f;
+  if (flowAlgName == "pixflow_search_20") {
+    static const float kPyrScaleFactor                  = 0.9f;
+    static const float kSmoothnessCoef                  = 0.001f;
+    static const float kVerticalRegularizationCoef      = 0.01f;
+    static const float kHorizontalRegularizationCoef    = 0.01f;
+    static const float kGradientStepSize                = 0.5f;
     static const float kDownscaleFactor                 = 0.5f;
-    static const float kDirectionalRegularizationCoef   = 0.1f;
-    return new PixFlowWithDirectionalRegularization(
-      kPyrScaleFactor,
-      kSmoothnessCoef,
-      kVerticalRegularizationCoef,
-      kHorizontalRegularizationCoef,
-      kGradientStepSize,
-      kDownscaleFactor,
-      kDirectionalRegularizationCoef
-    );
-  }
-
-  if (flowAlgName == "pixflow_ultra") {
-    static const float kPyrScaleFactor                  = 0.97f;
-    static const float kSmoothnessCoef                  = 0.00005f;
-    static const float kVerticalRegularizationCoef      = 0.02f;
-    static const float kHorizontalRegularizationCoef    = 0.02f;
-    static const float kGradientStepSize                = 1.0f;
-    static const float kDownscaleFactor                 = 1.0f;
-    static const float kDirectionalRegularizationCoef   = 0.1f;
-    return new PixFlowWithDirectionalRegularization(
+    static const float kDirectionalRegularizationCoef   = 0.0f;
+    return new PixFlow<false, 20>(
       kPyrScaleFactor,
       kSmoothnessCoef,
       kVerticalRegularizationCoef,
